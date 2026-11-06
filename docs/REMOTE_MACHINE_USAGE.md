@@ -116,7 +116,9 @@ Read-only inventory snapshot on 2026-11-06 15:52 HKT:
 - `~/mobile_vt` — working tree for capture, analysis, and decoder experiments.
   The directory exists and `python3 -m vt13_video --help` exits 0. Its `.git`
   directory exists, but `git status` currently fails with `fatal: not a git
-  repository`; do not treat it as a valid Git baseline yet.
+  repository`; do not treat it as a valid Git baseline yet. A 2026-11-06
+  source/config/test SHA256 comparison found 24 local entries versus 27 remote
+  entries; see the source hash comparison below.
 - `/tmp/dji_test_latest_dir` — **missing** on 2026-11-06 15:52 HKT. Do not
   assume a latest capture exists; use an explicit capture root or re-create the
   pointer with approval.
@@ -151,6 +153,21 @@ Read-only Git status on 2026-11-06:
   `libavcodec/v4l2_m2m_dec.c`. These include refcount/Copy-Out/diagnostic work;
   correctness and CPU cost still need validation.
 
+### Source hash comparison (read-only, 2026-11-06)
+
+A SHA256 comparison of `vt13_video`, `tests`, `config`, `examples`, `udev`,
+`pyproject.toml`, `requirements.txt`, and `README.md` found:
+
+- 24 local entries versus 27 remote entries.
+- Remote-only files: `config/vt13_video.no_status.yaml`,
+  `config/vt13_video.yuvtest.yaml`, and `vt13_video/async_usb.py`.
+- Differing files: `README.md`, `vt13_video/decoder.py`, and
+  `vt13_video/pipeline.py`.
+- Remaining compared files matched.
+
+Conclusion: the local and remote source trees are **not currently identical**.
+Determine which side is authoritative before copying either direction.
+
 ## Validation Needed
 
 The following are not proven by the read-only inventory. Check them before any
@@ -168,7 +185,7 @@ live run, driver change, or FFmpeg experiment.
 | Source Change/POC50/EOF | Historical only | Controlled offline and target-board short tests |
 | Live wireless end-to-end | Not started | AGENTS.md §6 handoff; READY before human opens link |
 | Performance/latency targets | User targets unconfirmed | User acceptance plus CM311 CPU/RSS/temperature/latency evidence |
-| Local/remote source consistency | Golden and parameter-set data match; source trees not yet compared | Git commit/diff or SHA256 manifest; exact file set and sync direction |
+| Local/remote source consistency | **Not consistent**: 24 local vs 27 remote source/config/test entries; remote-only `async_usb.py` and two config files; `README.md`, `decoder.py`, `pipeline.py` differ | Choose authoritative side; Git commit/diff or full SHA256 manifest; record sync direction |
 
 ## Code and data consistency checks
 

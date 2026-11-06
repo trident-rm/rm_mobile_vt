@@ -198,7 +198,7 @@ CM311 真正的版本信息应通过 `uname -m`、`uname -r`、`ldd --version`�
 
 | 项目 | 当前状态 | 需要验证的证据 |
 |---|---|---|
-| 本地/远端代码一致性 | 本地目录初始盘点时 `.git` 为空；远端 `~/mobile_vt` 的 `.git` 不是有效仓库；内核/FFmpeg 有未提交修改 | Git commit/diff 快照；`sha256sum` 清单；来源/目标路径 |
+| 本地/远端代码一致性 | 2026-11-06 源码/配置/测试 SHA256 对比不一致：本地 24 个文件、远端 27 个；远端多 `config/vt13_video.no_status.yaml`、`config/vt13_video.yuvtest.yaml`、`vt13_video/async_usb.py`；`README.md`、`vt13_video/decoder.py`、`vt13_video/pipeline.py` 不同；远端 `.git` 仍无效；内核/FFmpeg 有未提交修改 | 确定哪一侧是基线；Git commit/diff 或完整 SHA256 清单；记录同步方向 |
 | CM311 最新捕获指针 | 2026-11-06 只读盘点时 `/tmp/dji_test_latest_dir` 不存在 | 指针存在且指向预期 capture root；不要猜测 |
 | CM311 当前运行进程 | 本轮未启动任何 USB/V4L2/HDMI 程序 | `ps`/`pgrep`/`fuser` 证据；确认无冲突占用 |
 | 显示技术栈 | 未核实 DRM/KMS、fbdev、X11/Wayland | `ls /dev/dri`、`loginctl`/`DISPLAY`、实际 HDMI 输出证据 |

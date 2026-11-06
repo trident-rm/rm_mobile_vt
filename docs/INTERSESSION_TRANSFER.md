@@ -49,6 +49,11 @@ Read-only work completed:
 - Confirmed `/tmp/dji_test_latest_dir` is currently missing on CM311.
 - Confirmed the local and remote golden capture and parameter-set files have
   matching sizes and SHA256 values (see the data manifest below).
+- Compared source/config/test SHA256 manifests and found that the trees are
+  **not identical**: 24 local entries versus 27 remote entries. The remote tree
+  has `config/vt13_video.no_status.yaml`, `config/vt13_video.yuvtest.yaml`, and
+  `vt13_video/async_usb.py`; `README.md`, `vt13_video/decoder.py`, and
+  `vt13_video/pipeline.py` differ. The remaining compared files matched.
 - Confirmed the custom CM311 FFmpeg executable reports `ffmpeg version n6.1.1`
   with the expected `hevc_v4l2m2m` build configuration.
 - No package was installed, no service was restarted, and CM311 was not
@@ -63,7 +68,7 @@ Documentation and repository changes made in this session:
   checklist, and consistency-check procedure.
 - Added this intersession transfer file.
 - Initialized the local project directory as a Git repository and created the
-  initial baseline commit. Verify with `git log -1 --oneline` and
+  initial baseline commit `a5909bd`. Verify with `git log -1 --oneline` and
   `git status --short --branch`; large raw captures and live-run binaries are
   intentionally excluded by `.gitignore`.
 
@@ -80,7 +85,7 @@ Documentation and repository changes made in this session:
 |---|---|---|---|
 | `captures/cold_start/bulk_if0_ep81.bin` | 2,431,249 bytes; SHA256 `d4cec190f35eac9b32944aff0b32ca501d54e451c1e7e0c800ab10cbdd5aa698` | Same size and SHA256 | MATCH |
 | `live_runs/vt13_params.h265` | 102 bytes; SHA256 `f9f019a14e2fc2990863221cca5bd1187cf3898dceb38277ba2b86194f94887f` | Same size and SHA256 | MATCH |
-| Project source tree | Local Git baseline initialized this session | `~/mobile_vt/.git` exists but `git status` reports `fatal: not a git repository` | NOT YET COMPARABLE |
+| Project source tree | Local Git baseline initialized this session; 24 source/config/test entries hashed | `~/mobile_vt/.git` invalid; 27 source/config/test entries hashed; remote-only `async_usb.py` and two config files; `README.md`, `decoder.py`, `pipeline.py` differ | NOT CONSISTENT |
 | Kernel source tree | Not present in this workspace | HEAD `0e80ef956`; modified `codec_hevc.c`, `vdec_platform.c`; untracked backups | REMOTE-ONLY SNAPSHOT |
 | FFmpeg source tree | Not present in this workspace | HEAD `e38092e`; modified `v4l2_buffers.c`, `v4l2_m2m.c`, `v4l2_m2m_dec.c` | REMOTE-ONLY SNAPSHOT |
 | Project docs | Updated locally this session | Older remote copies not re-read/synced | EXPECTED DIVERGENCE UNTIL SYNC |
@@ -90,7 +95,7 @@ Documentation and repository changes made in this session:
 
 | ID | Item | Current status | Evidence required to close |
 |---|---|---|---|
-| V01 | Local/remote source consistency | Local Git baseline created; remote `~/mobile_vt` Git is invalid | Git commit/diff on both sides, or SHA256 manifest for the exact source set; record sync direction |
+| V01 | Local/remote source consistency | **Not consistent**: 24 local vs 27 remote source/config/test entries; remote-only `async_usb.py` and two config files; `README.md`, `decoder.py`, `pipeline.py` differ | Choose the authoritative side; Git commit/diff or full SHA256 manifest; record sync direction |
 | V02 | Latest capture pointer | Missing on CM311 | `test -f /tmp/dji_test_latest_dir`, `cat`, and a verified capture root |
 | V03 | CM311 process ownership | Not enumerated by this session | `ps`/`pgrep` plus `fuser`/`lsof` for `/dev/video0`; do not kill unknown processes |
 | V04 | Display stack | Not checked | `ls /dev/dri`, `DISPLAY`, `loginctl`, and actual HDMI output evidence |
@@ -115,6 +120,12 @@ Documentation and repository changes made in this session:
 Timestamps differ between hosts; size and SHA256 are the authoritative
 content-consistency evidence. Other large captures and live-run binaries have
 not yet been entered into this manifest.
+
+Source/config/test manifest comparison (2026-11-06 16:21 HKT): 24 local entries
+versus 27 remote entries; the exact divergence is recorded in
+`docs/REMOTE_MACHINE_USAGE.md` under “Source hash comparison”. Do not treat the
+two code trees as identical until the authoritative side and sync direction are
+chosen.
 
 ## Next-session start checklist
 
@@ -163,6 +174,8 @@ is opened by a human only after the receiver reports READY.
 - Read both existing project-control documents.
 - Verified local CLI, Python environments, and remote R0 environment.
 - Recorded matching golden/parameter-set SHA256 values across hosts.
+- Recorded source/config/test SHA256 divergence (24 local vs 27 remote entries;
+  remote-only `async_usb.py` and two config files; three differing files).
 - Recorded missing `/tmp/dji_test_latest_dir` and invalid remote Git metadata.
 - Added the local Git baseline and `.gitignore` exclusions for large raw data and
   generated artifacts.
