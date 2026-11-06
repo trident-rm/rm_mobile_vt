@@ -1,6 +1,6 @@
 # Remote Machine Usage Reference
 
-Status: 2026-11-06 15:52 HKT (read-only inventory; live USB/decode/display not revalidated)
+Status: 2026-11-06 16:46 HKT (read-only inventory and source-authority audit; live USB/decode/display not revalidated)
 
 This document describes how to access and operate the Armbian test machine used
 for VT13/HEVC capture and decoder experiments. It is intended as an operational
@@ -140,6 +140,18 @@ Read-only inventory snapshot on 2026-11-06 15:52 HKT:
   decode correctness.
 - `~/ffmpeg-6.1.1-v4l2/install` — install prefix for the custom build.
 
+## Source authority (user-confirmed 2026-11-06)
+
+- **CM311 `~/mobile_vt`** is the latest experimental source tree because most
+  decoder and latency experiments were performed there. “Latest” does not mean
+  production-ready, and it does not mean every individual file is newer than
+  the PC copy.
+- **Ubuntu PC `mobile_vt`** is the workable software-decode baseline. It has the
+  local 50-test regression baseline and the reproducible software-decode path.
+- Do not overwrite either tree wholesale. Merge per file, preserve the PC
+  software-decode baseline, treat CM311 as the latest experiment reference, and
+  verify both sides with tests and SHA256/commit evidence.
+
 ## Current source-tree modification snapshot
 
 Read-only Git status on 2026-11-06:
@@ -166,7 +178,39 @@ A SHA256 comparison of `vt13_video`, `tests`, `config`, `examples`, `udev`,
 - Remaining compared files matched.
 
 Conclusion: the local and remote source trees are **not currently identical**.
-Determine which side is authoritative before copying either direction.
+The authority decision is now recorded above; merge per file rather than copying
+either tree wholesale.
+
+### Observed experimental divergence (read-only, 2026-11-06)
+
+- `vt13_video/async_usb.py` is remote-only. It is a bounded experimental USB
+  prefetcher controlled by `VT13_ASYNC_USB` and `VT13_ASYNC_CHUNKS`; the default
+  16,384-chunk queue is about 32 MiB at 2,048 bytes/chunk. It is described in
+  the file as a diagnostic, not a real-time guarantee.
+- `vt13_video/decoder.py` adds a PyAV thread experiment controlled by
+  `VT13_AV_THREADS` and `VT13_AV_THREAD_TYPE`.
+- `vt13_video/pipeline.py` adds the async-source wrapper and a low-latency
+  stale-AU catch-up path controlled by `VT13_LOW_LATENCY_MS`; when active it
+  resets decoding and waits for a fresh IRAP.
+- `config/vt13_video.no_status.yaml` sets `status_drain: false`.
+- `config/vt13_video.yuvtest.yaml` sets `output_format: gray` and
+  `preview: false`.
+- `README.md`: the PC copy contains the remote-machine documentation link; the
+  CM311 copy does not. File-level freshness differs, so do not infer authority
+  from one directory timestamp.
+
+### Remote offline test snapshot (2026-11-06 16:46 HKT)
+
+Command on CM311: `python3 -m unittest discover -s tests -t . -v`.
+
+- Result: 50 tests run in 63.185 s; 49 passed, 1 error; process RC=1.
+- Error: `test_allow_corrupt_frames_controls_pyav_output_flag` accesses
+  `av.codec.context.Flags.output_corrupt`, but the installed PyAV `11.0.0`
+  exposes only `Flags.OUTPUT_CORRUPT`.
+- Local `rm` environment uses PyAV `17.1.0`, where the lowercase name exists.
+  Treat this as a test/PyAV-version compatibility issue, not proof that the
+  experimental decoder is broken. The decoder itself uses
+  `getattr(..., "output_corrupt", 1 << 3)`, which is compatible with both names.
 
 ## Validation Needed
 
@@ -185,7 +229,8 @@ live run, driver change, or FFmpeg experiment.
 | Source Change/POC50/EOF | Historical only | Controlled offline and target-board short tests |
 | Live wireless end-to-end | Not started | AGENTS.md §6 handoff; READY before human opens link |
 | Performance/latency targets | User targets unconfirmed | User acceptance plus CM311 CPU/RSS/temperature/latency evidence |
-| Local/remote source consistency | **Not consistent**: 24 local vs 27 remote source/config/test entries; remote-only `async_usb.py` and two config files; `README.md`, `decoder.py`, `pipeline.py` differ | Choose authoritative side; Git commit/diff or full SHA256 manifest; record sync direction |
+| Local/remote source consistency | **Authority documented; trees still divergent**: CM311 is latest experimental, PC is workable software-decode baseline; 24 local vs 27 remote entries; remote-only `async_usb.py` and two config files; `README.md`, `decoder.py`, `pipeline.py` differ | Per-file merge/review; Git commit/diff or full SHA256 manifest; test both sides |
+| Remote test/PyAV compatibility | 49/50 pass; PyAV 11.0.0 exposes `OUTPUT_CORRUPT`, while the test expects lowercase `output_corrupt` | Fix the compatibility test or pin PyAV; rerun all tests and record RC |
 
 ## Code and data consistency checks
 
@@ -202,6 +247,10 @@ remote run uses the local source/data:
    `ldd`) as applicable.
 6. Write the result, including expected divergence, into
    `docs/INTERSESSION_TRANSFER.md`.
+
+Use a repository-local temporary directory such as `.codex_tmp/<step>/` for
+fetched copies, manifests, and diff artifacts. Avoid leaving project data in
+`/tmp` unless the project directory is not writable or a tool requires it.
 
 If either tree lacks valid Git metadata, use an explicit SHA256 manifest for the
 source files instead of assuming that matching directory names mean matching

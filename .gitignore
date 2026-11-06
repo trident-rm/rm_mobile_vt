@@ -27,6 +27,7 @@ captures/*
 # Agent/runtime metadata
 .agents/
 .codex/
+.codex_tmp/
 
 # OS/editor files
 .DS_Store
