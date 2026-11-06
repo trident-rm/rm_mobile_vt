@@ -1,0 +1,95 @@
+{
+  "device": "2ca3:1020",
+  "configuration": 1,
+  "interfaces": [
+    {
+      "interface": 0,
+      "name": "MA Channel",
+      "class": 255,
+      "subclass": 67,
+      "protocol": 1,
+      "endpoints": [
+        "0x81",
+        "0x01"
+      ]
+    },
+    {
+      "interface": 1,
+      "name": "HS/SS-Data Channel",
+      "class": 255,
+      "subclass": 67,
+      "protocol": 1,
+      "endpoints": [
+        "0x02",
+        "0x82"
+      ]
+    },
+    {
+      "interface": 2,
+      "name": "ACM DATA",
+      "class": 2,
+      "subclass": 2,
+      "protocol": 1,
+      "endpoints": [
+        "0x84"
+      ]
+    },
+    {
+      "interface": 3,
+      "name": "ACM DATA",
+      "class": 10,
+      "subclass": 0,
+      "protocol": 0,
+      "endpoints": [
+        "0x03",
+        "0x83"
+      ]
+    },
+    {
+      "interface": 4,
+      "name": "ACM DATA",
+      "class": 2,
+      "subclass": 2,
+      "protocol": 1,
+      "endpoints": [
+        "0x86"
+      ]
+    },
+    {
+      "interface": 5,
+      "name": "ACM DATA",
+      "class": 10,
+      "subclass": 0,
+      "protocol": 0,
+      "endpoints": [
+        "0x04",
+        "0x85"
+      ]
+    }
+  ],
+  "detected_cdc": [
+    {
+      "port": "/dev/ttyACM1",
+      "description": "C5 - ACM DATA",
+      "location": "1-8:1.4",
+      "interface": "ACM DATA"
+    },
+    {
+      "port": "/dev/ttyACM0",
+      "description": "C5 - ACM DATA",
+      "location": "1-8:1.2",
+      "interface": "ACM DATA"
+    }
+  ],
+  "cdc_error": null,
+  "start_wallclock": "2026-10-30T23:19:08+0800",
+  "requested_seconds": 40.0,
+  "description": "read-only endpoint data probe; not a decoded video stream",
+  "warnings": [
+    "CDC port open may toggle DTR/RTS despite attempting to set low",
+    "Only USB standard descriptors are read via control endpoint EP0",
+    "No vendor USB OUT commands, no reset, no driver detach"
+  ],
+  "device_manufacturer": "DJI",
+  "device_product": "C5"
+}

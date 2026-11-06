@@ -1,0 +1,32 @@
+elapsed_s	event	detail	wall_time_utc
+0.014731	open	2ca3:1020 bus 1 address 24	2026-10-30T18:00:42.311+00:00
+0.015378	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=0; last_bytes=0; since_data=0.001s	2026-10-30T18:00:42.311+00:00
+0.015552	discontinuity	usb_io	2026-10-30T18:00:42.312+00:00
+0.269668	open	2ca3:1020 bus 1 address 24	2026-10-30T18:00:42.566+00:00
+0.270151	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=0; last_bytes=0; since_data=0.000s	2026-10-30T18:00:42.566+00:00
+0.270233	discontinuity	usb_io	2026-10-30T18:00:42.566+00:00
+0.736047	open	2ca3:1020 bus 1 address 24	2026-10-30T18:00:43.032+00:00
+0.736736	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=0; last_bytes=0; since_data=0.001s	2026-10-30T18:00:43.033+00:00
+0.736848	discontinuity	usb_io	2026-10-30T18:00:43.033+00:00
+1.666525	open	2ca3:1020 bus 1 address 24	2026-10-30T18:00:43.963+00:00
+1.667027	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=0; last_bytes=0; since_data=0.001s	2026-10-30T18:00:43.963+00:00
+1.667109	discontinuity	usb_io	2026-10-30T18:00:43.963+00:00
+3.770042	open	2ca3:1020 bus 1 address 24	2026-10-30T18:00:46.066+00:00
+3.770533	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=0; last_bytes=0; since_data=0.000s	2026-10-30T18:00:46.067+00:00
+3.770623	discontinuity	usb_io	2026-10-30T18:00:46.067+00:00
+7.454734	open	2ca3:1020 bus 1 address 24	2026-10-30T18:00:49.751+00:00
+7.455237	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=0; last_bytes=0; since_data=0.001s	2026-10-30T18:00:49.751+00:00
+7.455326	discontinuity	usb_io	2026-10-30T18:00:49.751+00:00
+12.881766	open	2ca3:1020 bus 1 address 24	2026-10-30T18:00:55.178+00:00
+12.882254	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=0; last_bytes=0; since_data=0.000s	2026-10-30T18:00:55.178+00:00
+12.882345	discontinuity	usb_io	2026-10-30T18:00:55.178+00:00
+17.902149	open	2ca3:1020 bus 1 address 24	2026-10-30T18:01:00.198+00:00
+17.902646	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=0; last_bytes=0; since_data=0.000s	2026-10-30T18:01:00.199+00:00
+17.902731	discontinuity	usb_io	2026-10-30T18:01:00.199+00:00
+22.495757	open	2ca3:1020 bus 1 address 24	2026-10-30T18:01:04.792+00:00
+22.496278	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=0; last_bytes=0; since_data=0.001s	2026-10-30T18:01:04.792+00:00
+22.496370	discontinuity	usb_io	2026-10-30T18:01:04.792+00:00
+27.016202	open	2ca3:1020 bus 1 address 24	2026-10-30T18:01:09.312+00:00
+27.016753	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=0; last_bytes=0; since_data=0.001s	2026-10-30T18:01:09.313+00:00
+27.016853	discontinuity	usb_io	2026-10-30T18:01:09.313+00:00
+30.021144	stop	stopped	2026-10-30T18:01:12.317+00:00

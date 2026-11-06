@@ -1,0 +1,33 @@
+# Python caches and environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Build and installation metadata
+build/
+dist/
+*.egg-info/
+
+# Generated preview images
+vt13_frames/
+
+# Large raw/generated data
+vt13_idle.bin
+live_runs/*.bin
+
+# Keep the verified cold-start golden set; ignore other raw captures
+captures/*
+!captures/cold_start/
+!captures/cold_start/**
+
+# Agent/runtime metadata
+.agents/
+.codex/
+
+# OS/editor files
+.DS_Store
+*.swp

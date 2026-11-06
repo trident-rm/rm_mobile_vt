@@ -1,0 +1,38 @@
+{
+  "bulk_if1_ep82": {
+    "interface": 1,
+    "endpoint": "0x82",
+    "bytes": 528150,
+    "reads": 131,
+    "timeouts": 0,
+    "error": "USBError(5, 'Input/Output Error')",
+    "elapsed_s": 40.05,
+    "bytes_per_second": 13187.1
+  },
+  "bulk_if0_ep81": {
+    "interface": 0,
+    "endpoint": "0x81",
+    "bytes": 2431249,
+    "reads": 665,
+    "timeouts": 64,
+    "error": "USBError(5, 'Input/Output Error')",
+    "elapsed_s": 40.05,
+    "bytes_per_second": 60704.7
+  },
+  "serial_ttyACM0": {
+    "port": "/dev/ttyACM0",
+    "bytes": 68888,
+    "reads": 198,
+    "timeouts": 2,
+    "elapsed_s": 40.05,
+    "bytes_per_second": 1720.0
+  },
+  "serial_ttyACM1": {
+    "port": "/dev/ttyACM1",
+    "bytes": 0,
+    "reads": 0,
+    "timeouts": 200,
+    "elapsed_s": 40.05,
+    "bytes_per_second": 0.0
+  }
+}

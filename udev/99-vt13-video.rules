@@ -1,0 +1,5 @@
+SUBSYSTEM=="usb", ATTR{idVendor}=="2ca3", ATTR{idProduct}=="1020", TAG+="uaccess"
+
+# TAG+="uaccess" applies to active local desktop sessions. For SSH/headless use,
+# replace the rule above with an owner/group rule, for example:
+# SUBSYSTEM=="usb", ATTR{idVendor}=="2ca3", ATTR{idProduct}=="1020", OWNER="youruser", GROUP="yourgroup", MODE="0660"

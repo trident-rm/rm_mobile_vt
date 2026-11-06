@@ -1,0 +1,28 @@
+elapsed_s	event	detail	wall_time_utc
+0.012077	open	2ca3:1020 bus 1 address 24	2026-10-30T19:06:07.002+00:00
+0.012619	drain	4080 bytes	2026-10-30T19:06:07.002+00:00
+18.140449	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=12029; last_bytes=23095239; since_data=0.001s	2026-10-30T19:06:25.130+00:00
+18.140657	clear_halt	ok=True	2026-10-30T19:06:25.131+00:00
+18.140689	recovery_in_place	usb_io	2026-10-30T19:06:25.131+00:00
+18.318183	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=12143; last_bytes=23314152; since_data=0.001s	2026-10-30T19:06:25.308+00:00
+18.318350	clear_halt	ok=True	2026-10-30T19:06:25.308+00:00
+18.318379	recovery_in_place	usb_io	2026-10-30T19:06:25.308+00:00
+18.875353	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=12503; last_bytes=24006938; since_data=0.001s	2026-10-30T19:06:25.865+00:00
+18.875551	clear_halt	ok=True	2026-10-30T19:06:25.865+00:00
+18.875583	recovery_in_place	usb_io	2026-10-30T19:06:25.865+00:00
+19.055961	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=12619; last_bytes=24231928; since_data=0.001s	2026-10-30T19:06:26.046+00:00
+19.056189	clear_halt	ok=True	2026-10-30T19:06:26.046+00:00
+19.056247	recovery_in_place	usb_io	2026-10-30T19:06:26.046+00:00
+44.616186	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=29249; last_bytes=56182428; since_data=0.001s	2026-10-30T19:06:51.606+00:00
+44.616372	clear_halt	ok=True	2026-10-30T19:06:51.606+00:00
+44.616399	recovery_in_place	usb_io	2026-10-30T19:06:51.606+00:00
+44.793162	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=29364; last_bytes=56402957; since_data=0.001s	2026-10-30T19:06:51.783+00:00
+44.793325	clear_halt	ok=True	2026-10-30T19:06:51.783+00:00
+44.793352	recovery_in_place	usb_io	2026-10-30T19:06:51.783+00:00
+54.193361	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=35487; last_bytes=68160596; since_data=0.001s	2026-10-30T19:07:01.183+00:00
+54.193517	clear_halt	ok=True	2026-10-30T19:07:01.183+00:00
+54.193547	recovery_in_place	usb_io	2026-10-30T19:07:01.183+00:00
+54.376819	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=35604; last_bytes=68388943; since_data=0.001s	2026-10-30T19:07:01.367+00:00
+54.377066	clear_halt	ok=True	2026-10-30T19:07:01.367+00:00
+54.377119	recovery_in_place	usb_io	2026-10-30T19:07:01.367+00:00
+90.083777	stop	stopped	2026-10-30T19:07:37.074+00:00

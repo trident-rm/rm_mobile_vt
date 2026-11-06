@@ -1,0 +1,813 @@
+elapsed_s	event	detail	wall_time_utc
+0.012405	open	2ca3:1020 bus 1 address 24	2026-10-30T18:10:36.707+00:00
+0.012816	drain	8160 bytes	2026-10-30T18:10:36.707+00:00
+0.786270	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=386; last_bytes=1394760; since_data=0.007s	2026-10-30T18:10:37.481+00:00
+0.786474	clear_halt	ok=True	2026-10-30T18:10:37.481+00:00
+0.786562	discontinuity	usb_io	2026-10-30T18:10:37.481+00:00
+0.786596	recovery_in_place	usb_io	2026-10-30T18:10:37.481+00:00
+1.108322	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=497; last_bytes=1792382; since_data=0.003s	2026-10-30T18:10:37.803+00:00
+1.108538	clear_halt	ok=True	2026-10-30T18:10:37.803+00:00
+1.108632	discontinuity	usb_io	2026-10-30T18:10:37.803+00:00
+1.108684	recovery_in_place	usb_io	2026-10-30T18:10:37.803+00:00
+2.704137	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=1047; last_bytes=3770982; since_data=0.006s	2026-10-30T18:10:39.399+00:00
+2.704369	clear_halt	ok=True	2026-10-30T18:10:39.399+00:00
+2.704464	discontinuity	usb_io	2026-10-30T18:10:39.399+00:00
+2.704514	recovery_in_place	usb_io	2026-10-30T18:10:39.399+00:00
+4.730389	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=1741; last_bytes=6276446; since_data=0.002s	2026-10-30T18:10:41.425+00:00
+4.730608	clear_halt	ok=True	2026-10-30T18:10:41.425+00:00
+4.730702	discontinuity	usb_io	2026-10-30T18:10:41.425+00:00
+4.730754	recovery_in_place	usb_io	2026-10-30T18:10:41.425+00:00
+5.864107	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=2125; last_bytes=7678110; since_data=0.001s	2026-10-30T18:10:42.559+00:00
+5.864359	clear_halt	ok=True	2026-10-30T18:10:42.559+00:00
+5.864448	discontinuity	usb_io	2026-10-30T18:10:42.559+00:00
+5.864492	recovery_in_place	usb_io	2026-10-30T18:10:42.559+00:00
+6.915864	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=2486; last_bytes=8974708; since_data=0.002s	2026-10-30T18:10:43.610+00:00
+6.916160	clear_halt	ok=True	2026-10-30T18:10:43.611+00:00
+6.916275	discontinuity	usb_io	2026-10-30T18:10:43.611+00:00
+6.916327	recovery_in_place	usb_io	2026-10-30T18:10:43.611+00:00
+11.440410	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=4029; last_bytes=14570307; since_data=0.003s	2026-10-30T18:10:48.135+00:00
+11.440629	clear_halt	ok=True	2026-10-30T18:10:48.135+00:00
+11.440726	discontinuity	usb_io	2026-10-30T18:10:48.135+00:00
+11.440778	recovery_in_place	usb_io	2026-10-30T18:10:48.135+00:00
+11.556636	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=4070; last_bytes=14713291; since_data=0.003s	2026-10-30T18:10:48.251+00:00
+11.556851	clear_halt	ok=True	2026-10-30T18:10:48.251+00:00
+11.556947	discontinuity	usb_io	2026-10-30T18:10:48.251+00:00
+11.556998	recovery_in_place	usb_io	2026-10-30T18:10:48.251+00:00
+12.424214	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=4362; last_bytes=15782151; since_data=0.003s	2026-10-30T18:10:49.119+00:00
+12.424435	clear_halt	ok=True	2026-10-30T18:10:49.119+00:00
+12.424507	discontinuity	usb_io	2026-10-30T18:10:49.119+00:00
+12.424537	recovery_in_place	usb_io	2026-10-30T18:10:49.119+00:00
+13.548303	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=4742; last_bytes=17164691; since_data=0.006s	2026-10-30T18:10:50.243+00:00
+13.548563	clear_halt	ok=True	2026-10-30T18:10:50.243+00:00
+13.548660	discontinuity	usb_io	2026-10-30T18:10:50.243+00:00
+13.548721	recovery_in_place	usb_io	2026-10-30T18:10:50.243+00:00
+14.375821	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=5027; last_bytes=18196558; since_data=0.003s	2026-10-30T18:10:51.070+00:00
+14.376008	clear_halt	ok=True	2026-10-30T18:10:51.070+00:00
+14.376071	discontinuity	usb_io	2026-10-30T18:10:51.071+00:00
+14.376099	recovery_in_place	usb_io	2026-10-30T18:10:51.071+00:00
+14.758835	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=5160; last_bytes=18670217; since_data=0.003s	2026-10-30T18:10:51.453+00:00
+14.759073	clear_halt	ok=True	2026-10-30T18:10:51.454+00:00
+14.759208	discontinuity	usb_io	2026-10-30T18:10:51.454+00:00
+14.759285	recovery_in_place	usb_io	2026-10-30T18:10:51.454+00:00
+15.906319	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=5551; last_bytes=20081695; since_data=0.003s	2026-10-30T18:10:52.601+00:00
+15.906492	clear_halt	ok=True	2026-10-30T18:10:52.601+00:00
+15.906555	discontinuity	usb_io	2026-10-30T18:10:52.601+00:00
+15.906581	recovery_in_place	usb_io	2026-10-30T18:10:52.601+00:00
+17.208005	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=5997; last_bytes=21687732; since_data=0.003s	2026-10-30T18:10:53.902+00:00
+17.208269	clear_halt	ok=True	2026-10-30T18:10:53.903+00:00
+17.208376	discontinuity	usb_io	2026-10-30T18:10:53.903+00:00
+17.208427	recovery_in_place	usb_io	2026-10-30T18:10:53.903+00:00
+17.593378	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=6130; last_bytes=22163552; since_data=0.002s	2026-10-30T18:10:54.288+00:00
+17.593556	clear_halt	ok=True	2026-10-30T18:10:54.288+00:00
+17.593622	discontinuity	usb_io	2026-10-30T18:10:54.288+00:00
+17.593650	recovery_in_place	usb_io	2026-10-30T18:10:54.288+00:00
+19.307969	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=6718; last_bytes=24282002; since_data=0.003s	2026-10-30T18:10:56.002+00:00
+19.308241	clear_halt	ok=True	2026-10-30T18:10:56.003+00:00
+19.308340	discontinuity	usb_io	2026-10-30T18:10:56.003+00:00
+19.308388	recovery_in_place	usb_io	2026-10-30T18:10:56.003+00:00
+22.324052	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=6723; last_bytes=24301623; since_data=3.003s	2026-10-30T18:10:59.019+00:00
+22.324643	clear_halt	ok=True	2026-10-30T18:10:59.019+00:00
+22.324791	discontinuity	usb_stall	2026-10-30T18:10:59.019+00:00
+22.324867	recovery_in_place	usb_stall	2026-10-30T18:10:59.019+00:00
+22.326331	read_gap	read_gap_3.005s	2026-10-30T18:10:59.021+00:00
+22.339956	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=6815; last_bytes=24628273; since_data=0.000s	2026-10-30T18:10:59.034+00:00
+22.340488	clear_halt	ok=True	2026-10-30T18:10:59.035+00:00
+22.340544	discontinuity	usb_io	2026-10-30T18:10:59.035+00:00
+22.340568	recovery_in_place	usb_io	2026-10-30T18:10:59.035+00:00
+25.409834	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=6878; last_bytes=24849168; since_data=3.003s	2026-10-30T18:11:02.104+00:00
+25.410738	clear_halt	ok=True	2026-10-30T18:11:02.105+00:00
+25.410858	discontinuity	usb_stall	2026-10-30T18:11:02.105+00:00
+25.410909	recovery_in_place	usb_stall	2026-10-30T18:11:02.105+00:00
+25.411160	read_gap	read_gap_3.005s	2026-10-30T18:11:02.106+00:00
+25.584187	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=7043; last_bytes=25443093; since_data=0.001s	2026-10-30T18:11:02.279+00:00
+25.584355	clear_halt	ok=True	2026-10-30T18:11:02.279+00:00
+25.584414	discontinuity	usb_io	2026-10-30T18:11:02.279+00:00
+25.584441	recovery_in_place	usb_io	2026-10-30T18:11:02.279+00:00
+26.185483	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=7249; last_bytes=26184228; since_data=0.003s	2026-10-30T18:11:02.880+00:00
+26.185720	clear_halt	ok=True	2026-10-30T18:11:02.880+00:00
+26.185824	discontinuity	usb_io	2026-10-30T18:11:02.880+00:00
+26.185877	recovery_in_place	usb_io	2026-10-30T18:11:02.880+00:00
+26.355905	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=7307; last_bytes=26392786; since_data=0.003s	2026-10-30T18:11:03.050+00:00
+26.356117	clear_halt	ok=True	2026-10-30T18:11:03.051+00:00
+26.356242	discontinuity	usb_io	2026-10-30T18:11:03.051+00:00
+26.356290	recovery_in_place	usb_io	2026-10-30T18:11:03.051+00:00
+26.530761	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=7368; last_bytes=26608386; since_data=0.000s	2026-10-30T18:11:03.225+00:00
+26.530975	clear_halt	ok=True	2026-10-30T18:11:03.225+00:00
+26.531064	discontinuity	usb_io	2026-10-30T18:11:03.226+00:00
+26.531110	recovery_in_place	usb_io	2026-10-30T18:11:03.226+00:00
+26.600486	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=7391; last_bytes=26686037; since_data=0.004s	2026-10-30T18:11:03.295+00:00
+26.600681	clear_halt	ok=True	2026-10-30T18:11:03.295+00:00
+26.600736	discontinuity	usb_io	2026-10-30T18:11:03.295+00:00
+26.600763	recovery_in_place	usb_io	2026-10-30T18:11:03.295+00:00
+27.984105	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=7861; last_bytes=28399384; since_data=0.003s	2026-10-30T18:11:04.679+00:00
+27.984326	clear_halt	ok=True	2026-10-30T18:11:04.679+00:00
+27.984421	discontinuity	usb_io	2026-10-30T18:11:04.679+00:00
+27.984469	recovery_in_place	usb_io	2026-10-30T18:11:04.679+00:00
+28.006350	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=7867; last_bytes=28423347; since_data=0.003s	2026-10-30T18:11:04.701+00:00
+28.006564	clear_halt	ok=True	2026-10-30T18:11:04.701+00:00
+28.006649	discontinuity	usb_io	2026-10-30T18:11:04.701+00:00
+28.006692	recovery_in_place	usb_io	2026-10-30T18:11:04.701+00:00
+28.282984	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=7961; last_bytes=28755946; since_data=0.004s	2026-10-30T18:11:04.977+00:00
+28.283182	clear_halt	ok=True	2026-10-30T18:11:04.978+00:00
+28.283243	discontinuity	usb_io	2026-10-30T18:11:04.978+00:00
+28.283272	recovery_in_place	usb_io	2026-10-30T18:11:04.978+00:00
+30.188039	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=8603; last_bytes=31113005; since_data=0.004s	2026-10-30T18:11:06.883+00:00
+30.188291	clear_halt	ok=True	2026-10-30T18:11:06.883+00:00
+30.188384	discontinuity	usb_io	2026-10-30T18:11:06.883+00:00
+30.188416	recovery_in_place	usb_io	2026-10-30T18:11:06.883+00:00
+31.650506	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=9103; last_bytes=32920022; since_data=0.006s	2026-10-30T18:11:08.345+00:00
+31.650764	clear_halt	ok=True	2026-10-30T18:11:08.345+00:00
+31.650858	discontinuity	usb_io	2026-10-30T18:11:08.345+00:00
+31.650907	recovery_in_place	usb_io	2026-10-30T18:11:08.345+00:00
+32.328463	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=9332; last_bytes=33757257; since_data=0.003s	2026-10-30T18:11:09.023+00:00
+32.328709	clear_halt	ok=True	2026-10-30T18:11:09.023+00:00
+32.328799	discontinuity	usb_io	2026-10-30T18:11:09.023+00:00
+32.328829	recovery_in_place	usb_io	2026-10-30T18:11:09.023+00:00
+32.712941	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=9462; last_bytes=34228498; since_data=0.003s	2026-10-30T18:11:09.407+00:00
+32.713150	clear_halt	ok=True	2026-10-30T18:11:09.408+00:00
+32.713228	discontinuity	usb_io	2026-10-30T18:11:09.408+00:00
+32.713259	recovery_in_place	usb_io	2026-10-30T18:11:09.408+00:00
+32.877964	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=9521; last_bytes=34436923; since_data=0.004s	2026-10-30T18:11:09.572+00:00
+32.878202	clear_halt	ok=True	2026-10-30T18:11:09.573+00:00
+32.878318	discontinuity	usb_io	2026-10-30T18:11:09.573+00:00
+32.878369	recovery_in_place	usb_io	2026-10-30T18:11:09.573+00:00
+34.775464	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=10168; last_bytes=36782561; since_data=0.003s	2026-10-30T18:11:11.470+00:00
+34.775664	clear_halt	ok=True	2026-10-30T18:11:11.470+00:00
+34.775728	discontinuity	usb_io	2026-10-30T18:11:11.470+00:00
+34.775759	recovery_in_place	usb_io	2026-10-30T18:11:11.470+00:00
+36.106689	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=10628; last_bytes=38442745; since_data=0.003s	2026-10-30T18:11:12.801+00:00
+36.106897	clear_halt	ok=True	2026-10-30T18:11:12.801+00:00
+36.106969	discontinuity	usb_io	2026-10-30T18:11:12.801+00:00
+36.106999	recovery_in_place	usb_io	2026-10-30T18:11:12.801+00:00
+37.911367	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=11242; last_bytes=40673712; since_data=0.005s	2026-10-30T18:11:14.606+00:00
+37.911585	clear_halt	ok=True	2026-10-30T18:11:14.606+00:00
+37.911664	discontinuity	usb_io	2026-10-30T18:11:14.606+00:00
+37.911695	recovery_in_place	usb_io	2026-10-30T18:11:14.606+00:00
+38.128581	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=11319; last_bytes=40947839; since_data=0.000s	2026-10-30T18:11:14.823+00:00
+38.128787	clear_halt	ok=True	2026-10-30T18:11:14.823+00:00
+38.128846	discontinuity	usb_io	2026-10-30T18:11:14.823+00:00
+38.128874	recovery_in_place	usb_io	2026-10-30T18:11:14.823+00:00
+38.141689	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=11323; last_bytes=40960313; since_data=0.003s	2026-10-30T18:11:14.836+00:00
+38.141861	clear_halt	ok=True	2026-10-30T18:11:14.836+00:00
+38.141904	discontinuity	usb_io	2026-10-30T18:11:14.836+00:00
+38.141925	recovery_in_place	usb_io	2026-10-30T18:11:14.836+00:00
+40.894242	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=12256; last_bytes=44356773; since_data=0.003s	2026-10-30T18:11:17.589+00:00
+40.894428	clear_halt	ok=True	2026-10-30T18:11:17.589+00:00
+40.894493	discontinuity	usb_io	2026-10-30T18:11:17.589+00:00
+40.894522	recovery_in_place	usb_io	2026-10-30T18:11:17.589+00:00
+41.113865	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=12332; last_bytes=44627962; since_data=0.003s	2026-10-30T18:11:17.808+00:00
+41.114083	clear_halt	ok=True	2026-10-30T18:11:17.809+00:00
+41.114180	discontinuity	usb_io	2026-10-30T18:11:17.809+00:00
+41.114230	recovery_in_place	usb_io	2026-10-30T18:11:17.809+00:00
+41.433867	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=12440; last_bytes=45022726; since_data=0.002s	2026-10-30T18:11:18.128+00:00
+41.434074	clear_halt	ok=True	2026-10-30T18:11:18.129+00:00
+41.434160	discontinuity	usb_io	2026-10-30T18:11:18.129+00:00
+41.434216	recovery_in_place	usb_io	2026-10-30T18:11:18.129+00:00
+42.015958	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=12636; last_bytes=45737156; since_data=0.003s	2026-10-30T18:11:18.710+00:00
+42.016177	clear_halt	ok=True	2026-10-30T18:11:18.711+00:00
+42.016268	discontinuity	usb_io	2026-10-30T18:11:18.711+00:00
+42.016323	recovery_in_place	usb_io	2026-10-30T18:11:18.711+00:00
+42.448427	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=12780; last_bytes=46268356; since_data=0.005s	2026-10-30T18:11:19.143+00:00
+42.448657	clear_halt	ok=True	2026-10-30T18:11:19.143+00:00
+42.448756	discontinuity	usb_io	2026-10-30T18:11:19.143+00:00
+42.448803	recovery_in_place	usb_io	2026-10-30T18:11:19.143+00:00
+44.801435	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=13584; last_bytes=49183267; since_data=0.003s	2026-10-30T18:11:21.496+00:00
+44.801658	clear_halt	ok=True	2026-10-30T18:11:21.496+00:00
+44.801748	discontinuity	usb_io	2026-10-30T18:11:21.496+00:00
+44.801794	recovery_in_place	usb_io	2026-10-30T18:11:21.496+00:00
+44.956026	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=13633; last_bytes=49366549; since_data=0.002s	2026-10-30T18:11:21.651+00:00
+44.956290	clear_halt	ok=True	2026-10-30T18:11:21.651+00:00
+44.956392	discontinuity	usb_io	2026-10-30T18:11:21.651+00:00
+44.956440	recovery_in_place	usb_io	2026-10-30T18:11:21.651+00:00
+45.383450	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=13780; last_bytes=49892120; since_data=0.003s	2026-10-30T18:11:22.078+00:00
+45.383661	clear_halt	ok=True	2026-10-30T18:11:22.078+00:00
+45.383750	discontinuity	usb_io	2026-10-30T18:11:22.078+00:00
+45.383798	recovery_in_place	usb_io	2026-10-30T18:11:22.078+00:00
+45.563840	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=13841; last_bytes=50109664; since_data=0.005s	2026-10-30T18:11:22.258+00:00
+45.564043	clear_halt	ok=True	2026-10-30T18:11:22.259+00:00
+45.564106	discontinuity	usb_io	2026-10-30T18:11:22.259+00:00
+45.564132	recovery_in_place	usb_io	2026-10-30T18:11:22.259+00:00
+47.492992	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=14504; last_bytes=52505420; since_data=0.004s	2026-10-30T18:11:24.187+00:00
+47.493238	clear_halt	ok=True	2026-10-30T18:11:24.188+00:00
+47.493329	discontinuity	usb_io	2026-10-30T18:11:24.188+00:00
+47.493379	recovery_in_place	usb_io	2026-10-30T18:11:24.188+00:00
+50.679397	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=14567; last_bytes=52737827; since_data=3.003s	2026-10-30T18:11:27.374+00:00
+50.680001	clear_halt	ok=True	2026-10-30T18:11:27.374+00:00
+50.680107	discontinuity	usb_stall	2026-10-30T18:11:27.375+00:00
+50.680158	recovery_in_place	usb_stall	2026-10-30T18:11:27.375+00:00
+50.680533	read_gap	read_gap_3.004s	2026-10-30T18:11:27.375+00:00
+50.683774	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=14585; last_bytes=52804803; since_data=0.000s	2026-10-30T18:11:27.378+00:00
+50.684556	clear_halt	ok=True	2026-10-30T18:11:27.379+00:00
+50.684625	discontinuity	usb_io	2026-10-30T18:11:27.379+00:00
+50.684669	recovery_in_place	usb_io	2026-10-30T18:11:27.379+00:00
+51.458586	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=14901; last_bytes=53938244; since_data=0.003s	2026-10-30T18:11:28.153+00:00
+51.458894	clear_halt	ok=True	2026-10-30T18:11:28.153+00:00
+51.458957	discontinuity	usb_io	2026-10-30T18:11:28.153+00:00
+51.458984	recovery_in_place	usb_io	2026-10-30T18:11:28.153+00:00
+51.591720	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=14946; last_bytes=54098732; since_data=0.003s	2026-10-30T18:11:28.286+00:00
+51.591900	clear_halt	ok=True	2026-10-30T18:11:28.286+00:00
+51.591962	discontinuity	usb_io	2026-10-30T18:11:28.286+00:00
+51.591989	recovery_in_place	usb_io	2026-10-30T18:11:28.286+00:00
+53.855520	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=15722; last_bytes=56911291; since_data=0.007s	2026-10-30T18:11:30.550+00:00
+53.855818	clear_halt	ok=True	2026-10-30T18:11:30.550+00:00
+53.855881	discontinuity	usb_io	2026-10-30T18:11:30.550+00:00
+53.855911	recovery_in_place	usb_io	2026-10-30T18:11:30.550+00:00
+55.493497	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=16286; last_bytes=58939981; since_data=0.003s	2026-10-30T18:11:32.188+00:00
+55.493893	clear_halt	ok=True	2026-10-30T18:11:32.188+00:00
+55.494001	discontinuity	usb_io	2026-10-30T18:11:32.188+00:00
+55.494054	recovery_in_place	usb_io	2026-10-30T18:11:32.189+00:00
+58.284254	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=17238; last_bytes=62398700; since_data=0.001s	2026-10-30T18:11:34.979+00:00
+58.284524	clear_halt	ok=True	2026-10-30T18:11:34.979+00:00
+58.284581	discontinuity	usb_io	2026-10-30T18:11:34.979+00:00
+58.284607	recovery_in_place	usb_io	2026-10-30T18:11:34.979+00:00
+58.386081	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=17274; last_bytes=62523310; since_data=0.002s	2026-10-30T18:11:35.081+00:00
+58.386354	clear_halt	ok=True	2026-10-30T18:11:35.081+00:00
+58.386466	discontinuity	usb_io	2026-10-30T18:11:35.081+00:00
+58.386497	recovery_in_place	usb_io	2026-10-30T18:11:35.081+00:00
+58.576900	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=17336; last_bytes=62751463; since_data=0.000s	2026-10-30T18:11:35.271+00:00
+58.577133	clear_halt	ok=True	2026-10-30T18:11:35.272+00:00
+58.577192	discontinuity	usb_io	2026-10-30T18:11:35.272+00:00
+58.577221	recovery_in_place	usb_io	2026-10-30T18:11:35.272+00:00
+61.599707	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=17351; last_bytes=62807962; since_data=3.003s	2026-10-30T18:11:38.294+00:00
+61.600407	clear_halt	ok=True	2026-10-30T18:11:38.295+00:00
+61.600509	discontinuity	usb_stall	2026-10-30T18:11:38.295+00:00
+61.600538	recovery_in_place	usb_stall	2026-10-30T18:11:38.295+00:00
+61.601780	read_gap	read_gap_3.005s	2026-10-30T18:11:38.296+00:00
+61.603701	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=17363; last_bytes=62853100; since_data=0.000s	2026-10-30T18:11:38.298+00:00
+61.604445	clear_halt	ok=True	2026-10-30T18:11:38.299+00:00
+61.604483	discontinuity	usb_io	2026-10-30T18:11:38.299+00:00
+61.604503	recovery_in_place	usb_io	2026-10-30T18:11:38.299+00:00
+61.733139	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=17455; last_bytes=63185897; since_data=0.004s	2026-10-30T18:11:38.428+00:00
+61.733502	clear_halt	ok=True	2026-10-30T18:11:38.428+00:00
+61.733563	discontinuity	usb_io	2026-10-30T18:11:38.428+00:00
+61.733588	recovery_in_place	usb_io	2026-10-30T18:11:38.428+00:00
+61.797994	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=17483; last_bytes=63288945; since_data=0.000s	2026-10-30T18:11:38.492+00:00
+61.798144	clear_halt	ok=True	2026-10-30T18:11:38.493+00:00
+61.798206	discontinuity	usb_io	2026-10-30T18:11:38.493+00:00
+61.798234	recovery_in_place	usb_io	2026-10-30T18:11:38.493+00:00
+62.354245	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=17673; last_bytes=63976303; since_data=0.003s	2026-10-30T18:11:39.049+00:00
+62.354465	clear_halt	ok=True	2026-10-30T18:11:39.049+00:00
+62.354527	discontinuity	usb_io	2026-10-30T18:11:39.049+00:00
+62.354556	recovery_in_place	usb_io	2026-10-30T18:11:39.049+00:00
+64.256774	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=18321; last_bytes=66327143; since_data=0.001s	2026-10-30T18:11:40.951+00:00
+64.257006	clear_halt	ok=True	2026-10-30T18:11:40.951+00:00
+64.257070	discontinuity	usb_io	2026-10-30T18:11:40.952+00:00
+64.257098	recovery_in_place	usb_io	2026-10-30T18:11:40.952+00:00
+64.439450	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=18383; last_bytes=66552363; since_data=0.000s	2026-10-30T18:11:41.134+00:00
+64.439706	clear_halt	ok=True	2026-10-30T18:11:41.134+00:00
+64.439797	discontinuity	usb_io	2026-10-30T18:11:41.134+00:00
+64.439845	recovery_in_place	usb_io	2026-10-30T18:11:41.134+00:00
+65.101714	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=18610; last_bytes=67367704; since_data=0.003s	2026-10-30T18:11:41.796+00:00
+65.101966	clear_halt	ok=True	2026-10-30T18:11:41.796+00:00
+65.102052	discontinuity	usb_io	2026-10-30T18:11:41.797+00:00
+65.102096	recovery_in_place	usb_io	2026-10-30T18:11:41.797+00:00
+65.323704	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=18686; last_bytes=67652559; since_data=0.000s	2026-10-30T18:11:42.018+00:00
+65.323932	clear_halt	ok=True	2026-10-30T18:11:42.018+00:00
+65.324018	discontinuity	usb_io	2026-10-30T18:11:42.018+00:00
+65.324063	recovery_in_place	usb_io	2026-10-30T18:11:42.019+00:00
+66.110989	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=18957; last_bytes=68634813; since_data=0.003s	2026-10-30T18:11:42.805+00:00
+66.111280	clear_halt	ok=True	2026-10-30T18:11:42.806+00:00
+66.111386	discontinuity	usb_io	2026-10-30T18:11:42.806+00:00
+66.111464	recovery_in_place	usb_io	2026-10-30T18:11:42.806+00:00
+66.801769	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=19193; last_bytes=69486947; since_data=0.006s	2026-10-30T18:11:43.496+00:00
+66.802030	clear_halt	ok=True	2026-10-30T18:11:43.497+00:00
+66.802120	discontinuity	usb_io	2026-10-30T18:11:43.497+00:00
+66.802169	recovery_in_place	usb_io	2026-10-30T18:11:43.497+00:00
+67.476764	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=19418; last_bytes=70320109; since_data=0.001s	2026-10-30T18:11:44.171+00:00
+67.476985	clear_halt	ok=True	2026-10-30T18:11:44.171+00:00
+67.477078	discontinuity	usb_io	2026-10-30T18:11:44.172+00:00
+67.477130	recovery_in_place	usb_io	2026-10-30T18:11:44.172+00:00
+68.390596	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=19727; last_bytes=71447810; since_data=0.004s	2026-10-30T18:11:45.085+00:00
+68.390849	clear_halt	ok=True	2026-10-30T18:11:45.085+00:00
+68.390946	discontinuity	usb_io	2026-10-30T18:11:45.085+00:00
+68.390996	recovery_in_place	usb_io	2026-10-30T18:11:45.085+00:00
+68.440564	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=19742; last_bytes=71507979; since_data=0.004s	2026-10-30T18:11:45.135+00:00
+68.440793	clear_halt	ok=True	2026-10-30T18:11:45.135+00:00
+68.440891	discontinuity	usb_io	2026-10-30T18:11:45.135+00:00
+68.440939	recovery_in_place	usb_io	2026-10-30T18:11:45.135+00:00
+69.061375	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=19957; last_bytes=72277833; since_data=0.002s	2026-10-30T18:11:45.756+00:00
+69.061603	clear_halt	ok=True	2026-10-30T18:11:45.756+00:00
+69.061694	discontinuity	usb_io	2026-10-30T18:11:45.756+00:00
+69.061738	recovery_in_place	usb_io	2026-10-30T18:11:45.756+00:00
+70.878492	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=20579; last_bytes=74531500; since_data=0.003s	2026-10-30T18:11:47.573+00:00
+70.878697	clear_halt	ok=True	2026-10-30T18:11:47.573+00:00
+70.878812	discontinuity	usb_io	2026-10-30T18:11:47.573+00:00
+70.878861	recovery_in_place	usb_io	2026-10-30T18:11:47.573+00:00
+72.949249	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=21295; last_bytes=77103358; since_data=0.003s	2026-10-30T18:11:49.644+00:00
+72.949483	clear_halt	ok=True	2026-10-30T18:11:49.644+00:00
+72.949575	discontinuity	usb_io	2026-10-30T18:11:49.644+00:00
+72.949626	recovery_in_place	usb_io	2026-10-30T18:11:49.644+00:00
+73.129237	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=21355; last_bytes=77322149; since_data=0.003s	2026-10-30T18:11:49.824+00:00
+73.129395	clear_halt	ok=True	2026-10-30T18:11:49.824+00:00
+73.129454	discontinuity	usb_io	2026-10-30T18:11:49.824+00:00
+73.129479	recovery_in_place	usb_io	2026-10-30T18:11:49.824+00:00
+74.181396	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=21717; last_bytes=78625728; since_data=0.003s	2026-10-30T18:11:50.876+00:00
+74.181627	clear_halt	ok=True	2026-10-30T18:11:50.876+00:00
+74.181723	discontinuity	usb_io	2026-10-30T18:11:50.876+00:00
+74.181780	recovery_in_place	usb_io	2026-10-30T18:11:50.876+00:00
+74.241760	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=21736; last_bytes=78694127; since_data=0.006s	2026-10-30T18:11:50.936+00:00
+74.241965	clear_halt	ok=True	2026-10-30T18:11:50.936+00:00
+74.242051	discontinuity	usb_io	2026-10-30T18:11:50.937+00:00
+74.242099	recovery_in_place	usb_io	2026-10-30T18:11:50.937+00:00
+76.013970	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=22343; last_bytes=80893567; since_data=0.003s	2026-10-30T18:11:52.708+00:00
+76.014199	clear_halt	ok=True	2026-10-30T18:11:52.709+00:00
+76.014287	discontinuity	usb_io	2026-10-30T18:11:52.709+00:00
+76.014334	recovery_in_place	usb_io	2026-10-30T18:11:52.709+00:00
+76.421388	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=22485; last_bytes=81405329; since_data=0.003s	2026-10-30T18:11:53.116+00:00
+76.421626	clear_halt	ok=True	2026-10-30T18:11:53.116+00:00
+76.421718	discontinuity	usb_io	2026-10-30T18:11:53.116+00:00
+76.421767	recovery_in_place	usb_io	2026-10-30T18:11:53.116+00:00
+77.296010	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=22782; last_bytes=82474688; since_data=0.007s	2026-10-30T18:11:53.990+00:00
+77.296309	clear_halt	ok=True	2026-10-30T18:11:53.991+00:00
+77.296409	discontinuity	usb_io	2026-10-30T18:11:53.991+00:00
+77.296460	recovery_in_place	usb_io	2026-10-30T18:11:53.991+00:00
+78.314018	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=23121; last_bytes=83726155; since_data=0.008s	2026-10-30T18:11:55.008+00:00
+78.314283	clear_halt	ok=True	2026-10-30T18:11:55.009+00:00
+78.314349	discontinuity	usb_io	2026-10-30T18:11:55.009+00:00
+78.314381	recovery_in_place	usb_io	2026-10-30T18:11:55.009+00:00
+79.425620	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=23496; last_bytes=85098231; since_data=0.002s	2026-10-30T18:11:56.120+00:00
+79.425872	clear_halt	ok=True	2026-10-30T18:11:56.120+00:00
+79.425973	discontinuity	usb_io	2026-10-30T18:11:56.120+00:00
+79.426026	recovery_in_place	usb_io	2026-10-30T18:11:56.121+00:00
+79.658082	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=23573; last_bytes=85387736; since_data=0.003s	2026-10-30T18:11:56.353+00:00
+79.658286	clear_halt	ok=True	2026-10-30T18:11:56.353+00:00
+79.658376	discontinuity	usb_io	2026-10-30T18:11:56.353+00:00
+79.658407	recovery_in_place	usb_io	2026-10-30T18:11:56.353+00:00
+79.936798	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=23666; last_bytes=85727130; since_data=0.003s	2026-10-30T18:11:56.631+00:00
+79.937057	clear_halt	ok=True	2026-10-30T18:11:56.632+00:00
+79.937163	discontinuity	usb_io	2026-10-30T18:11:56.632+00:00
+79.937222	recovery_in_place	usb_io	2026-10-30T18:11:56.632+00:00
+86.406836	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=25870; last_bytes=93751961; since_data=0.003s	2026-10-30T18:12:03.101+00:00
+86.407079	clear_halt	ok=True	2026-10-30T18:12:03.102+00:00
+86.407161	discontinuity	usb_io	2026-10-30T18:12:03.102+00:00
+86.407198	recovery_in_place	usb_io	2026-10-30T18:12:03.102+00:00
+86.878080	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=26028; last_bytes=94327493; since_data=0.003s	2026-10-30T18:12:03.573+00:00
+86.878311	clear_halt	ok=True	2026-10-30T18:12:03.573+00:00
+86.878405	discontinuity	usb_io	2026-10-30T18:12:03.573+00:00
+86.878454	recovery_in_place	usb_io	2026-10-30T18:12:03.573+00:00
+87.678911	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=26304; last_bytes=95323139; since_data=0.002s	2026-10-30T18:12:04.373+00:00
+87.679127	clear_halt	ok=True	2026-10-30T18:12:04.374+00:00
+87.679219	discontinuity	usb_io	2026-10-30T18:12:04.374+00:00
+87.679267	recovery_in_place	usb_io	2026-10-30T18:12:04.374+00:00
+87.774313	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=26335; last_bytes=95433922; since_data=0.003s	2026-10-30T18:12:04.469+00:00
+87.774535	clear_halt	ok=True	2026-10-30T18:12:04.469+00:00
+87.774627	discontinuity	usb_io	2026-10-30T18:12:04.469+00:00
+87.774686	recovery_in_place	usb_io	2026-10-30T18:12:04.469+00:00
+88.626046	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=26625; last_bytes=96482920; since_data=0.003s	2026-10-30T18:12:05.321+00:00
+88.626300	clear_halt	ok=True	2026-10-30T18:12:05.321+00:00
+88.626407	discontinuity	usb_io	2026-10-30T18:12:05.321+00:00
+88.626455	recovery_in_place	usb_io	2026-10-30T18:12:05.321+00:00
+92.037521	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=3.003s	2026-10-30T18:12:08.732+00:00
+92.038236	clear_halt	ok=True	2026-10-30T18:12:08.733+00:00
+92.038385	discontinuity	usb_stall	2026-10-30T18:12:08.733+00:00
+92.038440	recovery_in_place	usb_stall	2026-10-30T18:12:08.733+00:00
+92.288818	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=3.255s	2026-10-30T18:12:08.983+00:00
+92.289449	clear_halt	ok=True	2026-10-30T18:12:08.984+00:00
+92.289645	discontinuity	usb_stall	2026-10-30T18:12:08.984+00:00
+92.289696	recovery_in_place	usb_stall	2026-10-30T18:12:08.984+00:00
+92.540058	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=3.506s	2026-10-30T18:12:09.235+00:00
+92.540611	clear_halt	ok=True	2026-10-30T18:12:09.235+00:00
+92.540730	discontinuity	usb_stall	2026-10-30T18:12:09.235+00:00
+92.540777	recovery_in_place	usb_stall	2026-10-30T18:12:09.235+00:00
+92.791088	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=3.757s	2026-10-30T18:12:09.486+00:00
+92.791742	clear_halt	ok=True	2026-10-30T18:12:09.486+00:00
+92.791879	discontinuity	usb_stall	2026-10-30T18:12:09.486+00:00
+92.791928	recovery_in_place	usb_stall	2026-10-30T18:12:09.486+00:00
+93.042250	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=4.008s	2026-10-30T18:12:09.737+00:00
+93.042943	clear_halt	ok=True	2026-10-30T18:12:09.737+00:00
+93.043049	discontinuity	usb_stall	2026-10-30T18:12:09.738+00:00
+93.043099	recovery_in_place	usb_stall	2026-10-30T18:12:09.738+00:00
+93.293405	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=4.259s	2026-10-30T18:12:09.988+00:00
+93.293957	clear_halt	ok=True	2026-10-30T18:12:09.988+00:00
+93.294055	discontinuity	usb_stall	2026-10-30T18:12:09.989+00:00
+93.294103	recovery_in_place	usb_stall	2026-10-30T18:12:09.989+00:00
+93.544471	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=4.510s	2026-10-30T18:12:10.239+00:00
+93.545076	clear_halt	ok=True	2026-10-30T18:12:10.240+00:00
+93.545212	discontinuity	usb_stall	2026-10-30T18:12:10.240+00:00
+93.545268	recovery_in_place	usb_stall	2026-10-30T18:12:10.240+00:00
+93.795666	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=4.761s	2026-10-30T18:12:10.490+00:00
+93.796490	clear_halt	ok=True	2026-10-30T18:12:10.491+00:00
+93.796656	discontinuity	usb_stall	2026-10-30T18:12:10.491+00:00
+93.796705	recovery_in_place	usb_stall	2026-10-30T18:12:10.491+00:00
+94.047047	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=5.013s	2026-10-30T18:12:10.742+00:00
+94.047817	clear_halt	ok=True	2026-10-30T18:12:10.742+00:00
+94.047925	discontinuity	usb_stall	2026-10-30T18:12:10.742+00:00
+94.047975	recovery_in_place	usb_stall	2026-10-30T18:12:10.742+00:00
+94.298258	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=5.264s	2026-10-30T18:12:10.993+00:00
+94.298820	clear_halt	ok=True	2026-10-30T18:12:10.993+00:00
+94.298939	discontinuity	usb_stall	2026-10-30T18:12:10.993+00:00
+94.298987	recovery_in_place	usb_stall	2026-10-30T18:12:10.993+00:00
+94.549337	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=5.515s	2026-10-30T18:12:11.244+00:00
+94.549879	clear_halt	ok=True	2026-10-30T18:12:11.244+00:00
+94.549997	discontinuity	usb_stall	2026-10-30T18:12:11.244+00:00
+94.550044	recovery_in_place	usb_stall	2026-10-30T18:12:11.245+00:00
+94.800352	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=5.766s	2026-10-30T18:12:11.495+00:00
+94.800982	clear_halt	ok=True	2026-10-30T18:12:11.495+00:00
+94.801099	discontinuity	usb_stall	2026-10-30T18:12:11.496+00:00
+94.801146	recovery_in_place	usb_stall	2026-10-30T18:12:11.496+00:00
+95.051567	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=6.017s	2026-10-30T18:12:11.746+00:00
+95.052343	clear_halt	ok=True	2026-10-30T18:12:11.747+00:00
+95.052509	discontinuity	usb_stall	2026-10-30T18:12:11.747+00:00
+95.052562	recovery_in_place	usb_stall	2026-10-30T18:12:11.747+00:00
+95.302865	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=6.269s	2026-10-30T18:12:11.997+00:00
+95.303457	clear_halt	ok=True	2026-10-30T18:12:11.998+00:00
+95.303583	discontinuity	usb_stall	2026-10-30T18:12:11.998+00:00
+95.303640	recovery_in_place	usb_stall	2026-10-30T18:12:11.998+00:00
+95.553981	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=6.520s	2026-10-30T18:12:12.248+00:00
+95.554673	clear_halt	ok=True	2026-10-30T18:12:12.249+00:00
+95.554789	discontinuity	usb_stall	2026-10-30T18:12:12.249+00:00
+95.554839	recovery_in_place	usb_stall	2026-10-30T18:12:12.249+00:00
+95.805260	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=6.771s	2026-10-30T18:12:12.500+00:00
+95.805839	clear_halt	ok=True	2026-10-30T18:12:12.500+00:00
+95.805921	discontinuity	usb_stall	2026-10-30T18:12:12.500+00:00
+95.805948	recovery_in_place	usb_stall	2026-10-30T18:12:12.500+00:00
+96.056187	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=7.022s	2026-10-30T18:12:12.751+00:00
+96.056778	clear_halt	ok=True	2026-10-30T18:12:12.751+00:00
+96.056866	discontinuity	usb_stall	2026-10-30T18:12:12.751+00:00
+96.056897	recovery_in_place	usb_stall	2026-10-30T18:12:12.751+00:00
+96.307144	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=7.273s	2026-10-30T18:12:13.002+00:00
+96.307727	clear_halt	ok=True	2026-10-30T18:12:13.002+00:00
+96.307809	discontinuity	usb_stall	2026-10-30T18:12:13.002+00:00
+96.307837	recovery_in_place	usb_stall	2026-10-30T18:12:13.002+00:00
+96.558083	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=7.524s	2026-10-30T18:12:13.253+00:00
+96.558624	clear_halt	ok=True	2026-10-30T18:12:13.253+00:00
+96.558724	discontinuity	usb_stall	2026-10-30T18:12:13.253+00:00
+96.558753	recovery_in_place	usb_stall	2026-10-30T18:12:13.253+00:00
+96.809090	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=7.775s	2026-10-30T18:12:13.504+00:00
+96.809740	clear_halt	ok=True	2026-10-30T18:12:13.504+00:00
+96.809841	discontinuity	usb_stall	2026-10-30T18:12:13.504+00:00
+96.809874	recovery_in_place	usb_stall	2026-10-30T18:12:13.504+00:00
+97.060115	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=8.026s	2026-10-30T18:12:13.755+00:00
+97.060717	clear_halt	ok=True	2026-10-30T18:12:13.755+00:00
+97.060801	discontinuity	usb_stall	2026-10-30T18:12:13.755+00:00
+97.060828	recovery_in_place	usb_stall	2026-10-30T18:12:13.755+00:00
+97.311046	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=8.277s	2026-10-30T18:12:14.006+00:00
+97.311581	clear_halt	ok=True	2026-10-30T18:12:14.006+00:00
+97.311655	discontinuity	usb_stall	2026-10-30T18:12:14.006+00:00
+97.311683	recovery_in_place	usb_stall	2026-10-30T18:12:14.006+00:00
+97.561897	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=8.528s	2026-10-30T18:12:14.256+00:00
+97.562391	clear_halt	ok=True	2026-10-30T18:12:14.257+00:00
+97.562460	discontinuity	usb_stall	2026-10-30T18:12:14.257+00:00
+97.562486	recovery_in_place	usb_stall	2026-10-30T18:12:14.257+00:00
+97.812713	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=8.778s	2026-10-30T18:12:14.507+00:00
+97.813226	clear_halt	ok=True	2026-10-30T18:12:14.508+00:00
+97.813313	discontinuity	usb_stall	2026-10-30T18:12:14.508+00:00
+97.813342	recovery_in_place	usb_stall	2026-10-30T18:12:14.508+00:00
+98.063534	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=9.029s	2026-10-30T18:12:14.758+00:00
+98.064009	clear_halt	ok=True	2026-10-30T18:12:14.758+00:00
+98.064152	discontinuity	usb_stall	2026-10-30T18:12:14.759+00:00
+98.064210	recovery_in_place	usb_stall	2026-10-30T18:12:14.759+00:00
+98.314492	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=9.280s	2026-10-30T18:12:15.009+00:00
+98.315042	clear_halt	ok=True	2026-10-30T18:12:15.010+00:00
+98.315160	discontinuity	usb_stall	2026-10-30T18:12:15.010+00:00
+98.315224	recovery_in_place	usb_stall	2026-10-30T18:12:15.010+00:00
+98.565565	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=9.531s	2026-10-30T18:12:15.260+00:00
+98.566128	clear_halt	ok=True	2026-10-30T18:12:15.261+00:00
+98.566233	discontinuity	usb_stall	2026-10-30T18:12:15.261+00:00
+98.566299	recovery_in_place	usb_stall	2026-10-30T18:12:15.261+00:00
+98.816697	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=9.782s	2026-10-30T18:12:15.511+00:00
+98.817232	clear_halt	ok=True	2026-10-30T18:12:15.512+00:00
+98.817328	discontinuity	usb_stall	2026-10-30T18:12:15.512+00:00
+98.817374	recovery_in_place	usb_stall	2026-10-30T18:12:15.512+00:00
+99.067678	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=10.033s	2026-10-30T18:12:15.762+00:00
+99.068210	clear_halt	ok=True	2026-10-30T18:12:15.763+00:00
+99.068330	discontinuity	usb_stall	2026-10-30T18:12:15.763+00:00
+99.068373	recovery_in_place	usb_stall	2026-10-30T18:12:15.763+00:00
+99.318640	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=10.284s	2026-10-30T18:12:16.013+00:00
+99.319248	clear_halt	ok=True	2026-10-30T18:12:16.014+00:00
+99.319368	discontinuity	usb_stall	2026-10-30T18:12:16.014+00:00
+99.319420	recovery_in_place	usb_stall	2026-10-30T18:12:16.014+00:00
+99.569702	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=10.535s	2026-10-30T18:12:16.264+00:00
+99.570248	clear_halt	ok=True	2026-10-30T18:12:16.265+00:00
+99.570352	discontinuity	usb_stall	2026-10-30T18:12:16.265+00:00
+99.570401	recovery_in_place	usb_stall	2026-10-30T18:12:16.265+00:00
+99.820678	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=10.786s	2026-10-30T18:12:16.515+00:00
+99.821383	clear_halt	ok=True	2026-10-30T18:12:16.516+00:00
+99.821496	discontinuity	usb_stall	2026-10-30T18:12:16.516+00:00
+99.821544	recovery_in_place	usb_stall	2026-10-30T18:12:16.516+00:00
+100.071849	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=11.038s	2026-10-30T18:12:16.766+00:00
+100.072543	clear_halt	ok=True	2026-10-30T18:12:16.767+00:00
+100.072646	discontinuity	usb_stall	2026-10-30T18:12:16.767+00:00
+100.072694	recovery_in_place	usb_stall	2026-10-30T18:12:16.767+00:00
+100.323000	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=11.289s	2026-10-30T18:12:17.017+00:00
+100.323546	clear_halt	ok=True	2026-10-30T18:12:17.018+00:00
+100.323672	discontinuity	usb_stall	2026-10-30T18:12:17.018+00:00
+100.323723	recovery_in_place	usb_stall	2026-10-30T18:12:17.018+00:00
+100.574052	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=11.540s	2026-10-30T18:12:17.269+00:00
+100.574818	clear_halt	ok=True	2026-10-30T18:12:17.269+00:00
+100.574923	discontinuity	usb_stall	2026-10-30T18:12:17.269+00:00
+100.574971	recovery_in_place	usb_stall	2026-10-30T18:12:17.269+00:00
+100.825252	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=11.791s	2026-10-30T18:12:17.520+00:00
+100.825747	clear_halt	ok=True	2026-10-30T18:12:17.520+00:00
+100.825839	discontinuity	usb_stall	2026-10-30T18:12:17.520+00:00
+100.825870	recovery_in_place	usb_stall	2026-10-30T18:12:17.520+00:00
+101.076088	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=12.042s	2026-10-30T18:12:17.771+00:00
+101.076563	clear_halt	ok=True	2026-10-30T18:12:17.771+00:00
+101.076653	discontinuity	usb_stall	2026-10-30T18:12:17.771+00:00
+101.076681	recovery_in_place	usb_stall	2026-10-30T18:12:17.771+00:00
+101.326919	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=12.293s	2026-10-30T18:12:18.021+00:00
+101.327412	clear_halt	ok=True	2026-10-30T18:12:18.022+00:00
+101.327484	discontinuity	usb_stall	2026-10-30T18:12:18.022+00:00
+101.327512	recovery_in_place	usb_stall	2026-10-30T18:12:18.022+00:00
+101.577752	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=12.543s	2026-10-30T18:12:18.272+00:00
+101.578305	clear_halt	ok=True	2026-10-30T18:12:18.273+00:00
+101.578403	discontinuity	usb_stall	2026-10-30T18:12:18.273+00:00
+101.578433	recovery_in_place	usb_stall	2026-10-30T18:12:18.273+00:00
+101.828665	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=12.794s	2026-10-30T18:12:18.523+00:00
+101.829202	clear_halt	ok=True	2026-10-30T18:12:18.524+00:00
+101.829293	discontinuity	usb_stall	2026-10-30T18:12:18.524+00:00
+101.829322	recovery_in_place	usb_stall	2026-10-30T18:12:18.524+00:00
+102.079553	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=13.045s	2026-10-30T18:12:18.774+00:00
+102.080183	clear_halt	ok=True	2026-10-30T18:12:18.775+00:00
+102.080286	discontinuity	usb_stall	2026-10-30T18:12:18.775+00:00
+102.080333	recovery_in_place	usb_stall	2026-10-30T18:12:18.775+00:00
+102.330647	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=13.296s	2026-10-30T18:12:19.025+00:00
+102.331315	clear_halt	ok=True	2026-10-30T18:12:19.026+00:00
+102.331433	discontinuity	usb_stall	2026-10-30T18:12:19.026+00:00
+102.331488	recovery_in_place	usb_stall	2026-10-30T18:12:19.026+00:00
+102.581883	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=13.548s	2026-10-30T18:12:19.276+00:00
+102.582627	clear_halt	ok=True	2026-10-30T18:12:19.277+00:00
+102.582824	discontinuity	usb_stall	2026-10-30T18:12:19.277+00:00
+102.582879	recovery_in_place	usb_stall	2026-10-30T18:12:19.277+00:00
+102.833210	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=26764; last_bytes=96988843; since_data=13.799s	2026-10-30T18:12:19.528+00:00
+102.833750	clear_halt	ok=True	2026-10-30T18:12:19.528+00:00
+102.833846	discontinuity	usb_stall	2026-10-30T18:12:19.528+00:00
+102.833893	recovery_in_place	usb_stall	2026-10-30T18:12:19.528+00:00
+103.012506	read_gap	read_gap_13.978s	2026-10-30T18:12:19.707+00:00
+103.045143	waiting_parameter_sets	VPS, SPS, PPS	2026-10-30T18:12:19.740+00:00
+103.457404	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=26867; last_bytes=97386601; since_data=0.000s	2026-10-30T18:12:20.152+00:00
+103.457647	clear_halt	ok=True	2026-10-30T18:12:20.152+00:00
+103.457748	discontinuity	usb_io	2026-10-30T18:12:20.152+00:00
+103.457795	recovery_in_place	usb_io	2026-10-30T18:12:20.152+00:00
+104.182213	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=27065; last_bytes=98151583; since_data=0.021s	2026-10-30T18:12:20.877+00:00
+104.182579	clear_halt	ok=True	2026-10-30T18:12:20.877+00:00
+104.182730	discontinuity	usb_io	2026-10-30T18:12:20.877+00:00
+104.182800	recovery_in_place	usb_io	2026-10-30T18:12:20.877+00:00
+106.690456	read_gap	read_gap_1.995s	2026-10-30T18:12:23.385+00:00
+107.291048	first_frame	/tmp/vt13_relink_first.png	2026-10-30T18:12:23.986+00:00
+108.354622	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=27776; last_bytes=100858426; since_data=0.002s	2026-10-30T18:12:25.049+00:00
+108.354874	clear_halt	ok=True	2026-10-30T18:12:25.049+00:00
+108.355786	discontinuity	usb_io	2026-10-30T18:12:25.050+00:00
+108.355899	recovery_in_place	usb_io	2026-10-30T18:12:25.050+00:00
+108.769657	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=27948; last_bytes=101528037; since_data=0.002s	2026-10-30T18:12:25.464+00:00
+108.769872	clear_halt	ok=True	2026-10-30T18:12:25.464+00:00
+108.769966	discontinuity	usb_io	2026-10-30T18:12:25.464+00:00
+108.770015	recovery_in_place	usb_io	2026-10-30T18:12:25.464+00:00
+108.855111	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=27984; last_bytes=101668988; since_data=0.002s	2026-10-30T18:12:25.550+00:00
+108.855366	clear_halt	ok=True	2026-10-30T18:12:25.550+00:00
+108.855468	discontinuity	usb_io	2026-10-30T18:12:25.550+00:00
+108.855518	recovery_in_place	usb_io	2026-10-30T18:12:25.550+00:00
+108.894739	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=27992; last_bytes=101701315; since_data=0.003s	2026-10-30T18:12:25.589+00:00
+108.895005	clear_halt	ok=True	2026-10-30T18:12:25.589+00:00
+108.895139	discontinuity	usb_io	2026-10-30T18:12:25.590+00:00
+108.895241	recovery_in_place	usb_io	2026-10-30T18:12:25.590+00:00
+108.918216	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=28008; last_bytes=101763480; since_data=0.000s	2026-10-30T18:12:25.613+00:00
+108.918354	clear_halt	ok=True	2026-10-30T18:12:25.613+00:00
+108.918409	discontinuity	usb_io	2026-10-30T18:12:25.613+00:00
+108.918433	recovery_in_place	usb_io	2026-10-30T18:12:25.613+00:00
+108.920472	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=28009; last_bytes=101767560; since_data=0.001s	2026-10-30T18:12:25.615+00:00
+108.920579	clear_halt	ok=True	2026-10-30T18:12:25.615+00:00
+108.920612	discontinuity	usb_io	2026-10-30T18:12:25.615+00:00
+108.920631	recovery_in_place	usb_io	2026-10-30T18:12:25.615+00:00
+109.483314	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=28247; last_bytes=102701357; since_data=0.001s	2026-10-30T18:12:26.178+00:00
+109.483566	clear_halt	ok=True	2026-10-30T18:12:26.178+00:00
+109.483676	discontinuity	usb_io	2026-10-30T18:12:26.178+00:00
+109.483728	recovery_in_place	usb_io	2026-10-30T18:12:26.178+00:00
+112.573320	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=29165; last_bytes=105972416; since_data=0.003s	2026-10-30T18:12:29.268+00:00
+112.573536	clear_halt	ok=True	2026-10-30T18:12:29.268+00:00
+112.573625	discontinuity	usb_io	2026-10-30T18:12:29.268+00:00
+112.573675	recovery_in_place	usb_io	2026-10-30T18:12:29.268+00:00
+117.625030	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=30648; last_bytes=111215980; since_data=0.010s	2026-10-30T18:12:34.320+00:00
+117.625238	clear_halt	ok=True	2026-10-30T18:12:34.320+00:00
+117.625312	discontinuity	usb_io	2026-10-30T18:12:34.320+00:00
+117.625344	recovery_in_place	usb_io	2026-10-30T18:12:34.320+00:00
+122.340056	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=32019; last_bytes=116043620; since_data=0.002s	2026-10-30T18:12:39.035+00:00
+122.340275	clear_halt	ok=True	2026-10-30T18:12:39.035+00:00
+122.340370	discontinuity	usb_io	2026-10-30T18:12:39.035+00:00
+122.340422	recovery_in_place	usb_io	2026-10-30T18:12:39.035+00:00
+123.017578	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=32217; last_bytes=116745910; since_data=0.003s	2026-10-30T18:12:39.712+00:00
+123.017748	clear_halt	ok=True	2026-10-30T18:12:39.712+00:00
+123.017809	discontinuity	usb_io	2026-10-30T18:12:39.712+00:00
+123.017844	recovery_in_place	usb_io	2026-10-30T18:12:39.712+00:00
+124.410860	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=32616; last_bytes=118144203; since_data=0.004s	2026-10-30T18:12:41.105+00:00
+124.411049	clear_halt	ok=True	2026-10-30T18:12:41.106+00:00
+124.411119	discontinuity	usb_io	2026-10-30T18:12:41.106+00:00
+124.411147	recovery_in_place	usb_io	2026-10-30T18:12:41.106+00:00
+125.148320	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=32835; last_bytes=118917186; since_data=0.000s	2026-10-30T18:12:41.843+00:00
+125.148541	clear_halt	ok=True	2026-10-30T18:12:41.843+00:00
+125.148634	discontinuity	usb_io	2026-10-30T18:12:41.843+00:00
+125.148685	recovery_in_place	usb_io	2026-10-30T18:12:41.843+00:00
+125.687648	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=32987; last_bytes=119441895; since_data=0.003s	2026-10-30T18:12:42.382+00:00
+125.687903	clear_halt	ok=True	2026-10-30T18:12:42.382+00:00
+125.687993	discontinuity	usb_io	2026-10-30T18:12:42.382+00:00
+125.688040	recovery_in_place	usb_io	2026-10-30T18:12:42.383+00:00
+126.751054	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=33305; last_bytes=120566230; since_data=0.000s	2026-10-30T18:12:43.446+00:00
+126.751260	clear_halt	ok=True	2026-10-30T18:12:43.446+00:00
+126.751335	discontinuity	usb_io	2026-10-30T18:12:43.446+00:00
+126.751366	recovery_in_place	usb_io	2026-10-30T18:12:43.446+00:00
+126.827988	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=33324; last_bytes=120632309; since_data=0.003s	2026-10-30T18:12:43.522+00:00
+126.828200	clear_halt	ok=True	2026-10-30T18:12:43.523+00:00
+126.828293	discontinuity	usb_io	2026-10-30T18:12:43.523+00:00
+126.828342	recovery_in_place	usb_io	2026-10-30T18:12:43.523+00:00
+127.929853	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=33638; last_bytes=121750205; since_data=0.000s	2026-10-30T18:12:44.624+00:00
+127.930028	clear_halt	ok=True	2026-10-30T18:12:44.625+00:00
+127.930090	discontinuity	usb_io	2026-10-30T18:12:44.625+00:00
+127.930117	recovery_in_place	usb_io	2026-10-30T18:12:44.625+00:00
+128.417603	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=33783; last_bytes=122254809; since_data=0.003s	2026-10-30T18:12:45.112+00:00
+128.417803	clear_halt	ok=True	2026-10-30T18:12:45.112+00:00
+128.417863	discontinuity	usb_io	2026-10-30T18:12:45.112+00:00
+128.417892	recovery_in_place	usb_io	2026-10-30T18:12:45.112+00:00
+129.725552	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=34166; last_bytes=123608922; since_data=0.003s	2026-10-30T18:12:46.420+00:00
+129.725728	clear_halt	ok=True	2026-10-30T18:12:46.420+00:00
+129.725794	discontinuity	usb_io	2026-10-30T18:12:46.420+00:00
+129.725823	recovery_in_place	usb_io	2026-10-30T18:12:46.420+00:00
+129.863059	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=34200; last_bytes=123727729; since_data=0.003s	2026-10-30T18:12:46.558+00:00
+129.863290	clear_halt	ok=True	2026-10-30T18:12:46.558+00:00
+129.863352	discontinuity	usb_io	2026-10-30T18:12:46.558+00:00
+129.863380	recovery_in_place	usb_io	2026-10-30T18:12:46.558+00:00
+130.872583	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=34495; last_bytes=124768038; since_data=0.003s	2026-10-30T18:12:47.567+00:00
+130.872826	clear_halt	ok=True	2026-10-30T18:12:47.567+00:00
+130.872917	discontinuity	usb_io	2026-10-30T18:12:47.567+00:00
+130.872947	recovery_in_place	usb_io	2026-10-30T18:12:47.567+00:00
+131.123475	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=34562; last_bytes=124999099; since_data=0.028s	2026-10-30T18:12:47.818+00:00
+131.123686	clear_halt	ok=True	2026-10-30T18:12:47.818+00:00
+131.123757	discontinuity	usb_io	2026-10-30T18:12:47.818+00:00
+131.123787	recovery_in_place	usb_io	2026-10-30T18:12:47.818+00:00
+132.290930	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=34905; last_bytes=126215019; since_data=0.003s	2026-10-30T18:12:48.985+00:00
+132.291119	clear_halt	ok=True	2026-10-30T18:12:48.986+00:00
+132.291186	discontinuity	usb_io	2026-10-30T18:12:48.986+00:00
+132.291216	recovery_in_place	usb_io	2026-10-30T18:12:48.986+00:00
+133.050855	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=35120; last_bytes=126969410; since_data=0.001s	2026-10-30T18:12:49.745+00:00
+133.051069	clear_halt	ok=True	2026-10-30T18:12:49.746+00:00
+133.051136	discontinuity	usb_io	2026-10-30T18:12:49.746+00:00
+133.051167	recovery_in_place	usb_io	2026-10-30T18:12:49.746+00:00
+135.535084	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=35873; last_bytes=129639091; since_data=0.003s	2026-10-30T18:12:52.230+00:00
+135.535285	clear_halt	ok=True	2026-10-30T18:12:52.230+00:00
+135.535353	discontinuity	usb_io	2026-10-30T18:12:52.230+00:00
+135.535381	recovery_in_place	usb_io	2026-10-30T18:12:52.230+00:00
+138.049720	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=36751; last_bytes=132776605; since_data=0.004s	2026-10-30T18:12:54.744+00:00
+138.049921	clear_halt	ok=True	2026-10-30T18:12:54.744+00:00
+138.049990	discontinuity	usb_io	2026-10-30T18:12:54.744+00:00
+138.050019	recovery_in_place	usb_io	2026-10-30T18:12:54.744+00:00
+141.488047	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=37954; last_bytes=137058113; since_data=0.003s	2026-10-30T18:12:58.183+00:00
+141.488233	clear_halt	ok=True	2026-10-30T18:12:58.183+00:00
+141.488306	discontinuity	usb_io	2026-10-30T18:12:58.183+00:00
+141.488339	recovery_in_place	usb_io	2026-10-30T18:12:58.183+00:00
+141.666169	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=38016; last_bytes=137276948; since_data=0.000s	2026-10-30T18:12:58.361+00:00
+141.666372	clear_halt	ok=True	2026-10-30T18:12:58.361+00:00
+141.666432	discontinuity	usb_io	2026-10-30T18:12:58.361+00:00
+141.666460	recovery_in_place	usb_io	2026-10-30T18:12:58.361+00:00
+143.485601	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=38644; last_bytes=139527037; since_data=0.003s	2026-10-30T18:13:00.180+00:00
+143.485779	clear_halt	ok=True	2026-10-30T18:13:00.180+00:00
+143.485840	discontinuity	usb_io	2026-10-30T18:13:00.180+00:00
+143.485870	recovery_in_place	usb_io	2026-10-30T18:13:00.180+00:00
+143.893509	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=38786; last_bytes=140035392; since_data=0.003s	2026-10-30T18:13:00.588+00:00
+143.893758	clear_halt	ok=True	2026-10-30T18:13:00.588+00:00
+143.893849	discontinuity	usb_io	2026-10-30T18:13:00.588+00:00
+143.893897	recovery_in_place	usb_io	2026-10-30T18:13:00.588+00:00
+143.905161	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=38788; last_bytes=140043040; since_data=0.003s	2026-10-30T18:13:00.600+00:00
+143.905389	clear_halt	ok=True	2026-10-30T18:13:00.600+00:00
+143.905490	discontinuity	usb_io	2026-10-30T18:13:00.600+00:00
+143.905538	recovery_in_place	usb_io	2026-10-30T18:13:00.600+00:00
+146.518465	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=39697; last_bytes=143287808; since_data=0.006s	2026-10-30T18:13:03.213+00:00
+146.518735	clear_halt	ok=True	2026-10-30T18:13:03.213+00:00
+146.518831	discontinuity	usb_io	2026-10-30T18:13:03.213+00:00
+146.518881	recovery_in_place	usb_io	2026-10-30T18:13:03.213+00:00
+146.945910	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=39847; last_bytes=143819466; since_data=0.003s	2026-10-30T18:13:03.640+00:00
+146.946159	clear_halt	ok=True	2026-10-30T18:13:03.641+00:00
+146.946259	discontinuity	usb_io	2026-10-30T18:13:03.641+00:00
+146.946309	recovery_in_place	usb_io	2026-10-30T18:13:03.641+00:00
+147.205607	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=39933; last_bytes=144133504; since_data=0.003s	2026-10-30T18:13:03.900+00:00
+147.205804	clear_halt	ok=True	2026-10-30T18:13:03.900+00:00
+147.205866	discontinuity	usb_io	2026-10-30T18:13:03.900+00:00
+147.205892	recovery_in_place	usb_io	2026-10-30T18:13:03.900+00:00
+148.128029	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=40254; last_bytes=145277992; since_data=0.002s	2026-10-30T18:13:04.823+00:00
+148.128273	clear_halt	ok=True	2026-10-30T18:13:04.823+00:00
+148.128367	discontinuity	usb_io	2026-10-30T18:13:04.823+00:00
+148.128418	recovery_in_place	usb_io	2026-10-30T18:13:04.823+00:00
+148.280925	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=40306; last_bytes=145468297; since_data=0.003s	2026-10-30T18:13:04.975+00:00
+148.281167	clear_halt	ok=True	2026-10-30T18:13:04.976+00:00
+148.281311	discontinuity	usb_io	2026-10-30T18:13:04.976+00:00
+148.281358	recovery_in_place	usb_io	2026-10-30T18:13:04.976+00:00
+148.673442	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=40441; last_bytes=145945714; since_data=0.009s	2026-10-30T18:13:05.368+00:00
+148.673704	clear_halt	ok=True	2026-10-30T18:13:05.368+00:00
+148.673807	discontinuity	usb_io	2026-10-30T18:13:05.368+00:00
+148.673860	recovery_in_place	usb_io	2026-10-30T18:13:05.368+00:00
+148.695127	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=40448; last_bytes=145970022; since_data=0.002s	2026-10-30T18:13:05.390+00:00
+148.695373	clear_halt	ok=True	2026-10-30T18:13:05.390+00:00
+148.695449	discontinuity	usb_io	2026-10-30T18:13:05.390+00:00
+148.695479	recovery_in_place	usb_io	2026-10-30T18:13:05.390+00:00
+148.924731	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=40527; last_bytes=146251627; since_data=0.003s	2026-10-30T18:13:05.619+00:00
+148.924965	clear_halt	ok=True	2026-10-30T18:13:05.619+00:00
+148.925057	discontinuity	usb_io	2026-10-30T18:13:05.620+00:00
+148.925103	recovery_in_place	usb_io	2026-10-30T18:13:05.620+00:00
+149.147966	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=40607; last_bytes=146534335; since_data=0.003s	2026-10-30T18:13:05.842+00:00
+149.148206	clear_halt	ok=True	2026-10-30T18:13:05.843+00:00
+149.148288	discontinuity	usb_io	2026-10-30T18:13:05.843+00:00
+149.148319	recovery_in_place	usb_io	2026-10-30T18:13:05.843+00:00
+149.538400	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=40742; last_bytes=147014818; since_data=0.010s	2026-10-30T18:13:06.233+00:00
+149.538625	clear_halt	ok=True	2026-10-30T18:13:06.233+00:00
+149.538690	discontinuity	usb_io	2026-10-30T18:13:06.233+00:00
+149.538720	recovery_in_place	usb_io	2026-10-30T18:13:06.233+00:00
+152.561227	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=40751; last_bytes=147043689; since_data=3.003s	2026-10-30T18:13:09.256+00:00
+152.561852	clear_halt	ok=True	2026-10-30T18:13:09.256+00:00
+152.562006	discontinuity	usb_stall	2026-10-30T18:13:09.256+00:00
+152.562061	recovery_in_place	usb_stall	2026-10-30T18:13:09.257+00:00
+152.564768	read_gap	read_gap_3.007s	2026-10-30T18:13:09.259+00:00
+157.119824	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=42460; last_bytes=153155827; since_data=0.003s	2026-10-30T18:13:13.814+00:00
+157.120063	clear_halt	ok=True	2026-10-30T18:13:13.815+00:00
+157.120178	discontinuity	usb_io	2026-10-30T18:13:13.815+00:00
+157.120216	recovery_in_place	usb_io	2026-10-30T18:13:13.815+00:00
+158.856009	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=43064; last_bytes=155323095; since_data=0.003s	2026-10-30T18:13:15.550+00:00
+158.856238	clear_halt	ok=True	2026-10-30T18:13:15.551+00:00
+158.856335	discontinuity	usb_io	2026-10-30T18:13:15.551+00:00
+158.856387	recovery_in_place	usb_io	2026-10-30T18:13:15.551+00:00
+159.973106	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=43451; last_bytes=156714762; since_data=0.002s	2026-10-30T18:13:16.668+00:00
+159.973379	clear_halt	ok=True	2026-10-30T18:13:16.668+00:00
+159.973465	discontinuity	usb_io	2026-10-30T18:13:16.668+00:00
+159.973495	recovery_in_place	usb_io	2026-10-30T18:13:16.668+00:00
+161.839789	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=44097; last_bytes=159031848; since_data=0.003s	2026-10-30T18:13:18.534+00:00
+161.840010	clear_halt	ok=True	2026-10-30T18:13:18.534+00:00
+161.840102	discontinuity	usb_io	2026-10-30T18:13:18.535+00:00
+161.840151	recovery_in_place	usb_io	2026-10-30T18:13:18.535+00:00
+163.288412	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=44594; last_bytes=160829752; since_data=0.003s	2026-10-30T18:13:19.983+00:00
+163.288578	clear_halt	ok=True	2026-10-30T18:13:19.983+00:00
+163.288637	discontinuity	usb_io	2026-10-30T18:13:19.983+00:00
+163.288664	recovery_in_place	usb_io	2026-10-30T18:13:19.983+00:00
+163.513053	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=44673; last_bytes=161117190; since_data=0.003s	2026-10-30T18:13:20.208+00:00
+163.513381	clear_halt	ok=True	2026-10-30T18:13:20.208+00:00
+163.513489	discontinuity	usb_io	2026-10-30T18:13:20.208+00:00
+163.513521	recovery_in_place	usb_io	2026-10-30T18:13:20.208+00:00
+163.635944	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=44714; last_bytes=161262978; since_data=0.003s	2026-10-30T18:13:20.330+00:00
+163.636185	clear_halt	ok=True	2026-10-30T18:13:20.331+00:00
+163.636289	discontinuity	usb_io	2026-10-30T18:13:20.331+00:00
+163.636339	recovery_in_place	usb_io	2026-10-30T18:13:20.331+00:00
+165.875976	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=45499; last_bytes=164057997; since_data=0.003s	2026-10-30T18:13:22.570+00:00
+165.876224	clear_halt	ok=True	2026-10-30T18:13:22.571+00:00
+165.876343	discontinuity	usb_io	2026-10-30T18:13:22.571+00:00
+165.876394	recovery_in_place	usb_io	2026-10-30T18:13:22.571+00:00
+166.830938	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=45835; last_bytes=165253383; since_data=0.001s	2026-10-30T18:13:23.525+00:00
+166.831196	clear_halt	ok=True	2026-10-30T18:13:23.526+00:00
+166.831297	discontinuity	usb_io	2026-10-30T18:13:23.526+00:00
+166.831350	recovery_in_place	usb_io	2026-10-30T18:13:23.526+00:00
+167.480967	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=46063; last_bytes=166063390; since_data=0.003s	2026-10-30T18:13:24.175+00:00
+167.481191	clear_halt	ok=True	2026-10-30T18:13:24.176+00:00
+167.481296	discontinuity	usb_io	2026-10-30T18:13:24.176+00:00
+167.481349	recovery_in_place	usb_io	2026-10-30T18:13:24.176+00:00
+167.878534	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=46201; last_bytes=166557500; since_data=0.003s	2026-10-30T18:13:24.573+00:00
+167.878764	clear_halt	ok=True	2026-10-30T18:13:24.573+00:00
+167.878857	discontinuity	usb_io	2026-10-30T18:13:24.573+00:00
+167.878889	recovery_in_place	usb_io	2026-10-30T18:13:24.573+00:00
+168.193457	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=46306; last_bytes=166940934; since_data=0.008s	2026-10-30T18:13:24.888+00:00
+168.193703	clear_halt	ok=True	2026-10-30T18:13:24.888+00:00
+168.193813	discontinuity	usb_io	2026-10-30T18:13:24.888+00:00
+168.193865	recovery_in_place	usb_io	2026-10-30T18:13:24.888+00:00
+168.365546	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=46368; last_bytes=167160547; since_data=0.000s	2026-10-30T18:13:25.060+00:00
+168.365754	clear_halt	ok=True	2026-10-30T18:13:25.060+00:00
+168.365845	discontinuity	usb_io	2026-10-30T18:13:25.060+00:00
+168.365904	recovery_in_place	usb_io	2026-10-30T18:13:25.060+00:00
+170.185941	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=47011; last_bytes=169440335; since_data=0.003s	2026-10-30T18:13:26.880+00:00
+170.186161	clear_halt	ok=True	2026-10-30T18:13:26.881+00:00
+170.186267	discontinuity	usb_io	2026-10-30T18:13:26.881+00:00
+170.186319	recovery_in_place	usb_io	2026-10-30T18:13:26.881+00:00
+170.679758	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=47185; last_bytes=170050549; since_data=0.003s	2026-10-30T18:13:27.374+00:00
+170.679966	clear_halt	ok=True	2026-10-30T18:13:27.374+00:00
+170.680040	discontinuity	usb_io	2026-10-30T18:13:27.375+00:00
+170.680078	recovery_in_place	usb_io	2026-10-30T18:13:27.375+00:00
+171.532307	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=47480; last_bytes=171111396; since_data=0.003s	2026-10-30T18:13:28.227+00:00
+171.532584	clear_halt	ok=True	2026-10-30T18:13:28.227+00:00
+171.532672	discontinuity	usb_io	2026-10-30T18:13:28.227+00:00
+171.532708	recovery_in_place	usb_io	2026-10-30T18:13:28.227+00:00
+171.749828	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=47555; last_bytes=171378101; since_data=0.003s	2026-10-30T18:13:28.444+00:00
+171.750079	clear_halt	ok=True	2026-10-30T18:13:28.445+00:00
+171.750184	discontinuity	usb_io	2026-10-30T18:13:28.445+00:00
+171.750238	recovery_in_place	usb_io	2026-10-30T18:13:28.445+00:00
+171.883100	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=47601; last_bytes=171543541; since_data=0.003s	2026-10-30T18:13:28.578+00:00
+171.883332	clear_halt	ok=True	2026-10-30T18:13:28.578+00:00
+171.883425	discontinuity	usb_io	2026-10-30T18:13:28.578+00:00
+171.883474	recovery_in_place	usb_io	2026-10-30T18:13:28.578+00:00
+172.819808	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=47926; last_bytes=172710100; since_data=0.002s	2026-10-30T18:13:29.514+00:00
+172.820023	clear_halt	ok=True	2026-10-30T18:13:29.514+00:00
+172.820091	discontinuity	usb_io	2026-10-30T18:13:29.515+00:00
+172.820120	recovery_in_place	usb_io	2026-10-30T18:13:29.515+00:00
+174.152335	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=48388; last_bytes=174372403; since_data=0.003s	2026-10-30T18:13:30.847+00:00
+174.152575	clear_halt	ok=True	2026-10-30T18:13:30.847+00:00
+174.152665	discontinuity	usb_io	2026-10-30T18:13:30.847+00:00
+174.152712	recovery_in_place	usb_io	2026-10-30T18:13:30.847+00:00
+175.570178	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=48881; last_bytes=176144992; since_data=0.003s	2026-10-30T18:13:32.265+00:00
+175.570396	clear_halt	ok=True	2026-10-30T18:13:32.265+00:00
+175.570478	discontinuity	usb_io	2026-10-30T18:13:32.265+00:00
+175.570510	recovery_in_place	usb_io	2026-10-30T18:13:32.265+00:00
+175.608209	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=48893; last_bytes=176189908; since_data=0.003s	2026-10-30T18:13:32.303+00:00
+175.608388	clear_halt	ok=True	2026-10-30T18:13:32.303+00:00
+175.608449	discontinuity	usb_io	2026-10-30T18:13:32.303+00:00
+175.608475	recovery_in_place	usb_io	2026-10-30T18:13:32.303+00:00
+176.302289	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=49134; last_bytes=177043806; since_data=0.003s	2026-10-30T18:13:32.997+00:00
+176.302488	clear_halt	ok=True	2026-10-30T18:13:32.997+00:00
+176.302551	discontinuity	usb_io	2026-10-30T18:13:32.997+00:00
+176.302581	recovery_in_place	usb_io	2026-10-30T18:13:32.997+00:00
+177.343466	usb_error	io: io USB read error: [Errno 5] Input/Output Error; errno=5; backend=-1; last_reads=49502; last_bytes=178352840; since_data=0.003s	2026-10-30T18:13:34.038+00:00
+177.343710	clear_halt	ok=True	2026-10-30T18:13:34.038+00:00
+177.343803	discontinuity	usb_io	2026-10-30T18:13:34.038+00:00
+177.343852	recovery_in_place	usb_io	2026-10-30T18:13:34.038+00:00
+180.002888	stop	stopped	2026-10-30T18:13:36.697+00:00

@@ -1,0 +1,632 @@
+elapsed_s	event	detail	wall_time_utc
+0.009926	open	2ca3:1020 bus 1 address 27	2026-10-30T20:31:08.788+00:00
+0.010338	drain	4080 bytes	2026-10-30T20:31:08.789+00:00
+9.109045	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=3.003s	2026-10-30T20:31:17.888+00:00
+9.109659	clear_halt	ok=True	2026-10-30T20:31:17.888+00:00
+9.109793	discontinuity	usb_stall	2026-10-30T20:31:17.888+00:00
+9.109824	recovery_in_place	usb_stall	2026-10-30T20:31:17.888+00:00
+9.360105	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=3.254s	2026-10-30T20:31:18.139+00:00
+9.360707	clear_halt	ok=True	2026-10-30T20:31:18.139+00:00
+9.360867	discontinuity	usb_stall	2026-10-30T20:31:18.139+00:00
+9.360928	recovery_in_place	usb_stall	2026-10-30T20:31:18.139+00:00
+9.611266	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=3.505s	2026-10-30T20:31:18.390+00:00
+9.611896	clear_halt	ok=True	2026-10-30T20:31:18.390+00:00
+9.612001	discontinuity	usb_stall	2026-10-30T20:31:18.390+00:00
+9.612028	recovery_in_place	usb_stall	2026-10-30T20:31:18.391+00:00
+9.862256	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=3.756s	2026-10-30T20:31:18.641+00:00
+9.862908	clear_halt	ok=True	2026-10-30T20:31:18.641+00:00
+9.863030	discontinuity	usb_stall	2026-10-30T20:31:18.642+00:00
+9.863080	recovery_in_place	usb_stall	2026-10-30T20:31:18.642+00:00
+10.113387	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=4.007s	2026-10-30T20:31:18.892+00:00
+10.114034	clear_halt	ok=True	2026-10-30T20:31:18.893+00:00
+10.114241	discontinuity	usb_stall	2026-10-30T20:31:18.893+00:00
+10.114320	recovery_in_place	usb_stall	2026-10-30T20:31:18.893+00:00
+10.364509	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=4.258s	2026-10-30T20:31:19.143+00:00
+10.364969	clear_halt	ok=True	2026-10-30T20:31:19.143+00:00
+10.365063	discontinuity	usb_stall	2026-10-30T20:31:19.144+00:00
+10.365088	recovery_in_place	usb_stall	2026-10-30T20:31:19.144+00:00
+10.615274	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=4.509s	2026-10-30T20:31:19.394+00:00
+10.616008	clear_halt	ok=True	2026-10-30T20:31:19.394+00:00
+10.616114	discontinuity	usb_stall	2026-10-30T20:31:19.395+00:00
+10.616180	recovery_in_place	usb_stall	2026-10-30T20:31:19.395+00:00
+10.866497	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=4.760s	2026-10-30T20:31:19.645+00:00
+10.867014	clear_halt	ok=True	2026-10-30T20:31:19.645+00:00
+10.867128	discontinuity	usb_stall	2026-10-30T20:31:19.646+00:00
+10.867181	recovery_in_place	usb_stall	2026-10-30T20:31:19.646+00:00
+11.117562	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=5.011s	2026-10-30T20:31:19.896+00:00
+11.118172	clear_halt	ok=True	2026-10-30T20:31:19.897+00:00
+11.118324	discontinuity	usb_stall	2026-10-30T20:31:19.897+00:00
+11.118381	recovery_in_place	usb_stall	2026-10-30T20:31:19.897+00:00
+11.368657	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=5.262s	2026-10-30T20:31:20.147+00:00
+11.369189	clear_halt	ok=True	2026-10-30T20:31:20.148+00:00
+11.369307	discontinuity	usb_stall	2026-10-30T20:31:20.148+00:00
+11.369357	recovery_in_place	usb_stall	2026-10-30T20:31:20.148+00:00
+11.619568	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=5.513s	2026-10-30T20:31:20.398+00:00
+11.620080	clear_halt	ok=True	2026-10-30T20:31:20.399+00:00
+11.620198	discontinuity	usb_stall	2026-10-30T20:31:20.399+00:00
+11.620247	recovery_in_place	usb_stall	2026-10-30T20:31:20.399+00:00
+11.870530	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=5.764s	2026-10-30T20:31:20.649+00:00
+11.871041	clear_halt	ok=True	2026-10-30T20:31:20.650+00:00
+11.871152	discontinuity	usb_stall	2026-10-30T20:31:20.650+00:00
+11.871202	recovery_in_place	usb_stall	2026-10-30T20:31:20.650+00:00
+12.121451	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=6.015s	2026-10-30T20:31:20.900+00:00
+12.121964	clear_halt	ok=True	2026-10-30T20:31:20.900+00:00
+12.122086	discontinuity	usb_stall	2026-10-30T20:31:20.901+00:00
+12.122133	recovery_in_place	usb_stall	2026-10-30T20:31:20.901+00:00
+12.372447	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=6.266s	2026-10-30T20:31:21.151+00:00
+12.372971	clear_halt	ok=True	2026-10-30T20:31:21.151+00:00
+12.373085	discontinuity	usb_stall	2026-10-30T20:31:21.152+00:00
+12.373130	recovery_in_place	usb_stall	2026-10-30T20:31:21.152+00:00
+12.623429	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=6.517s	2026-10-30T20:31:21.402+00:00
+12.624070	clear_halt	ok=True	2026-10-30T20:31:21.403+00:00
+12.624212	discontinuity	usb_stall	2026-10-30T20:31:21.403+00:00
+12.624265	recovery_in_place	usb_stall	2026-10-30T20:31:21.403+00:00
+12.874498	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=6.768s	2026-10-30T20:31:21.653+00:00
+12.875143	clear_halt	ok=True	2026-10-30T20:31:21.654+00:00
+12.875274	discontinuity	usb_stall	2026-10-30T20:31:21.654+00:00
+12.875321	recovery_in_place	usb_stall	2026-10-30T20:31:21.654+00:00
+13.125572	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=7.019s	2026-10-30T20:31:21.904+00:00
+13.126142	clear_halt	ok=True	2026-10-30T20:31:21.905+00:00
+13.126282	discontinuity	usb_stall	2026-10-30T20:31:21.905+00:00
+13.126328	recovery_in_place	usb_stall	2026-10-30T20:31:21.905+00:00
+13.376599	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=7.270s	2026-10-30T20:31:22.155+00:00
+13.377139	clear_halt	ok=True	2026-10-30T20:31:22.156+00:00
+13.377272	discontinuity	usb_stall	2026-10-30T20:31:22.156+00:00
+13.377324	recovery_in_place	usb_stall	2026-10-30T20:31:22.156+00:00
+13.627590	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=7.521s	2026-10-30T20:31:22.406+00:00
+13.628107	clear_halt	ok=True	2026-10-30T20:31:22.407+00:00
+13.628226	discontinuity	usb_stall	2026-10-30T20:31:22.407+00:00
+13.628272	recovery_in_place	usb_stall	2026-10-30T20:31:22.407+00:00
+13.878513	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=7.772s	2026-10-30T20:31:22.657+00:00
+13.879109	clear_halt	ok=True	2026-10-30T20:31:22.658+00:00
+13.879237	discontinuity	usb_stall	2026-10-30T20:31:22.658+00:00
+13.879285	recovery_in_place	usb_stall	2026-10-30T20:31:22.658+00:00
+14.129506	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=8.023s	2026-10-30T20:31:22.908+00:00
+14.130022	clear_halt	ok=True	2026-10-30T20:31:22.909+00:00
+14.130152	discontinuity	usb_stall	2026-10-30T20:31:22.909+00:00
+14.130204	recovery_in_place	usb_stall	2026-10-30T20:31:22.909+00:00
+14.380500	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=8.274s	2026-10-30T20:31:23.159+00:00
+14.381130	clear_halt	ok=True	2026-10-30T20:31:23.160+00:00
+14.381270	discontinuity	usb_stall	2026-10-30T20:31:23.160+00:00
+14.381323	recovery_in_place	usb_stall	2026-10-30T20:31:23.160+00:00
+14.631542	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=8.525s	2026-10-30T20:31:23.410+00:00
+14.632156	clear_halt	ok=True	2026-10-30T20:31:23.411+00:00
+14.632269	discontinuity	usb_stall	2026-10-30T20:31:23.411+00:00
+14.632314	recovery_in_place	usb_stall	2026-10-30T20:31:23.411+00:00
+14.882621	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=8.776s	2026-10-30T20:31:23.661+00:00
+14.883195	clear_halt	ok=True	2026-10-30T20:31:23.662+00:00
+14.883326	discontinuity	usb_stall	2026-10-30T20:31:23.662+00:00
+14.883372	recovery_in_place	usb_stall	2026-10-30T20:31:23.662+00:00
+15.133620	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=9.027s	2026-10-30T20:31:23.912+00:00
+15.134146	clear_halt	ok=True	2026-10-30T20:31:23.913+00:00
+15.134271	discontinuity	usb_stall	2026-10-30T20:31:23.913+00:00
+15.134323	recovery_in_place	usb_stall	2026-10-30T20:31:23.913+00:00
+15.384610	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=9.278s	2026-10-30T20:31:24.163+00:00
+15.385153	clear_halt	ok=True	2026-10-30T20:31:24.164+00:00
+15.385277	discontinuity	usb_stall	2026-10-30T20:31:24.164+00:00
+15.385322	recovery_in_place	usb_stall	2026-10-30T20:31:24.164+00:00
+15.635581	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=9.529s	2026-10-30T20:31:24.414+00:00
+15.636089	clear_halt	ok=True	2026-10-30T20:31:24.415+00:00
+15.636201	discontinuity	usb_stall	2026-10-30T20:31:24.415+00:00
+15.636245	recovery_in_place	usb_stall	2026-10-30T20:31:24.415+00:00
+15.886495	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=9.780s	2026-10-30T20:31:24.665+00:00
+15.887018	clear_halt	ok=True	2026-10-30T20:31:24.666+00:00
+15.887147	discontinuity	usb_stall	2026-10-30T20:31:24.666+00:00
+15.887200	recovery_in_place	usb_stall	2026-10-30T20:31:24.666+00:00
+16.137461	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=10.031s	2026-10-30T20:31:24.916+00:00
+16.138015	clear_halt	ok=True	2026-10-30T20:31:24.916+00:00
+16.138121	discontinuity	usb_stall	2026-10-30T20:31:24.917+00:00
+16.138171	recovery_in_place	usb_stall	2026-10-30T20:31:24.917+00:00
+16.388418	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=10.282s	2026-10-30T20:31:25.167+00:00
+16.388932	clear_halt	ok=True	2026-10-30T20:31:25.167+00:00
+16.389036	discontinuity	usb_stall	2026-10-30T20:31:25.168+00:00
+16.389078	recovery_in_place	usb_stall	2026-10-30T20:31:25.168+00:00
+16.639303	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=10.533s	2026-10-30T20:31:25.418+00:00
+16.639864	clear_halt	ok=True	2026-10-30T20:31:25.418+00:00
+16.639981	discontinuity	usb_stall	2026-10-30T20:31:25.418+00:00
+16.640029	recovery_in_place	usb_stall	2026-10-30T20:31:25.419+00:00
+16.890263	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=10.784s	2026-10-30T20:31:25.669+00:00
+16.890773	clear_halt	ok=True	2026-10-30T20:31:25.669+00:00
+16.890886	discontinuity	usb_stall	2026-10-30T20:31:25.669+00:00
+16.890930	recovery_in_place	usb_stall	2026-10-30T20:31:25.669+00:00
+17.141159	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=11.035s	2026-10-30T20:31:25.920+00:00
+17.141689	clear_halt	ok=True	2026-10-30T20:31:25.920+00:00
+17.141792	discontinuity	usb_stall	2026-10-30T20:31:25.920+00:00
+17.141838	recovery_in_place	usb_stall	2026-10-30T20:31:25.920+00:00
+17.392061	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=11.286s	2026-10-30T20:31:26.171+00:00
+17.392636	clear_halt	ok=True	2026-10-30T20:31:26.171+00:00
+17.392782	discontinuity	usb_stall	2026-10-30T20:31:26.171+00:00
+17.392813	recovery_in_place	usb_stall	2026-10-30T20:31:26.171+00:00
+17.643058	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=11.537s	2026-10-30T20:31:26.422+00:00
+17.643580	clear_halt	ok=True	2026-10-30T20:31:26.422+00:00
+17.643697	discontinuity	usb_stall	2026-10-30T20:31:26.422+00:00
+17.643742	recovery_in_place	usb_stall	2026-10-30T20:31:26.422+00:00
+17.894005	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=11.788s	2026-10-30T20:31:26.672+00:00
+17.894631	clear_halt	ok=True	2026-10-30T20:31:26.673+00:00
+17.894745	discontinuity	usb_stall	2026-10-30T20:31:26.673+00:00
+17.894788	recovery_in_place	usb_stall	2026-10-30T20:31:26.673+00:00
+18.145159	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=12.039s	2026-10-30T20:31:26.924+00:00
+18.145756	clear_halt	ok=True	2026-10-30T20:31:26.924+00:00
+18.145960	discontinuity	usb_stall	2026-10-30T20:31:26.924+00:00
+18.146100	recovery_in_place	usb_stall	2026-10-30T20:31:26.925+00:00
+18.396388	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=12.290s	2026-10-30T20:31:27.175+00:00
+18.396928	clear_halt	ok=True	2026-10-30T20:31:27.175+00:00
+18.397051	discontinuity	usb_stall	2026-10-30T20:31:27.176+00:00
+18.397104	recovery_in_place	usb_stall	2026-10-30T20:31:27.176+00:00
+18.647388	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=12.541s	2026-10-30T20:31:27.426+00:00
+18.647924	clear_halt	ok=True	2026-10-30T20:31:27.426+00:00
+18.648027	discontinuity	usb_stall	2026-10-30T20:31:27.427+00:00
+18.648069	recovery_in_place	usb_stall	2026-10-30T20:31:27.427+00:00
+18.898326	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=12.792s	2026-10-30T20:31:27.677+00:00
+18.898838	clear_halt	ok=True	2026-10-30T20:31:27.677+00:00
+18.898943	discontinuity	usb_stall	2026-10-30T20:31:27.677+00:00
+18.898990	recovery_in_place	usb_stall	2026-10-30T20:31:27.677+00:00
+19.149325	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=13.043s	2026-10-30T20:31:27.928+00:00
+19.149927	clear_halt	ok=True	2026-10-30T20:31:27.928+00:00
+19.150043	discontinuity	usb_stall	2026-10-30T20:31:27.929+00:00
+19.150090	recovery_in_place	usb_stall	2026-10-30T20:31:27.929+00:00
+19.400355	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=13.294s	2026-10-30T20:31:28.179+00:00
+19.400872	clear_halt	ok=True	2026-10-30T20:31:28.179+00:00
+19.400978	discontinuity	usb_stall	2026-10-30T20:31:28.179+00:00
+19.401022	recovery_in_place	usb_stall	2026-10-30T20:31:28.180+00:00
+19.651301	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=13.545s	2026-10-30T20:31:28.430+00:00
+19.651999	clear_halt	ok=True	2026-10-30T20:31:28.430+00:00
+19.652113	discontinuity	usb_stall	2026-10-30T20:31:28.431+00:00
+19.652142	recovery_in_place	usb_stall	2026-10-30T20:31:28.431+00:00
+19.902379	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=13.796s	2026-10-30T20:31:28.681+00:00
+19.902909	clear_halt	ok=True	2026-10-30T20:31:28.681+00:00
+19.903039	discontinuity	usb_stall	2026-10-30T20:31:28.682+00:00
+19.903086	recovery_in_place	usb_stall	2026-10-30T20:31:28.682+00:00
+20.153304	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=14.047s	2026-10-30T20:31:28.932+00:00
+20.153817	clear_halt	ok=True	2026-10-30T20:31:28.932+00:00
+20.153925	discontinuity	usb_stall	2026-10-30T20:31:28.932+00:00
+20.153972	recovery_in_place	usb_stall	2026-10-30T20:31:28.932+00:00
+20.404237	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=14.298s	2026-10-30T20:31:29.183+00:00
+20.404749	clear_halt	ok=True	2026-10-30T20:31:29.183+00:00
+20.404862	discontinuity	usb_stall	2026-10-30T20:31:29.183+00:00
+20.404908	recovery_in_place	usb_stall	2026-10-30T20:31:29.183+00:00
+20.655179	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=14.549s	2026-10-30T20:31:29.434+00:00
+20.655750	clear_halt	ok=True	2026-10-30T20:31:29.434+00:00
+20.655868	discontinuity	usb_stall	2026-10-30T20:31:29.434+00:00
+20.655914	recovery_in_place	usb_stall	2026-10-30T20:31:29.434+00:00
+20.906162	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=14.800s	2026-10-30T20:31:29.685+00:00
+20.906732	clear_halt	ok=True	2026-10-30T20:31:29.685+00:00
+20.906828	discontinuity	usb_stall	2026-10-30T20:31:29.685+00:00
+20.906855	recovery_in_place	usb_stall	2026-10-30T20:31:29.685+00:00
+21.157107	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=15.051s	2026-10-30T20:31:29.936+00:00
+21.157716	clear_halt	ok=True	2026-10-30T20:31:29.936+00:00
+21.157843	discontinuity	usb_stall	2026-10-30T20:31:29.936+00:00
+21.157894	recovery_in_place	usb_stall	2026-10-30T20:31:29.936+00:00
+21.408149	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=15.302s	2026-10-30T20:31:30.187+00:00
+21.408670	clear_halt	ok=True	2026-10-30T20:31:30.187+00:00
+21.408798	discontinuity	usb_stall	2026-10-30T20:31:30.187+00:00
+21.408850	recovery_in_place	usb_stall	2026-10-30T20:31:30.187+00:00
+21.659110	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=15.553s	2026-10-30T20:31:30.438+00:00
+21.659629	clear_halt	ok=True	2026-10-30T20:31:30.438+00:00
+21.659743	discontinuity	usb_stall	2026-10-30T20:31:30.438+00:00
+21.659816	recovery_in_place	usb_stall	2026-10-30T20:31:30.438+00:00
+21.910124	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=15.804s	2026-10-30T20:31:30.689+00:00
+21.910648	clear_halt	ok=True	2026-10-30T20:31:30.689+00:00
+21.910759	discontinuity	usb_stall	2026-10-30T20:31:30.689+00:00
+21.910803	recovery_in_place	usb_stall	2026-10-30T20:31:30.689+00:00
+22.161036	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=16.055s	2026-10-30T20:31:30.940+00:00
+22.161553	clear_halt	ok=True	2026-10-30T20:31:30.940+00:00
+22.161666	discontinuity	usb_stall	2026-10-30T20:31:30.940+00:00
+22.161711	recovery_in_place	usb_stall	2026-10-30T20:31:30.940+00:00
+22.411921	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=16.306s	2026-10-30T20:31:31.190+00:00
+22.412451	clear_halt	ok=True	2026-10-30T20:31:31.191+00:00
+22.412574	discontinuity	usb_stall	2026-10-30T20:31:31.191+00:00
+22.412620	recovery_in_place	usb_stall	2026-10-30T20:31:31.191+00:00
+22.662881	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=16.557s	2026-10-30T20:31:31.441+00:00
+22.663402	clear_halt	ok=True	2026-10-30T20:31:31.442+00:00
+22.663515	discontinuity	usb_stall	2026-10-30T20:31:31.442+00:00
+22.663562	recovery_in_place	usb_stall	2026-10-30T20:31:31.442+00:00
+22.913821	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=16.807s	2026-10-30T20:31:31.692+00:00
+22.914340	clear_halt	ok=True	2026-10-30T20:31:31.693+00:00
+22.914456	discontinuity	usb_stall	2026-10-30T20:31:31.693+00:00
+22.914507	recovery_in_place	usb_stall	2026-10-30T20:31:31.693+00:00
+23.164808	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4212; last_bytes=8159069; since_data=17.058s	2026-10-30T20:31:31.943+00:00
+23.165377	clear_halt	ok=True	2026-10-30T20:31:31.944+00:00
+23.165483	discontinuity	usb_stall	2026-10-30T20:31:31.944+00:00
+23.165529	recovery_in_place	usb_stall	2026-10-30T20:31:31.944+00:00
+23.401099	read_gap	read_gap_17.295s	2026-10-30T20:31:32.180+00:00
+23.434041	waiting_parameter_sets	VPS, SPS, PPS	2026-10-30T20:31:32.213+00:00
+27.199472	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4498; last_bytes=8717330; since_data=3.003s	2026-10-30T20:31:35.978+00:00
+27.200031	clear_halt	ok=True	2026-10-30T20:31:35.979+00:00
+27.200173	discontinuity	usb_stall	2026-10-30T20:31:35.979+00:00
+27.200290	recovery_in_place	usb_stall	2026-10-30T20:31:35.979+00:00
+27.450547	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4498; last_bytes=8717330; since_data=3.254s	2026-10-30T20:31:36.229+00:00
+27.451056	clear_halt	ok=True	2026-10-30T20:31:36.230+00:00
+27.451159	discontinuity	usb_stall	2026-10-30T20:31:36.230+00:00
+27.451207	recovery_in_place	usb_stall	2026-10-30T20:31:36.230+00:00
+27.701451	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=4498; last_bytes=8717330; since_data=3.505s	2026-10-30T20:31:36.480+00:00
+27.701965	clear_halt	ok=True	2026-10-30T20:31:36.480+00:00
+27.702068	discontinuity	usb_stall	2026-10-30T20:31:36.481+00:00
+27.702112	recovery_in_place	usb_stall	2026-10-30T20:31:36.481+00:00
+27.912705	read_gap	read_gap_3.716s	2026-10-30T20:31:36.691+00:00
+28.015374	first_frame	/tmp/vt13_live_first.png	2026-10-30T20:31:36.794+00:00
+38.196243	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=3.003s	2026-10-30T20:31:46.975+00:00
+38.196832	clear_halt	ok=True	2026-10-30T20:31:46.975+00:00
+38.197852	discontinuity	usb_stall	2026-10-30T20:31:46.976+00:00
+38.197922	recovery_in_place	usb_stall	2026-10-30T20:31:46.976+00:00
+38.448203	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=3.255s	2026-10-30T20:31:47.227+00:00
+38.448748	clear_halt	ok=True	2026-10-30T20:31:47.227+00:00
+38.448856	discontinuity	usb_stall	2026-10-30T20:31:47.227+00:00
+38.448904	recovery_in_place	usb_stall	2026-10-30T20:31:47.227+00:00
+38.699173	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=3.506s	2026-10-30T20:31:47.478+00:00
+38.699720	clear_halt	ok=True	2026-10-30T20:31:47.478+00:00
+38.699904	discontinuity	usb_stall	2026-10-30T20:31:47.478+00:00
+38.699952	recovery_in_place	usb_stall	2026-10-30T20:31:47.478+00:00
+38.950320	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=3.757s	2026-10-30T20:31:47.729+00:00
+38.950902	clear_halt	ok=True	2026-10-30T20:31:47.729+00:00
+38.951037	discontinuity	usb_stall	2026-10-30T20:31:47.730+00:00
+38.951105	recovery_in_place	usb_stall	2026-10-30T20:31:47.730+00:00
+39.201494	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=4.008s	2026-10-30T20:31:47.980+00:00
+39.201996	clear_halt	ok=True	2026-10-30T20:31:47.980+00:00
+39.202122	discontinuity	usb_stall	2026-10-30T20:31:47.981+00:00
+39.202171	recovery_in_place	usb_stall	2026-10-30T20:31:47.981+00:00
+39.452467	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=4.259s	2026-10-30T20:31:48.231+00:00
+39.453043	clear_halt	ok=True	2026-10-30T20:31:48.232+00:00
+39.453190	discontinuity	usb_stall	2026-10-30T20:31:48.232+00:00
+39.453239	recovery_in_place	usb_stall	2026-10-30T20:31:48.232+00:00
+39.703500	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=4.510s	2026-10-30T20:31:48.482+00:00
+39.704075	clear_halt	ok=True	2026-10-30T20:31:48.483+00:00
+39.704234	discontinuity	usb_stall	2026-10-30T20:31:48.483+00:00
+39.704286	recovery_in_place	usb_stall	2026-10-30T20:31:48.483+00:00
+39.954541	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=4.761s	2026-10-30T20:31:48.733+00:00
+39.955054	clear_halt	ok=True	2026-10-30T20:31:48.734+00:00
+39.955159	discontinuity	usb_stall	2026-10-30T20:31:48.734+00:00
+39.955213	recovery_in_place	usb_stall	2026-10-30T20:31:48.734+00:00
+40.205448	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=5.012s	2026-10-30T20:31:48.984+00:00
+40.206054	clear_halt	ok=True	2026-10-30T20:31:48.985+00:00
+40.206196	discontinuity	usb_stall	2026-10-30T20:31:48.985+00:00
+40.206244	recovery_in_place	usb_stall	2026-10-30T20:31:48.985+00:00
+40.456501	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=5.263s	2026-10-30T20:31:49.235+00:00
+40.457100	clear_halt	ok=True	2026-10-30T20:31:49.236+00:00
+40.457207	discontinuity	usb_stall	2026-10-30T20:31:49.236+00:00
+40.457249	recovery_in_place	usb_stall	2026-10-30T20:31:49.236+00:00
+40.707536	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=5.514s	2026-10-30T20:31:49.486+00:00
+40.708057	clear_halt	ok=True	2026-10-30T20:31:49.487+00:00
+40.708195	discontinuity	usb_stall	2026-10-30T20:31:49.487+00:00
+40.708271	recovery_in_place	usb_stall	2026-10-30T20:31:49.487+00:00
+40.958536	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=5.765s	2026-10-30T20:31:49.737+00:00
+40.959063	clear_halt	ok=True	2026-10-30T20:31:49.738+00:00
+40.959178	discontinuity	usb_stall	2026-10-30T20:31:49.738+00:00
+40.959224	recovery_in_place	usb_stall	2026-10-30T20:31:49.738+00:00
+41.209496	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=6.016s	2026-10-30T20:31:49.988+00:00
+41.210210	clear_halt	ok=True	2026-10-30T20:31:49.989+00:00
+41.210332	discontinuity	usb_stall	2026-10-30T20:31:49.989+00:00
+41.210413	recovery_in_place	usb_stall	2026-10-30T20:31:49.989+00:00
+41.460714	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=6.267s	2026-10-30T20:31:50.239+00:00
+41.461275	clear_halt	ok=True	2026-10-30T20:31:50.240+00:00
+41.461393	discontinuity	usb_stall	2026-10-30T20:31:50.240+00:00
+41.461439	recovery_in_place	usb_stall	2026-10-30T20:31:50.240+00:00
+41.711778	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=6.518s	2026-10-30T20:31:50.490+00:00
+41.712295	clear_halt	ok=True	2026-10-30T20:31:50.491+00:00
+41.712402	discontinuity	usb_stall	2026-10-30T20:31:50.491+00:00
+41.712447	recovery_in_place	usb_stall	2026-10-30T20:31:50.491+00:00
+41.962738	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=6.769s	2026-10-30T20:31:50.741+00:00
+41.963326	clear_halt	ok=True	2026-10-30T20:31:50.742+00:00
+41.963472	discontinuity	usb_stall	2026-10-30T20:31:50.742+00:00
+41.963524	recovery_in_place	usb_stall	2026-10-30T20:31:50.742+00:00
+42.213803	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=7.020s	2026-10-30T20:31:50.992+00:00
+42.214320	clear_halt	ok=True	2026-10-30T20:31:50.993+00:00
+42.214427	discontinuity	usb_stall	2026-10-30T20:31:50.993+00:00
+42.214470	recovery_in_place	usb_stall	2026-10-30T20:31:50.993+00:00
+42.464814	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=7.271s	2026-10-30T20:31:51.243+00:00
+42.465523	clear_halt	ok=True	2026-10-30T20:31:51.244+00:00
+42.465860	discontinuity	usb_stall	2026-10-30T20:31:51.244+00:00
+42.465952	recovery_in_place	usb_stall	2026-10-30T20:31:51.244+00:00
+42.716295	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=7.523s	2026-10-30T20:31:51.495+00:00
+42.716857	clear_halt	ok=True	2026-10-30T20:31:51.495+00:00
+42.716975	discontinuity	usb_stall	2026-10-30T20:31:51.495+00:00
+42.717021	recovery_in_place	usb_stall	2026-10-30T20:31:51.496+00:00
+42.967261	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=7.774s	2026-10-30T20:31:51.746+00:00
+42.967845	clear_halt	ok=True	2026-10-30T20:31:51.746+00:00
+42.967949	discontinuity	usb_stall	2026-10-30T20:31:51.746+00:00
+42.967992	recovery_in_place	usb_stall	2026-10-30T20:31:51.746+00:00
+43.218257	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=8.025s	2026-10-30T20:31:51.997+00:00
+43.218819	clear_halt	ok=True	2026-10-30T20:31:51.997+00:00
+43.218937	discontinuity	usb_stall	2026-10-30T20:31:51.997+00:00
+43.218980	recovery_in_place	usb_stall	2026-10-30T20:31:51.997+00:00
+43.469262	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=8.276s	2026-10-30T20:31:52.248+00:00
+43.469775	clear_halt	ok=True	2026-10-30T20:31:52.248+00:00
+43.469913	discontinuity	usb_stall	2026-10-30T20:31:52.248+00:00
+43.469979	recovery_in_place	usb_stall	2026-10-30T20:31:52.248+00:00
+43.720330	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=8.527s	2026-10-30T20:31:52.499+00:00
+43.720939	clear_halt	ok=True	2026-10-30T20:31:52.499+00:00
+43.721095	discontinuity	usb_stall	2026-10-30T20:31:52.500+00:00
+43.721180	recovery_in_place	usb_stall	2026-10-30T20:31:52.500+00:00
+43.971434	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=8.778s	2026-10-30T20:31:52.750+00:00
+43.971948	clear_halt	ok=True	2026-10-30T20:31:52.750+00:00
+43.972058	discontinuity	usb_stall	2026-10-30T20:31:52.751+00:00
+43.972104	recovery_in_place	usb_stall	2026-10-30T20:31:52.751+00:00
+44.222430	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=9.029s	2026-10-30T20:31:53.001+00:00
+44.222980	clear_halt	ok=True	2026-10-30T20:31:53.001+00:00
+44.223114	discontinuity	usb_stall	2026-10-30T20:31:53.002+00:00
+44.223203	recovery_in_place	usb_stall	2026-10-30T20:31:53.002+00:00
+44.473441	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=9.280s	2026-10-30T20:31:53.252+00:00
+44.473960	clear_halt	ok=True	2026-10-30T20:31:53.252+00:00
+44.474068	discontinuity	usb_stall	2026-10-30T20:31:53.253+00:00
+44.474114	recovery_in_place	usb_stall	2026-10-30T20:31:53.253+00:00
+44.724387	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=9.531s	2026-10-30T20:31:53.503+00:00
+44.724902	clear_halt	ok=True	2026-10-30T20:31:53.503+00:00
+44.725006	discontinuity	usb_stall	2026-10-30T20:31:53.503+00:00
+44.725049	recovery_in_place	usb_stall	2026-10-30T20:31:53.504+00:00
+44.975332	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=9.782s	2026-10-30T20:31:53.754+00:00
+44.975889	clear_halt	ok=True	2026-10-30T20:31:53.754+00:00
+44.976022	discontinuity	usb_stall	2026-10-30T20:31:53.755+00:00
+44.976073	recovery_in_place	usb_stall	2026-10-30T20:31:53.755+00:00
+45.226375	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=10.033s	2026-10-30T20:31:54.005+00:00
+45.226891	clear_halt	ok=True	2026-10-30T20:31:54.005+00:00
+45.226996	discontinuity	usb_stall	2026-10-30T20:31:54.005+00:00
+45.227041	recovery_in_place	usb_stall	2026-10-30T20:31:54.006+00:00
+45.477278	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=10.284s	2026-10-30T20:31:54.256+00:00
+45.477790	clear_halt	ok=True	2026-10-30T20:31:54.256+00:00
+45.477920	discontinuity	usb_stall	2026-10-30T20:31:54.256+00:00
+45.477983	recovery_in_place	usb_stall	2026-10-30T20:31:54.256+00:00
+45.728281	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=10.535s	2026-10-30T20:31:54.507+00:00
+45.728802	clear_halt	ok=True	2026-10-30T20:31:54.507+00:00
+45.728937	discontinuity	usb_stall	2026-10-30T20:31:54.507+00:00
+45.728986	recovery_in_place	usb_stall	2026-10-30T20:31:54.507+00:00
+45.979306	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=10.786s	2026-10-30T20:31:54.758+00:00
+45.979811	clear_halt	ok=True	2026-10-30T20:31:54.758+00:00
+45.979908	discontinuity	usb_stall	2026-10-30T20:31:54.758+00:00
+45.979935	recovery_in_place	usb_stall	2026-10-30T20:31:54.758+00:00
+46.230195	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=11.037s	2026-10-30T20:31:55.009+00:00
+46.230726	clear_halt	ok=True	2026-10-30T20:31:55.009+00:00
+46.230850	discontinuity	usb_stall	2026-10-30T20:31:55.009+00:00
+46.230902	recovery_in_place	usb_stall	2026-10-30T20:31:55.009+00:00
+46.481264	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=11.288s	2026-10-30T20:31:55.260+00:00
+46.481792	clear_halt	ok=True	2026-10-30T20:31:55.260+00:00
+46.481926	discontinuity	usb_stall	2026-10-30T20:31:55.260+00:00
+46.481971	recovery_in_place	usb_stall	2026-10-30T20:31:55.260+00:00
+46.732229	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=11.539s	2026-10-30T20:31:55.511+00:00
+46.732752	clear_halt	ok=True	2026-10-30T20:31:55.511+00:00
+46.732882	discontinuity	usb_stall	2026-10-30T20:31:55.511+00:00
+46.732929	recovery_in_place	usb_stall	2026-10-30T20:31:55.511+00:00
+46.983239	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=11.790s	2026-10-30T20:31:55.762+00:00
+46.983839	clear_halt	ok=True	2026-10-30T20:31:55.762+00:00
+46.983954	discontinuity	usb_stall	2026-10-30T20:31:55.762+00:00
+46.983999	recovery_in_place	usb_stall	2026-10-30T20:31:55.762+00:00
+47.234289	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=12.041s	2026-10-30T20:31:56.013+00:00
+47.234810	clear_halt	ok=True	2026-10-30T20:31:56.013+00:00
+47.234928	discontinuity	usb_stall	2026-10-30T20:31:56.013+00:00
+47.234976	recovery_in_place	usb_stall	2026-10-30T20:31:56.013+00:00
+47.485322	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=12.292s	2026-10-30T20:31:56.264+00:00
+47.485863	clear_halt	ok=True	2026-10-30T20:31:56.264+00:00
+47.485979	discontinuity	usb_stall	2026-10-30T20:31:56.264+00:00
+47.486025	recovery_in_place	usb_stall	2026-10-30T20:31:56.265+00:00
+47.736257	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=12.543s	2026-10-30T20:31:56.515+00:00
+47.736774	clear_halt	ok=True	2026-10-30T20:31:56.515+00:00
+47.736915	discontinuity	usb_stall	2026-10-30T20:31:56.515+00:00
+47.736980	recovery_in_place	usb_stall	2026-10-30T20:31:56.515+00:00
+47.987213	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=12.794s	2026-10-30T20:31:56.766+00:00
+47.987727	clear_halt	ok=True	2026-10-30T20:31:56.766+00:00
+47.987854	discontinuity	usb_stall	2026-10-30T20:31:56.766+00:00
+47.987897	recovery_in_place	usb_stall	2026-10-30T20:31:56.766+00:00
+48.238245	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=13.045s	2026-10-30T20:31:57.017+00:00
+48.238734	clear_halt	ok=True	2026-10-30T20:31:57.017+00:00
+48.238831	discontinuity	usb_stall	2026-10-30T20:31:57.017+00:00
+48.238858	recovery_in_place	usb_stall	2026-10-30T20:31:57.017+00:00
+48.489089	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=13.295s	2026-10-30T20:31:57.268+00:00
+48.489609	clear_halt	ok=True	2026-10-30T20:31:57.268+00:00
+48.489714	discontinuity	usb_stall	2026-10-30T20:31:57.268+00:00
+48.489761	recovery_in_place	usb_stall	2026-10-30T20:31:57.268+00:00
+48.740105	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=13.547s	2026-10-30T20:31:57.519+00:00
+48.740802	clear_halt	ok=True	2026-10-30T20:31:57.519+00:00
+48.740914	discontinuity	usb_stall	2026-10-30T20:31:57.519+00:00
+48.740958	recovery_in_place	usb_stall	2026-10-30T20:31:57.519+00:00
+48.991193	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=13.798s	2026-10-30T20:31:57.770+00:00
+48.991709	clear_halt	ok=True	2026-10-30T20:31:57.770+00:00
+48.991815	discontinuity	usb_stall	2026-10-30T20:31:57.770+00:00
+48.991861	recovery_in_place	usb_stall	2026-10-30T20:31:57.770+00:00
+49.242110	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=14.049s	2026-10-30T20:31:58.021+00:00
+49.242628	clear_halt	ok=True	2026-10-30T20:31:58.021+00:00
+49.242731	discontinuity	usb_stall	2026-10-30T20:31:58.021+00:00
+49.242775	recovery_in_place	usb_stall	2026-10-30T20:31:58.021+00:00
+49.493050	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=14.299s	2026-10-30T20:31:58.272+00:00
+49.493633	clear_halt	ok=True	2026-10-30T20:31:58.272+00:00
+49.493741	discontinuity	usb_stall	2026-10-30T20:31:58.272+00:00
+49.493786	recovery_in_place	usb_stall	2026-10-30T20:31:58.272+00:00
+49.744019	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=14.550s	2026-10-30T20:31:58.523+00:00
+49.744708	clear_halt	ok=True	2026-10-30T20:31:58.523+00:00
+49.744833	discontinuity	usb_stall	2026-10-30T20:31:58.523+00:00
+49.744866	recovery_in_place	usb_stall	2026-10-30T20:31:58.523+00:00
+49.995095	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=14.801s	2026-10-30T20:31:58.774+00:00
+49.995660	clear_halt	ok=True	2026-10-30T20:31:58.774+00:00
+49.995762	discontinuity	usb_stall	2026-10-30T20:31:58.774+00:00
+49.995788	recovery_in_place	usb_stall	2026-10-30T20:31:58.774+00:00
+50.246047	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=15.052s	2026-10-30T20:31:59.025+00:00
+50.246662	clear_halt	ok=True	2026-10-30T20:31:59.025+00:00
+50.246840	discontinuity	usb_stall	2026-10-30T20:31:59.025+00:00
+50.246917	recovery_in_place	usb_stall	2026-10-30T20:31:59.025+00:00
+50.497185	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=15.304s	2026-10-30T20:31:59.276+00:00
+50.497712	clear_halt	ok=True	2026-10-30T20:31:59.276+00:00
+50.497825	discontinuity	usb_stall	2026-10-30T20:31:59.276+00:00
+50.497875	recovery_in_place	usb_stall	2026-10-30T20:31:59.276+00:00
+50.748172	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=15.555s	2026-10-30T20:31:59.527+00:00
+50.748738	clear_halt	ok=True	2026-10-30T20:31:59.527+00:00
+50.748840	discontinuity	usb_stall	2026-10-30T20:31:59.527+00:00
+50.748885	recovery_in_place	usb_stall	2026-10-30T20:31:59.527+00:00
+50.999134	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=15.806s	2026-10-30T20:31:59.778+00:00
+50.999711	clear_halt	ok=True	2026-10-30T20:31:59.778+00:00
+50.999813	discontinuity	usb_stall	2026-10-30T20:31:59.778+00:00
+50.999841	recovery_in_place	usb_stall	2026-10-30T20:31:59.778+00:00
+51.250072	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=16.056s	2026-10-30T20:32:00.029+00:00
+51.250591	clear_halt	ok=True	2026-10-30T20:32:00.029+00:00
+51.250689	discontinuity	usb_stall	2026-10-30T20:32:00.029+00:00
+51.250717	recovery_in_place	usb_stall	2026-10-30T20:32:00.029+00:00
+51.500905	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=16.307s	2026-10-30T20:32:00.279+00:00
+51.501442	clear_halt	ok=True	2026-10-30T20:32:00.280+00:00
+51.501574	discontinuity	usb_stall	2026-10-30T20:32:00.280+00:00
+51.501651	recovery_in_place	usb_stall	2026-10-30T20:32:00.280+00:00
+51.751962	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=16.558s	2026-10-30T20:32:00.530+00:00
+51.752527	clear_halt	ok=True	2026-10-30T20:32:00.531+00:00
+51.752640	discontinuity	usb_stall	2026-10-30T20:32:00.531+00:00
+51.752687	recovery_in_place	usb_stall	2026-10-30T20:32:00.531+00:00
+52.002932	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=16.809s	2026-10-30T20:32:00.781+00:00
+52.003457	clear_halt	ok=True	2026-10-30T20:32:00.782+00:00
+52.003587	discontinuity	usb_stall	2026-10-30T20:32:00.782+00:00
+52.003630	recovery_in_place	usb_stall	2026-10-30T20:32:00.782+00:00
+52.254006	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=8679; last_bytes=16827669; since_data=17.060s	2026-10-30T20:32:01.032+00:00
+52.254514	clear_halt	ok=True	2026-10-30T20:32:01.033+00:00
+52.254641	discontinuity	usb_stall	2026-10-30T20:32:01.033+00:00
+52.254682	recovery_in_place	usb_stall	2026-10-30T20:32:01.033+00:00
+52.279927	read_gap	read_gap_17.086s	2026-10-30T20:32:01.058+00:00
+56.499945	read_gap	read_gap_2.700s	2026-10-30T20:32:05.278+00:00
+65.433730	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=3.003s	2026-10-30T20:32:14.212+00:00
+65.434354	clear_halt	ok=True	2026-10-30T20:32:14.213+00:00
+65.434890	discontinuity	usb_stall	2026-10-30T20:32:14.213+00:00
+65.434962	recovery_in_place	usb_stall	2026-10-30T20:32:14.213+00:00
+65.685254	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=3.255s	2026-10-30T20:32:14.464+00:00
+65.685824	clear_halt	ok=True	2026-10-30T20:32:14.464+00:00
+65.685937	discontinuity	usb_stall	2026-10-30T20:32:14.464+00:00
+65.685983	recovery_in_place	usb_stall	2026-10-30T20:32:14.464+00:00
+65.936282	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=3.506s	2026-10-30T20:32:14.715+00:00
+65.936830	clear_halt	ok=True	2026-10-30T20:32:14.715+00:00
+65.936978	discontinuity	usb_stall	2026-10-30T20:32:14.715+00:00
+65.937014	recovery_in_place	usb_stall	2026-10-30T20:32:14.715+00:00
+66.187321	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=3.757s	2026-10-30T20:32:14.966+00:00
+66.187909	clear_halt	ok=True	2026-10-30T20:32:14.966+00:00
+66.188024	discontinuity	usb_stall	2026-10-30T20:32:14.967+00:00
+66.188072	recovery_in_place	usb_stall	2026-10-30T20:32:14.967+00:00
+66.438468	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=4.008s	2026-10-30T20:32:15.217+00:00
+66.439199	clear_halt	ok=True	2026-10-30T20:32:15.218+00:00
+66.439324	discontinuity	usb_stall	2026-10-30T20:32:15.218+00:00
+66.439373	recovery_in_place	usb_stall	2026-10-30T20:32:15.218+00:00
+66.689785	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=4.259s	2026-10-30T20:32:15.468+00:00
+66.690406	clear_halt	ok=True	2026-10-30T20:32:15.469+00:00
+66.690523	discontinuity	usb_stall	2026-10-30T20:32:15.469+00:00
+66.690568	recovery_in_place	usb_stall	2026-10-30T20:32:15.469+00:00
+66.940953	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=4.510s	2026-10-30T20:32:15.719+00:00
+66.941511	clear_halt	ok=True	2026-10-30T20:32:15.720+00:00
+66.941691	discontinuity	usb_stall	2026-10-30T20:32:15.720+00:00
+66.941741	recovery_in_place	usb_stall	2026-10-30T20:32:15.720+00:00
+67.192060	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=4.761s	2026-10-30T20:32:15.971+00:00
+67.192656	clear_halt	ok=True	2026-10-30T20:32:15.971+00:00
+67.192770	discontinuity	usb_stall	2026-10-30T20:32:15.971+00:00
+67.192814	recovery_in_place	usb_stall	2026-10-30T20:32:15.971+00:00
+67.443232	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=5.012s	2026-10-30T20:32:16.222+00:00
+67.443845	clear_halt	ok=True	2026-10-30T20:32:16.222+00:00
+67.443961	discontinuity	usb_stall	2026-10-30T20:32:16.222+00:00
+67.444017	recovery_in_place	usb_stall	2026-10-30T20:32:16.223+00:00
+67.694422	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=5.264s	2026-10-30T20:32:16.473+00:00
+67.694938	clear_halt	ok=True	2026-10-30T20:32:16.473+00:00
+67.695059	discontinuity	usb_stall	2026-10-30T20:32:16.474+00:00
+67.695103	recovery_in_place	usb_stall	2026-10-30T20:32:16.474+00:00
+67.945367	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=5.515s	2026-10-30T20:32:16.724+00:00
+67.945923	clear_halt	ok=True	2026-10-30T20:32:16.724+00:00
+67.946045	discontinuity	usb_stall	2026-10-30T20:32:16.725+00:00
+67.946090	recovery_in_place	usb_stall	2026-10-30T20:32:16.725+00:00
+68.196403	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=5.766s	2026-10-30T20:32:16.975+00:00
+68.196922	clear_halt	ok=True	2026-10-30T20:32:16.975+00:00
+68.197029	discontinuity	usb_stall	2026-10-30T20:32:16.976+00:00
+68.197073	recovery_in_place	usb_stall	2026-10-30T20:32:16.976+00:00
+68.447335	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=6.017s	2026-10-30T20:32:17.226+00:00
+68.447852	clear_halt	ok=True	2026-10-30T20:32:17.226+00:00
+68.447958	discontinuity	usb_stall	2026-10-30T20:32:17.226+00:00
+68.447988	recovery_in_place	usb_stall	2026-10-30T20:32:17.226+00:00
+68.698274	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=6.268s	2026-10-30T20:32:17.477+00:00
+68.698845	clear_halt	ok=True	2026-10-30T20:32:17.477+00:00
+68.698963	discontinuity	usb_stall	2026-10-30T20:32:17.477+00:00
+68.699013	recovery_in_place	usb_stall	2026-10-30T20:32:17.477+00:00
+68.949287	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=6.519s	2026-10-30T20:32:17.728+00:00
+68.949811	clear_halt	ok=True	2026-10-30T20:32:17.728+00:00
+68.949924	discontinuity	usb_stall	2026-10-30T20:32:17.728+00:00
+68.949972	recovery_in_place	usb_stall	2026-10-30T20:32:17.728+00:00
+69.200279	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=6.770s	2026-10-30T20:32:17.979+00:00
+69.200802	clear_halt	ok=True	2026-10-30T20:32:17.979+00:00
+69.200911	discontinuity	usb_stall	2026-10-30T20:32:17.979+00:00
+69.200963	recovery_in_place	usb_stall	2026-10-30T20:32:17.979+00:00
+69.451249	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=7.020s	2026-10-30T20:32:18.230+00:00
+69.451761	clear_halt	ok=True	2026-10-30T20:32:18.230+00:00
+69.451866	discontinuity	usb_stall	2026-10-30T20:32:18.230+00:00
+69.451911	recovery_in_place	usb_stall	2026-10-30T20:32:18.230+00:00
+69.702185	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=7.271s	2026-10-30T20:32:18.481+00:00
+69.702698	clear_halt	ok=True	2026-10-30T20:32:18.481+00:00
+69.702801	discontinuity	usb_stall	2026-10-30T20:32:18.481+00:00
+69.702845	recovery_in_place	usb_stall	2026-10-30T20:32:18.481+00:00
+69.953186	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=7.522s	2026-10-30T20:32:18.732+00:00
+69.953784	clear_halt	ok=True	2026-10-30T20:32:18.732+00:00
+69.953902	discontinuity	usb_stall	2026-10-30T20:32:18.732+00:00
+69.953950	recovery_in_place	usb_stall	2026-10-30T20:32:18.732+00:00
+70.204462	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=7.774s	2026-10-30T20:32:18.983+00:00
+70.205018	clear_halt	ok=True	2026-10-30T20:32:18.984+00:00
+70.205147	discontinuity	usb_stall	2026-10-30T20:32:18.984+00:00
+70.205207	recovery_in_place	usb_stall	2026-10-30T20:32:18.984+00:00
+70.455485	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=8.025s	2026-10-30T20:32:19.234+00:00
+70.456001	clear_halt	ok=True	2026-10-30T20:32:19.234+00:00
+70.456139	discontinuity	usb_stall	2026-10-30T20:32:19.235+00:00
+70.456193	recovery_in_place	usb_stall	2026-10-30T20:32:19.235+00:00
+70.706455	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=8.276s	2026-10-30T20:32:19.485+00:00
+70.707008	clear_halt	ok=True	2026-10-30T20:32:19.485+00:00
+70.707159	discontinuity	usb_stall	2026-10-30T20:32:19.486+00:00
+70.707215	recovery_in_place	usb_stall	2026-10-30T20:32:19.486+00:00
+70.957521	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=8.527s	2026-10-30T20:32:19.736+00:00
+70.958052	clear_halt	ok=True	2026-10-30T20:32:19.737+00:00
+70.958219	discontinuity	usb_stall	2026-10-30T20:32:19.737+00:00
+70.958322	recovery_in_place	usb_stall	2026-10-30T20:32:19.737+00:00
+71.208603	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=8.778s	2026-10-30T20:32:19.987+00:00
+71.209121	clear_halt	ok=True	2026-10-30T20:32:19.988+00:00
+71.209239	discontinuity	usb_stall	2026-10-30T20:32:19.988+00:00
+71.209286	recovery_in_place	usb_stall	2026-10-30T20:32:19.988+00:00
+71.459491	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=9.029s	2026-10-30T20:32:20.238+00:00
+71.460010	clear_halt	ok=True	2026-10-30T20:32:20.238+00:00
+71.460125	discontinuity	usb_stall	2026-10-30T20:32:20.239+00:00
+71.460179	recovery_in_place	usb_stall	2026-10-30T20:32:20.239+00:00
+71.710497	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=9.280s	2026-10-30T20:32:20.489+00:00
+71.711015	clear_halt	ok=True	2026-10-30T20:32:20.489+00:00
+71.711142	discontinuity	usb_stall	2026-10-30T20:32:20.490+00:00
+71.711193	recovery_in_place	usb_stall	2026-10-30T20:32:20.490+00:00
+71.961463	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=9.531s	2026-10-30T20:32:20.740+00:00
+71.962073	clear_halt	ok=True	2026-10-30T20:32:20.741+00:00
+71.962257	discontinuity	usb_stall	2026-10-30T20:32:20.741+00:00
+71.962329	recovery_in_place	usb_stall	2026-10-30T20:32:20.741+00:00
+72.212582	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=9.782s	2026-10-30T20:32:20.991+00:00
+72.213069	clear_halt	ok=True	2026-10-30T20:32:20.992+00:00
+72.213178	discontinuity	usb_stall	2026-10-30T20:32:20.992+00:00
+72.213212	recovery_in_place	usb_stall	2026-10-30T20:32:20.992+00:00
+72.463410	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=10.033s	2026-10-30T20:32:21.242+00:00
+72.463968	clear_halt	ok=True	2026-10-30T20:32:21.242+00:00
+72.464083	discontinuity	usb_stall	2026-10-30T20:32:21.243+00:00
+72.464126	recovery_in_place	usb_stall	2026-10-30T20:32:21.243+00:00
+72.714390	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=10.284s	2026-10-30T20:32:21.493+00:00
+72.714903	clear_halt	ok=True	2026-10-30T20:32:21.493+00:00
+72.715030	discontinuity	usb_stall	2026-10-30T20:32:21.494+00:00
+72.715074	recovery_in_place	usb_stall	2026-10-30T20:32:21.494+00:00
+72.965328	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=10.535s	2026-10-30T20:32:21.744+00:00
+72.965906	clear_halt	ok=True	2026-10-30T20:32:21.744+00:00
+72.966018	discontinuity	usb_stall	2026-10-30T20:32:21.745+00:00
+72.966065	recovery_in_place	usb_stall	2026-10-30T20:32:21.745+00:00
+73.216362	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=10.786s	2026-10-30T20:32:21.995+00:00
+73.216899	clear_halt	ok=True	2026-10-30T20:32:21.995+00:00
+73.217015	discontinuity	usb_stall	2026-10-30T20:32:21.995+00:00
+73.217060	recovery_in_place	usb_stall	2026-10-30T20:32:21.996+00:00
+73.467357	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=11.037s	2026-10-30T20:32:22.246+00:00
+73.468025	clear_halt	ok=True	2026-10-30T20:32:22.247+00:00
+73.468203	discontinuity	usb_stall	2026-10-30T20:32:22.247+00:00
+73.468266	recovery_in_place	usb_stall	2026-10-30T20:32:22.247+00:00
+73.718542	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=11.288s	2026-10-30T20:32:22.497+00:00
+73.719055	clear_halt	ok=True	2026-10-30T20:32:22.498+00:00
+73.719191	discontinuity	usb_stall	2026-10-30T20:32:22.498+00:00
+73.719239	recovery_in_place	usb_stall	2026-10-30T20:32:22.498+00:00
+73.969503	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=11.539s	2026-10-30T20:32:22.748+00:00
+73.970028	clear_halt	ok=True	2026-10-30T20:32:22.749+00:00
+73.970136	discontinuity	usb_stall	2026-10-30T20:32:22.749+00:00
+73.970189	recovery_in_place	usb_stall	2026-10-30T20:32:22.749+00:00
+74.220448	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=11.790s	2026-10-30T20:32:22.999+00:00
+74.220976	clear_halt	ok=True	2026-10-30T20:32:22.999+00:00
+74.221093	discontinuity	usb_stall	2026-10-30T20:32:23.000+00:00
+74.221145	recovery_in_place	usb_stall	2026-10-30T20:32:23.000+00:00
+74.471413	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=12.041s	2026-10-30T20:32:23.250+00:00
+74.471989	clear_halt	ok=True	2026-10-30T20:32:23.250+00:00
+74.472173	discontinuity	usb_stall	2026-10-30T20:32:23.251+00:00
+74.472233	recovery_in_place	usb_stall	2026-10-30T20:32:23.251+00:00
+74.722507	usb_error	stall: timeout USB read error: [Errno 110] Operation timed out; errno=110; backend=-7; last_reads=13644; last_bytes=26549244; since_data=12.292s	2026-10-30T20:32:23.501+00:00
+74.723023	clear_halt	ok=True	2026-10-30T20:32:23.502+00:00
+74.723190	discontinuity	usb_stall	2026-10-30T20:32:23.502+00:00
+74.723285	recovery_in_place	usb_stall	2026-10-30T20:32:23.502+00:00
+74.957208	read_gap	read_gap_12.526s	2026-10-30T20:32:23.736+00:00
+77.550957	read_gap	read_gap_1.775s	2026-10-30T20:32:26.329+00:00
+79.484304	stop	stopped	2026-10-30T20:32:28.263+00:00
