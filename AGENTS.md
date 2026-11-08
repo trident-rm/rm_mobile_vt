@@ -14,7 +14,7 @@
 1. **先发现真实环境，后写命令**：确认 SSH 目标、CPU 架构、Linux/Armbian 版本、源码和 CLI 的实际存在情况。文中的路径是已知历史路径，不能无条件假设当前仍一致。
 2. **关键事实不确定时向人提问**：尤其 SSH 目标、真实图传启动命令、显示技术栈、系统是否正在承担其他任务。可并行完成不依赖这些信息的只读工作；不得为了继续而猜测。
 3. **先提供具体计划**：目标、涉及主机、计划改动、风险等级、回退方式、验证准则。一次只推进最小可验证改动，记录证据。
-4. **按 §5 的批准制度执行**：有害、不可逆、可能让 CM311 失去 SSH 或视频能力的命令，必须先展示**完整将要执行的命令**并取得明确批准。没有回复即未批准；以前的批准不能自动扩展到新操作。
+4. **按 §5 的批准制度执行**：离线测试/分析（PC 或 CM311 上不启动实时 USB/HDMI 的只读分析或短时测试，包括离线 `hevc_v4l2m2m` 解码）无需逐次人工批准，但须先确认设备空闲、使用独立输出目录和 `timeout`，并记录命令/RC/证据。有害、不可逆、可能让 CM311 失去 SSH 或视频能力的命令，必须先展示**完整将要执行的命令**并取得明确批准。没有回复即未批准；以前的批准不能自动扩展到新操作。
 5. **无线图传实测实行人机交接**：实际顺序必须为「先启动并确认接收程序处于等待状态 → 再由人开启无线图传」。Agent 提供完整、可复制粘贴的 Bash 命令和预期 READY 证据；由人完成物理操作并反馈结果，再由 Agent 自动分析日志。不要假定 Codex 可以控制无线发射端。
 6. **Ubuntu PC 与 CM311 职责分离**：复杂分析、重计算、离线软件解码、源码审查和可行时的构建优先在 PC；最终所有代码、二进制、依赖及运行流程必须兼容 **CM311 目标环境**，并在目标机完成验收。
 7. **数据/源代码的所有权与同步清晰**：区分 PC 本地、CM311 远端以及历史捕获；检查 SHA256/文件大小。未经批准不覆盖远端黄金版本、已有日志、内核模块和系统配置。
@@ -162,7 +162,7 @@ CM311 真正的版本信息应通过 `uname -m`、`uname -r`、`ldd --version`�
 
 ---
 
-## 3. 已验证事实、实验补丁及未决问题（2026-11-06 基线）
+## 3. 已验证事实、实验补丁及未决问题（2026-11-06 基线；2026-11-07 更新）
 
 ### 3.1 已有证据
 
@@ -176,6 +176,12 @@ CM311 真正的版本信息应通过 `uname -m`、`uname -r`、`ldd --version`�
 8. **Packet81 padding sweep（连续重复 3 轮）**：在 Packet81 后、Packet82 前插入 0/64/256 B，VDEC 仍 `status=0xf`；插入 512/1024/2048/4096/8192 B，VDEC `status=0x8`、退出码 0；成功时图片处理达到最后 LCU index 2039/2040。
 9. **图片一致性限制**：`sw_raw == sw_pad512` 38/38；`hw_pad512 == hw_pad8192` 38/38；`sw_pad512` vs `hw_pad512` **仅 36/38 一致**，差异在 POC50、POC55（均存在参考链缺失；最后一帧也可能受 EOF 影响）。**Padding 只是实验性硬解不中断 workaround，不是生产质量修复。**
 10. **POC 改写对照**：把 POC50/55 改成 36/37 但保留原压缩数据，硬解仍在相同 LCU 报 `0x0F`；克隆先前可解的 Packet80 作为 Packet81 后成功，说明触发依赖输入内容/边界，不只是 POC 缺失。
+11. **2026-11-07 CM311 离线硬解证据（clean 与 EOF）**：源码 `meson_vdec` 加载后，`clean_1832x1032.h265` 用 `-vsync 0` 软/硬解均 30 帧、RC=0，FrameMD5 29/30 一致，仅 index 29 不同，未观察 `status=0xf`。三个 EOF 变体软件均 27 帧、RC=0，且 SW FrameMD5 完全一致。硬件在 EOF drain/flush 阶段表现不同：`aud` 在 `timeout -k 5 45` 下 RC=137，`eos` 断言中止 RC=134；未启用 `-flush_packets` 时 framemd5 没有持久化帧。`zeros1024` 加 `-flush_packets 1 -pix_fmt yuv420p` 可 RC=0、27 帧，但 26/27 一致、末帧不同且跨运行哈希可变；三次无 flush 也均 RC=0/27，但第 2 次 FrameMD5 与第 1/3 次不同。`-frames:v` 提前停止时 `aud` 22 帧、`eos` 20 帧均全部匹配，说明已输出的普通帧内容正确，失败集中在 EOF drain；`flush_packets` 只是保留超时前输出的实验性手段，不是根治。根因未证实。
+12. **2026-11-08 00:51 HKT CM311 只读盘点**：`/dev/video0` 无 opener，源码 `meson_vdec` 仍加载；`clean_1832x1032.h265`、`no_sei.h265`、`fresh_45_to_82.h265`、`pad_1024.h265` 和三个 EOF 样本均存在，SHA256 与既有记录一致。下一步是 clean 的 `-fps_mode passthrough` 复验及扩展样本硬解矩阵；本轮尚未启动 USB/HDMI/无线链路。
+13. **2026-11-08 01:09-01:11 HKT CM311 扩展硬解矩阵**：全部使用 `-fps_mode passthrough`、硬件 `-flush_packets 1`、`timeout -k 5 45`。`clean` 软/硬解 30 帧、RC=0，FrameMD5 29/30 一致（仅 index 29 不同）；`no_sei` 软件 132 帧 RC=0，硬件在 POC21 报 `HEVC_LCU_CHECK status=0xf` 并中止 RC=134，仅输出 14 帧但全部匹配前缀；`fresh_45_to_82` 软件 38 帧 RC=0，硬件在 POC50 报 `status=0xf`、RC=134，输出 32 帧且全部匹配前缀；`pad_1024` 硬件 38 帧 RC=0，但仅 36/38 匹配，首差异 index 36，驱动仅见 `status=0x8` 与两条缺失参考替代。EOF：`aud` 本次 RC=137、18 帧全匹配；后续同窗口 3 次均为 19 帧且逐帧相同（跨窗口 22/18/19，见 item 14）；`eos` RC=134、20 帧全匹配；`zeros1024` RC=0、27 帧但 26/27 匹配。三份 EOF 软件参考仍完全一致。**结论：clean 的 `-fps_mode passthrough` 复验通过帧数/RC，但末帧仍不一致；POC21/POC50 的 `0xf` 中止、padding 内容差异和 EOF drain 均未解决。**
+14. **2026-11-08 02:57-03:00 HKT CM311 `aud` EOF 重复**：同一命令连续 3 次均为 RC=137、19 帧，FrameMD5 完全相同且 19/19 匹配 SW；本次窗口内输出稳定。结合先前 22 帧与 01:09 矩阵 18 帧，超时前已输出帧数会跨窗口变化；根因仍指向 EOF drain/超时窗口，未证实。**不能把 18、19 或 22 任一帧数当作完整 EOF 解码结果。**
+15. **2026-11-08 03:00 HKT 本地/远端证据一致性**：扩展矩阵证据目录 74 个文件、`aud` 重复证据目录 29 个文件，完整 SHA256 清单本地与 CM311 逐文件一致；清单保存在 `.codex_tmp/manifests_20261108/`。这是证据副本一致性，不代表硬解内容已验收。
+16. **2026-11-08 03:51 HKT 测试后状态**：CM311 无 `ffmpeg`/`vt13_video` 残留，`/dev/video0` 无 opener，源码 `meson_vdec` 仍加载；未启动 USB/HDMI/无线链路。
 
 ### 3.2 已知实验性代码状态——需要审查，不应照单全收
 
@@ -196,11 +202,15 @@ CM311 真正的版本信息应通过 `uname -m`、`uname -r`、`ldd --version`�
 
 **P1 — 正确性/健壮性**
 
-- 动态分辨率切换时丢一帧；EOF 时最后帧可能提前输出；Copy-Out 成本/替代方案；引用计数补丁验证。
+- 动态分辨率切换时丢一帧；EOF drain/flush 可挂起或断言中止，`zeros1024` 末帧内容/哈希仍不稳定；Copy-Out 成本/替代方案；引用计数补丁验证。
 - 真实场景长时间负载、CPU/内存/温度、音视频帧调度（当前项目以视频为主）；断链重连后软件和硬件状态机恢复。
 - 从 HEVC 原始数据到 HDMI 显示的时间戳、队列深度、丢帧策略及量化延迟测量。
 
 单次 `status=0x8`、`RC=0`、POC 改写或补零均不能视为 P0 已解决。
+
+测试套件 `RC=0` 只证明 Python 回归基线通过；它不等于 `hevc_v4l2m2m`
+实机硬解成功，也不能替代帧内容一致性检查。硬解目标应优先用 CM311
+离线 golden HEVC 解码证据（交接清单 V07/V08）推进。
 
 ### 3.4 待验证清单（Validation Needed）
 
@@ -211,13 +221,13 @@ CM311 真正的版本信息应通过 `uname -m`、`uname -r`、`ldd --version`�
 | 本地/远端代码一致性 | 用户确认：CM311 为最新实验代码，PC 为可用软解基线；2026-11-06 SHA256 对比为本地 24、远端 27；远端多 `config/vt13_video.no_status.yaml`、`config/vt13_video.yuvtest.yaml`、`vt13_video/async_usb.py`；`README.md`、`vt13_video/decoder.py`、`vt13_video/pipeline.py` 不同；远端 `.git` 仍无效；内核/FFmpeg 有未提交修改 | 逐文件审查/合并；记录 commit/diff/SHA256；两侧复测 |
 | CM311 最新实验代码测试兼容性 | 远端 50 项中 49 通过；`test_allow_corrupt_frames_controls_pyav_output_flag` 因 PyAV 11.0.0 仅暴露 `Flags.OUTPUT_CORRUPT`、测试访问小写 `output_corrupt` 而报错 | 修复测试兼容性，或固定 PyAV 版本；重跑完整测试并记录 RC |
 | CM311 最新捕获指针 | 2026-11-06 只读盘点时 `/tmp/dji_test_latest_dir` 不存在 | 指针存在且指向预期 capture root；不要猜测 |
-| CM311 当前运行进程 | 本轮未启动任何 USB/V4L2/HDMI 程序 | `ps`/`pgrep`/`fuser` 证据；确认无冲突占用 |
+| CM311 当前运行进程 | 2026-11-08 00:51 HKT 只读检查未发现 `vt13_video`/`ffmpeg` 占用，`/dev/video0` 无 opener；源码 `meson_vdec` 仍加载；01:09-01:11 扩展硬解矩阵已跑完；未启动实时 USB/HDMI | `ps`/`fuser` 证据；确认无冲突占用 |
 | 显示技术栈 | 未核实 DRM/KMS、fbdev、X11/Wayland | `ls /dev/dri`、`loginctl`/`DISPLAY`、实际 HDMI 输出证据 |
 | `vt13_video` 入口与 READY | 远端 `python3 -m vt13_video --help` RC=0；未跑 stream | 真实 `stream` 命令、READY/LISTENING 日志、退出方式 |
 | golden capture | 本地与 CM311 的 `captures/cold_start/bulk_if0_ep81.bin` SHA256 已核对一致 | 记录大小、SHA256、来源路径；离线解码结果 |
-| FFmpeg 硬解 | 自定义目录和修改存在；本轮未重跑解码 | `hevc_v4l2m2m` 命令、RC、帧数、FrameMD5/对比 |
-| 内核模块/VDEC | 修改文件和未跟踪备份存在；本轮未看 dmesg | `uname -r`、模块 vermagic、dmesg、`status=0x8/0xf` |
-| Source Change / POC50 / EOF | 历史结果，未在今日设备状态复验 | 受控离线/目标板短测证据 |
+| FFmpeg 硬解 | R3 已加载源码模块，V4L2 已枚举 HEVC；2026-11-08 `-fps_mode passthrough`：clean 30 帧 RC=0、29/30；`no_sei` POC21 `0xf` RC=134（14 帧前缀全匹配）；`fresh_45_to_82` POC50 `0xf` RC=134（32 帧前缀全匹配）；`pad_1024` 38 帧 RC=0、36/38；EOF `aud` 3 次重复均 RC=137/19 帧且逐帧相同（跨窗口曾见 22/18/19）、`eos` 20 帧 RC=134、`zeros` 27 帧 26/27 | 解释/修复 EOF drain 与 `0xf`；说明 `aud` 超时前帧数跨窗口差异；继续覆盖真实样本 |
+| 内核模块/VDEC | R3 已卸载 stock 并加载源码 `meson_vdec`（SHA256 `ca46...`）；HEVC 已注册；2026-11-08 dmesg 已见 `status=0x8` 与 `status=0xf`：`no_sei` POC21、`fresh` POC50 触发 `0xf`；`pad` 仅见 `0x8` 且两次缺失参考替代 | `uname -r`、模块 vermagic、dmesg、`status=0x8/0xf`；解释 EOF 状态机 |
+| Source Change / POC50 / EOF | 2026-11-08 扩展矩阵确认：三份 EOF SW 27 帧仍一致；HW `aud`/`eos` drain 失败，`zeros` 26/27；`pad_1024` 虽 RC=0 但 36/38，首差异 index 36；`aud` 同一窗口 3 次均为 19 帧且相同，但跨窗口帧数为 22/18/19 | 解释 EOF drain/flush 状态机与超时窗口；验证 `0xf` 根因与 padding 内容差异 |
 | 实时无线链路 | 本轮完全未启动 | 按 §6 人机交接；READY 后由人开图传 |
 | 性能/延迟目标 | 30–50 FPS、约 1024×576 仍是待确认目标 | 用户确认 + CM311 实测 CPU/RSS/温度/延迟 |
 
@@ -239,22 +249,23 @@ CM311 真正的版本信息应通过 `uname -m`、`uname -r`、`ldd --version`�
 
 ## 5. 风险分级与 HUMAN APPROVAL（强制）
 
-默认仅授权只读、PC 沙盒文件、非破坏性离线计算。风险不明的远端操作须先询问。
+默认授权只读、PC/CM311 的离线测试与分析、PC 沙盒文件和非破坏性离线计算。风险不明的远端操作须先询问。
 
 | 等级 | 示例 | 执行规则 |
 |---|---|---|
 | **R0 只读** | `ls`、`cat`、`uname`、`git status`、读源码/已有日志、`ffprobe`、读取 sysfs | 可直接执行；注意不要触发设备占用 |
-| **R1 可回滚、限沙盒** | PC 新增分析脚本、PC 离线软件解码、CM311 的单独测试目录产生日志（确认磁盘空间与进程无冲突） | 提前说明并限制磁盘、CPU 与超时时间；不得覆盖既有文件 |
-| **R2 需用户明确同意** | 在 CM311 启动占用真实 USB/V4L2/HDMI 的程序；停止已有业务进程；大量拷贝/删除；写入工作树现有关键文件；非短时压力测试；连接/断开无线设备 | 展示完整命令、持续范围及退出方法；等批准后执行；无线开关仍由人操作 |
+| **R1 离线测试/分析（无需批准）** | PC/CM311 的离线软件或硬件解码、FFmpeg/V4L2 短测、只读分析脚本、在独立测试目录产生日志；前提是 `/dev/video0` 等目标设备无其他占用 | 可直接执行；执行前只读检查设备空闲，限制磁盘、CPU 与 `timeout`；输出到独立目录，不覆盖原始捕获/golden；记录命令、RC、证据路径 |
+| **R2 需用户明确同意** | 在 CM311 启动实时 USB 接收、HDMI 显示或长期/独占 V4L2 测试；停止已有业务进程；大量拷贝/删除；写入工作树现有关键文件；非短时压力测试；连接/断开无线设备 | 展示完整命令、持续范围及退出方法；等批准后执行；无线开关仍由人操作 |
 | **R3 高风险、每项单独明确批准** | `reboot`/`shutdown`/`poweroff`；`systemctl restart/stop` 影响 SSH/网络/显示/USB 的服务；`rmmod`/`modprobe`/驱动重载；写 `/lib/modules`、`/boot`、DTB、firmware、bootloader；升级 kernel/`apt upgrade`；改网络/防火墙/IP；`dd` 到设备；可能使 SSH 失联的操作 | **禁止自动执行**；必须先给人计划、完整命令、停机/失联风险、现场回退与物理访问条件，得到限定范围的明确批准，再在约定窗口进行 |
 
 额外约束：
 
 - **绝不**执行 `rm -rf` 清理未知目录、`git reset --hard`、`git clean -fdx`、覆盖原始捕获、抹掉 Git 历史、任意 `killall` / `pkill -f`、写 EFI/eMMC/闪存，除非人对完整作用域明确授权。危险操作即使被脚本间接调用也必须审批。
+- **离线测试/分析无需批准，但不是无约束**：先检查目标设备/进程无冲突；使用 `timeout`、有限磁盘和独立 `.codex_tmp/<step>/` 或专用 run 目录；不得覆盖 golden 或既有日志；结束后报告命令、RC、证据和是否需要后续审批。
 - 不用 `sudo` 碰运气；若只读诊断需要权限，先解释具体的 `sudo` 只读命令；**任何 root 写入**按高风险处理。不要索取、回显或记录人的密码、SSH 私钥、token。
 - 不擅自 `apt install`（可能改包依赖和系统状态）；PC 安装开发依赖也先说明影响。优先用已安装工具或 PC 独立虚拟环境。
 - 不自动调整系统电源、网络、摄像头/无线发射端及 USB 供电。`echo` 写 sysfs、unbind/bind USB、GPIO reset 等均视为可能影响链路的高风险操作。
-- 不以 `timeout` 能结束进程为由忽视设备占用；实时视频解码器和内核可能存在失败后需要恢复的情形。
+- 不以 `timeout` 能结束进程为由忽视设备占用；离线短测也不得抢占正在使用的 USB/V4L2/HDMI 资源。实时视频解码器和内核可能存在失败后需要恢复的情形。
 - 无法回退且缺少物理恢复手段时不得执行。
 - 不能将人的一次 `批准` 当成整个会话对所有 reboot/驱动装载/删除的永久授权。**改变命令、目标、时间或范围，重新申请。**
 
@@ -415,6 +426,7 @@ run_id / 日期与时区 / Ubuntu 或 CM311
 Git commit + diff / 二进制版本 / uname -a
 输入文件名、大小、SHA256、AU 数、VPS/SPS/PPS/IRAP 位置、分辨率
 确切 Bash 命令、退出码、timeout、stdout/stderr 路径
+硬超时策略（如 timeout -k 5 45）及 framemd5 是否持久化；空文件不等于 0 帧解码
 SW/HW 解码帧数、FrameMD5 和首次不一致 index
 相应 POC / RPS / Missing reference 日志
 V4L2 Source Change、POLLERR、内核 HEVC_LCU_CHECK 状态
@@ -432,6 +444,10 @@ CPU / RSS / 温度 / 延迟和显示表现（如果可测）
 - `status=0xf` 需要结合 LCU、shift、输入边界、参考状态判断。`shift` 包含 parser/FIFO 读取效应，不能未经验证映射成 CABAC 最后一字节。
 - `refcount=0` 可支持当前 Source Change 引用释放正常，但不能证明全部 FFmpeg AVBufferRef 逻辑正确。
 - 当前 Copy-Out 的 CPU 带宽开销必须在 CM311 实机量化；不要为了追求零拷贝而牺牲稳定性，也不要在未经验证时把 Copy-Out 移除。
+- `-vsync 0` 是旧写法；新测试用 `-fps_mode passthrough`，并在证据中记录实际命令。默认 vsync 会筛选帧，不能把少量输出误判为解码失败。
+- `-frames:v` 提前停止只绕过 EOF drain；它证明已输出帧内容，不证明 EOF 处理正确。
+- `-flush_packets 1` 让超时前已解码帧写入 framemd5，是实验性诊断手段，不是 EOF 修复；未启用时 framemd5 为空不等于 0 帧被解码。
+- 硬件 EOF 测试必须使用 `timeout -k 5 <seconds>` 一类硬杀策略；只发 TERM 可能让 V4L2 进程在 EOF 挂起。
 
 ---
 

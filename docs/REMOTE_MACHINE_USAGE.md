@@ -1,6 +1,6 @@
 # Remote Machine Usage Reference
 
-Status: 2026-11-06 16:46 HKT (read-only inventory and source-authority audit; live USB/decode/display not revalidated)
+Status: 2026-11-08 03:00 HKT (source meson_vdec loaded; HEVC advertised; clean 30-frame hardware decode 29/30 FrameMD5 match; expanded sample matrix completed; `aud` EOF repeat stable within one window at 19 frames; POC21/POC50 `0xf`, padding content differences, and EOF drain failures documented; offline tests/analysis no longer require approval)
 
 This document describes how to access and operate the Armbian test machine used
 for VT13/HEVC capture and decoder experiments. It is intended as an operational
@@ -11,6 +11,15 @@ V4L2, decoding, or HDMI output is working. Re-run the read-only checks before a
 live session. The three project-control documents are `AGENTS.md`, this file,
 and `docs/INTERSESSION_TRANSFER.md`; update the transfer file at the end of every
 session.
+
+Approval policy (user decision 2026-11-06): offline testing and analysis on the
+Ubuntu PC or CM311 do **not** require per-run human approval. This includes
+offline `hevc_v4l2m2m` decode, FFmpeg/V4L2 short tests, and read-only analysis.
+Before running one, confirm the target device/process is not occupied, use a
+bounded `timeout`, write to a step-specific or run-specific directory, do not
+overwrite golden data, and record the command, RC, and evidence. Starting a
+real-time USB receiver/HDMI display, stopping unrelated services, or reloading a
+kernel module still follows the R2/R3 rules in `AGENTS.md`.
 
 ## Connection details
 
@@ -110,6 +119,19 @@ Read-only inventory snapshot on 2026-11-06 15:52 HKT:
 - Uptime: 29 minutes; 2 users; load average 0.17, 0.14, 0.19
 - Commands present: `python3`, `ffmpeg`, `ffprobe`, `v4l2-ctl`, `tmux`, `rsync`, `git`, `sha256sum`
 - Video node: `/dev/video0` exists, mode `crw-rw----+ root video`; presence does not prove it is free or functional
+- Hardware-decode precheck 17:54 HKT: `/dev/video0` had no opener from `fuser`, `pgrep`, or `lsof`; `meson_vdec` was loaded with vermagic `6.18.59-ophub`; custom FFmpeg exposed both `hevc` and `hevc_v4l2m2m`; no live stream was started
+- R3 module reload 18:50 HKT: stock `meson_vdec` was unloaded and the source-built module was loaded. `v4l2-ctl --list-formats-out` now lists `HEVC` first. The module remains loaded until reboot or manual restore to stock.
+- Offline hardware-decode verification 19:32 HKT: with `-vsync 0`, software and hardware each produced 30 frames with RC=0. FrameMD5 matched for 29/30 frames; the only mismatch is frame index 29 (software `133559bb...`, hardware `1517d50f...`). This is an unresolved last-frame/EOF difference, not proof of complete decode correctness. The sample did not exhibit `status=0xf`.
+- 2026-11-07 EOF hardware tests 20:27-20:45 HKT: software decode of `test_eof_aud.h265`, `test_eof_eos.h265`, and `test_eof_zeros1024.h265` each produced 27 frames RC=0 with identical SW FrameMD5 SHA256 `da3a69dc68bde16d749471fa89e6dceb4bcbf4418995fda1fd691899744fc695`.
+- Full-EOF hardware under `timeout -k 5 45` gave `aud` and `zeros` RC=137, `eos` RC=134, and 0 persisted frames when output was not flushed. With `-flush_packets 1 -pix_fmt yuv420p`, `aud` emitted 22 frames (all matching SW), `eos` 20 (all matching), and `zeros1024` 27 (26/27 matching). `zeros1024` repeated 3x RC=0/27 with identical FrameMD5 SHA256 `03d78cb97121b4ef875f79ced2c6beb9a00c028cd6ad485c1c88b73e8bea5866`, but the last frame differs from SW (`bf20bb...` vs `6652eaf...`). `-frames:v` stopped `aud` at 22 and `eos` at 20, both fully matching; `zeros1024` remained 26/27. Root cause is unverified.
+
+- 2026-11-08 00:51 HKT precheck: CM311 idle (`/dev/video0` had no `fuser` opener; no `vt13_video`/`ffmpeg` process); source `meson_vdec` remains loaded; custom FFmpeg `n6.1.1` present; `/tmp/dji_test_latest_dir` still missing. All seven target sample files exist and their SHA256 values match the recorded baseline. Expanded hardware matrix not yet run.
+
+- 2026-11-08 01:09-01:11 HKT expanded hardware matrix: all runs used `-fps_mode passthrough`; hardware used `-flush_packets 1` and `timeout -k 5 45`. `clean` SW/HW 30 frames RC=0 with 29/30 FrameMD5 match (index 29 differs). `no_sei` SW 132 frames RC=0; HW aborted at POC21 with `status=0xf` RC=134 after 14 frames, all matching the SW prefix. `fresh_45_to_82` SW 38 frames RC=0; HW aborted at POC50 with `status=0xf` RC=134 after 32 frames, all matching the SW prefix. `pad_1024` HW 38 frames RC=0 but only 36/38 matched (first mismatch index 36); driver logs showed `status=0x8` and two missing-reference substitutions. EOF: `aud` RC=137 with 18 matching frames (later 3x repeat: 19 frames, identical; cross-window 22/18/19), `eos` RC=134 with 20 matching frames, `zeros1024` RC=0 with 27 frames and 26/27 matching. All three EOF SW references remained identical.
+
+- 2026-11-08 02:57-03:00 HKT `test_eof_aud` repeat: 3 hardware runs all RC=137, 19 frames, identical FrameMD5 SHA256 `b8fb5b532a15815f5fa57c5f20f85bd48a83b5d7ac0684e8fce8a7bc1c4c4000`, and 19/19 matched SW. Across windows the emitted count was 22 (prior), 18 (matrix), 19 (repeat); within-window output was stable, but the timeout cutoff/frame count varies. Evidence: `~/mobile_vt/.codex_tmp/cm311_eof_aud_repeat_20261108_025726/`; local copy under the same relative path. Final hashes: `summary.txt` `98f7e5352841148ca3d83e2750420d6428f140e5f295c3fd8c21a23a892b0eba`, `summary.json` `76b36ddd6a30284a90c4986f9635d6449c40b4def6f05afd1725aa029b3e3485`, `run.log` `87b9fcac048c328335eaef91eaf5874101e02767a362fc6ac6a1723b8bf68a85`, `sample.sha256` `693bc993763f7404966f8611ba6fc3fe9c494d94401ed1e5a34efb93c2a4bad0`, `status.txt` `f6c02eeadf401ed2ca5479658433ed6a4fd1747151d383fe0eae926284afb360`.
+
+- 2026-11-08 03:51 HKT post-run check: no `ffmpeg`/`vt13_video` process, `/dev/video0` free, source `meson_vdec` loaded; no live USB/HDMI/wireless run.
 
 ## Important paths
 
@@ -126,6 +148,23 @@ Read-only inventory snapshot on 2026-11-06 15:52 HKT:
   2,431,249 bytes, SHA256
   `d4cec190f35eac9b32944aff0b32ca501d54e451c1e7e0c800ab10cbdd5aa698`.
   This matches the local copy checked on 2026-11-06.
+- `~/mobile_vt/captures/hw_test/clean_1832x1032.h265` — 698,640 bytes, SHA256
+  `2e13db183d5e562094e2952b169f3486cfaad5221b5a4ec8d97ff152f2a7d5bb`.
+  Software decode produced 30 frames with RC=0 and no missing-reference
+  messages. Hardware decode with `-vsync 0` and the 2026-11-08
+  `-fps_mode passthrough` re-run both produced 30 frames RC=0 and 29/30
+  FrameMD5 matches; only frame index 29 differs. The last-frame difference
+  remains unresolved.
+- `/lib/modules/6.18.59-ophub/kernel/drivers/staging/media/meson/vdec/meson-vdec.ko`
+  — stock module, not currently loaded, 225,216 bytes, SHA256
+  `a6cc08ca2598caf378881a85515c211e8fc41e6bc870753e5d11a3942458f198`.
+  It does not declare `meson/vdec/gxl_hevc.bin`.
+- `~/linux-6.18-vdec/drivers/staging/media/meson/vdec/meson-vdec.ko` — source-built
+  custom module, 5,550,816 bytes, SHA256
+  `ca46798328e0975290151c40e1ddbf191a277b563a9694344aca910507aacdab`.
+  Vermagic matches `6.18.59-ophub`; it declares `meson/vdec/gxl_hevc.bin`.
+  It is currently loaded after the approved R3 reload; restore stock explicitly
+  if needed.
 - `~/mobile_vt/live_runs/vt13_params.h265` — exists on CM311, 102 bytes,
   SHA256 `f9f019a14e2fc2990863221cca5bd1187cf3898dceb38277ba2b86194f94887f`.
   The local copy has the same size and SHA256.
@@ -139,6 +178,36 @@ Read-only inventory snapshot on 2026-11-06 15:52 HKT:
   --enable-muxer=null --enable-debug=2`. This verifies binary identity, not
   decode correctness.
 - `~/ffmpeg-6.1.1-v4l2/install` — install prefix for the custom build.
+- `~/mobile_vt/.codex_tmp/cm311_eof_compare_kill_20261107_202711/` — full-EOF
+  comparison evidence; summary SHA256
+  `e281ce7c41c1c40dce06ac55cfb52342ab23ef9cf895ab1bf6188ddd9d25b563`.
+- `~/mobile_vt/.codex_tmp/cm311_eof_hw_i420_20261107_203517/` — preserved
+  partial output with `-flush_packets 1 -pix_fmt yuv420p`; summary SHA256
+  `4c376e541e9112f7029ba64b0de126f07be86f569c1bb949bb232468209f81c2`.
+- `~/mobile_vt/.codex_tmp/cm311_eof_zeros_repeat_20261107_203813/` — three
+  repeated `zeros1024` hardware runs with flush; summary SHA256
+  `aecb9dfabfb57f9b1a9a4cc95092184df48aad5cfb81bb9d86120fdcd0361f2f`.
+- `~/mobile_vt/.codex_tmp/cm311_eof_zeros_noflush_20261107_204129/` — three
+  repeated `zeros1024` runs without flush; summary SHA256
+  `1d65f50e29f38f4b72b03d3fd27f1a8426e0b122036b6df59fa6d43e6bf6221a`.
+- `~/mobile_vt/.codex_tmp/cm311_eof_framelimit_20261107_204504/` — pre-EOF
+  `-frames:v` comparison; summary SHA256
+  `b194ed279febac6e8367182c928a8fccca1e82468e4a95454fe0be61a1f23fc2`.
+- `~/mobile_vt/.codex_tmp/cm311_hw_samples_20261108_010902/` — expanded
+  software/hardware matrix. Final local and remote SHA256 values matched for
+  `summary.txt` `a9625216c57f6069f6bda3d55d303e6038f486c42f3fdebc603346d5392c0b23`,
+  `summary.json` `4b7f9082cbc9a02f3b62b3542ab7d5f24059520309e45d521d4591cb4756520a`,
+  `run.log` `0330e2840e48a30c24708b47a53bd6153e3d1b49499bc7d84ae5a5e32c56ae1b`,
+  `samples.sha256` `c1ec1b1e1119d779a4df03e71ec78cac40deb212caa69e7721014ba7ff22a5ad`,
+  and `status.txt` `18a55e47438912b7e08798d6e9df1ee9942d352666ff55360cb444f6ea56be11`.
+  A local copy is under the same relative path in this repository.
+  Full local/remote manifest comparison: 74 files matched; manifests are under
+  `.codex_tmp/manifests_20261108/cm311_hw_samples_20261108_010902.*.sha256`.
+- `~/mobile_vt/.codex_tmp/cm311_eof_aud_repeat_20261108_025726/` — `aud` EOF
+  repeat evidence; local and remote final hashes matched. See the run summary
+  for the 3x RC/frame/FrameMD5 results and the final artifact hashes. Full
+  local/remote manifest comparison: 29 files matched; manifests are under
+  `.codex_tmp/manifests_20261108/cm311_eof_aud_repeat_20261108_025726.*.sha256`.
 
 ## Source authority (user-confirmed 2026-11-06)
 
@@ -220,17 +289,22 @@ live run, driver change, or FFmpeg experiment.
 | Item | Status on 2026-11-06 | Evidence needed |
 |---|---|---|
 | Latest capture pointer | Missing | `test -f /tmp/dji_test_latest_dir`; explicit capture root; do not guess |
-| Idle/ownership | Not enumerated by this session | `ps`, `pgrep`, `fuser`/`lsof` for `/dev/video0`; do not kill |
+| Idle/ownership | Confirmed idle at 2026-11-08 00:51 HKT: no `vt13_video`/`ffmpeg` process and no `/dev/video0` opener; source `meson_vdec` remains loaded; expanded hardware matrix ran 01:09-01:11 HKT | Re-check immediately before a live or hardware run; do not kill |
 | Display stack | Not checked | `ls /dev/dri`, `DISPLAY`, `loginctl`, physical HDMI output |
 | `vt13_video` stream/READY | Only `--help` checked | Real `stream` command, READY/LISTENING log, exit method |
-| `/dev/video0` function | Node exists only | `v4l2-ctl --all`; meson-vdec binding; no conflicting opener |
-| Custom FFmpeg decode | Binary/version verified | `-decoders` check; actual `hevc_v4l2m2m` decode; frame comparison |
-| Kernel module/VDEC | Not checked | `uname -r`, `lsmod`, module vermagic, `dmesg`, `status=0x8/0xf` |
-| Source Change/POC50/EOF | Historical only | Controlled offline and target-board short tests |
+| `/dev/video0` function | Source `meson-vdec` loaded; V4L2 output formats include `HEVC`; clean and EOF offline hardware runs executed | `v4l2-ctl --all`; meson-vdec binding; no conflicting opener |
+| Custom FFmpeg decode | 2026-11-08 `-fps_mode passthrough`: clean 30 frames RC=0, 29/30; `no_sei` POC21 `0xf` RC=134, 14-frame prefix all matching; `fresh_45_to_82` POC50 `0xf` RC=134, 32-frame prefix all matching; `pad_1024` 38 frames RC=0, 36/38; EOF `aud` 3x repeat all RC=137/19 frames and identical (cross-window counts 22/18/19), `eos` 20 frames RC=134, `zeros` 27 frames 26/27 | Explain/fix `0xf`, padding mismatch, and EOF drain; explain `aud` cross-window timeout count; add more real samples |
+| Kernel module/VDEC | R3 loaded source module (`ca46...`) with matching vermagic; HEVC advertised; 2026-11-08 dmesg shows `status=0x8` and `status=0xf` (POC21 for `no_sei`, POC50 for `fresh`); `pad` shows only `0x8` plus two missing-reference substitutions | `uname -r`, `lsmod`, module vermagic, `dmesg`, `status=0x8/0xf`; explain EOF state machine |
+| Source Change/POC50/EOF | 2026-11-08 expanded matrix: EOF SW 27 frames remains identical; HW `aud`/`eos` drain failed, `zeros` 26/27; `pad_1024` RC=0 but 36/38 (first mismatch index 36); `aud` same-window 3x was 19 frames and identical, but cross-window counts were 22/18/19 | Explain/fix EOF drain/flush and `0xf`; explain timeout-window frame-count variation; validate padding content differences |
 | Live wireless end-to-end | Not started | AGENTS.md §6 handoff; READY before human opens link |
 | Performance/latency targets | User targets unconfirmed | User acceptance plus CM311 CPU/RSS/temperature/latency evidence |
 | Local/remote source consistency | **Authority documented; trees still divergent**: CM311 is latest experimental, PC is workable software-decode baseline; 24 local vs 27 remote entries; remote-only `async_usb.py` and two config files; `README.md`, `decoder.py`, `pipeline.py` differ | Per-file merge/review; Git commit/diff or full SHA256 manifest; test both sides |
 | Remote test/PyAV compatibility | 49/50 pass; PyAV 11.0.0 exposes `OUTPUT_CORRUPT`, while the test expects lowercase `output_corrupt` | Fix the compatibility test or pin PyAV; rerun all tests and record RC |
+
+A green Python test suite (`RC=0`) is a regression gate, not proof of hardware
+decode. The primary acceptance evidence remains an actual CM311
+`hevc_v4l2m2m` decode with frame comparison (V07/V08). The 2026-11-07 EOF tests
+localize a real failure/difference to EOF drain/flush; they do not close V09.
 
 ## Code and data consistency checks
 
@@ -297,12 +371,28 @@ fi
 
 ```bash
 ulimit -c 0
-timeout -s TERM -k 2s 15s "$HOME/ffmpeg-6.1.1-v4l2/ffmpeg" \
+timeout -k 5 45 "$HOME/ffmpeg-6.1.1-v4l2/ffmpeg" \
   -hide_banner -nostdin \
   -loglevel info -stats \
   -c:v hevc_v4l2m2m \
   -f hevc -i "$DIR/fresh_45_to_82.h265" \
   -f null -
+```
+
+`-c:v hevc_v4l2m2m` must appear before `-i`. Placing it after the input makes
+FFmpeg interpret it as an output encoder. For FrameMD5 comparison, use the
+following bounded command; `-flush_packets 1` preserves frames already decoded
+when a hang is killed, but it is a diagnostic aid, not an EOF fix:
+
+```bash
+SAMPLE="$DIR/test_eof_aud.h265"
+OUT="$RUN_DIR/test_eof_aud.hw.framemd5"
+ulimit -c 0
+timeout -k 5 45 "$HOME/ffmpeg-6.1.1-v4l2/ffmpeg" \
+  -hide_banner -nostdin -loglevel info \
+  -c:v hevc_v4l2m2m -f hevc -i "$SAMPLE" \
+  -map 0:v:0 -fps_mode passthrough -pix_fmt yuv420p \
+  -c:v rawvideo -flush_packets 1 -f framemd5 "$OUT"
 ```
 
 ### Trace slice headers
@@ -431,7 +521,14 @@ session` messages when the reference chain is inconsistent.
   `sudo -S` with the password on stdin.
 - `Could not find ref with POC ...` — software decoder detected a missing
   reference; inspect the POC trace and the kernel log.
+- `HW_RC=137` — the hard timeout killed the hardware process, commonly while it
+  is stuck in EOF drain. Use `timeout -k`; inspect the tail of the log and
+  dmesg. An empty `framemd5` can mean buffered output was lost, not necessarily
+  that no frame was decoded.
 - `HW_RC=134` — the hardware decoder aborted. Check `sudo dmesg` for the
-  `meson-vdec` messages.
+  `meson-vdec` messages; EOF samples can hit
+  `Assertion pkt failed at fftools/ffmpeg_dec.c:597`.
+- `-frames:v` stops before EOF drain and can make a hanging sample exit 0; do
+  not treat that as proof that EOF handling is fixed.
 - `/tmp/dji_test_latest_dir` missing or stale — confirm that a new capture was
   completed and that the file was updated.
