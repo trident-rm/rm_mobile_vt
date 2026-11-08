@@ -1,11 +1,17 @@
 # Intersession Transfer: VT13 / CM311
 
-Status: 2026-11-08 03:00 HKT
+Status: 2026-11-08 20:31 HKT
 
 Scope of this entry: documentation, read-only inventory, source-authority
 decision, experimental-code diff audit, and offline V4L2 hardware decode,
-including the 2026-11-08 expanded software/hardware matrix and `aud` EOF repeat.
-No live USB stream, HDMI display, or wireless-link test was started.
+including the 2026-11-08 expanded software/hardware matrix, `aud` EOF repeat,
+the 19:54 HKT R0 precheck for the first live smoke test, and the 20:25-20:31
+HKT offline soft/hardware rate benchmark plus decoder-path audit. No live USB
+stream, HDMI display, or wireless-link test was started. The R0 precheck found
+CM311 idle but no `2ca3:1020` USB receiver enumerated; live capture is blocked
+until the receiver is connected and `doctor` returns RC=0. The benchmark shows
+the custom FFmpeg hardware decoder is faster than software on short samples, but
+`vt13_video` still uses PyAV software `hevc`, not `hevc_v4l2m2m`.
 
 Approval-policy update (2026-11-06): offline testing and analysis on the PC or
 CM311 no longer require per-run human approval. This includes offline
@@ -151,17 +157,20 @@ Documentation and repository changes made in this session:
 |---|---|---|---|
 | V01 | Local/remote source consistency | Authority documented: CM311 is latest experimental, PC is workable software-decode baseline; trees remain divergent (24 vs 27 entries); remote tests 49/50 due PyAV API mismatch | Per-file merge/review; Git commit/diff or full SHA256 manifest; test both sides |
 | V02 | Latest capture pointer | Missing on CM311 | `test -f /tmp/dji_test_latest_dir`, `cat`, and a verified capture root |
-| V03 | CM311 process ownership | Confirmed idle at 2026-11-08 00:51 HKT: no `vt13_video`/`ffmpeg` process and no `/dev/video0` opener; expanded hardware matrix ran 01:09-01:11 HKT | Re-check immediately before a live or hardware run; do not kill unknown processes |
-| V04 | Display stack | Not checked | `ls /dev/dri`, `DISPLAY`, `loginctl`, and actual HDMI output evidence |
-| V05 | `vt13_video` stream/READY | Only `--help` checked | Real `stream` command, READY/LISTENING log, stop/exit procedure |
+| V03 | CM311 process ownership | 2026-11-08 19:54 HKT R0 precheck: no `vt13_video`/`ffmpeg` process and no `/dev/video0` opener; source `meson_vdec` remains loaded; USB receiver is not enumerated | Re-check immediately before a live or hardware run; do not kill unknown processes; require `doctor` RC=0 |
+| V04 | Display stack | Partially checked: `/dev/dri` has `card0`/`card1`/`renderD128`; SSH `DISPLAY`/`WAYLAND_DISPLAY` are empty; `loginctl` shows active `seat0`/`tty7`; physical HDMI output not verified | Actual HDMI output evidence; confirm DRM/KMS, fbdev, or other display path |
+| V05 | `vt13_video` stream/READY | `--help` and `stream --help` returned RC=0; confirmed `--headless`, `--seconds`, `--record`, `--json-stats`; source has no literal `READY`, so use `USB source open` plus a `waiting_*` state; stream not run yet | Real `stream` command, READY evidence, stop/exit procedure |
 | V06 | Golden capture decode | `clean_1832x1032.h265` software decode 30 frames RC=0 with no missing-reference messages; `no_sei.h265` software decode 132 frames RC=0 but with missing refs | Offline replay RC, frame count, decoder errors, FrameMD5 or equivalent |
-| V07 | Custom FFmpeg hardware decode | 2026-11-08 `-fps_mode passthrough`: clean 30 frames RC=0, 29/30; `no_sei` POC21 `0xf` RC=134, 14-frame prefix all matching; `fresh_45_to_82` POC50 `0xf` RC=134, 32-frame prefix all matching; `pad_1024` 38 frames RC=0, 36/38; EOF `aud` same-window 3x all RC=137/19 frames and identical (cross-window 22/18/19), `eos` 20 frames RC=134, `zeros` 27 frames 26/27 | Explain/fix `0xf`, padding mismatch, and EOF drain; explain `aud` timeout-window count; add more real samples |
+| V07 | Custom FFmpeg hardware decode | 2026-11-08 `-fps_mode passthrough`: clean 30 frames RC=0, 29/30; `no_sei` POC21 `0xf` RC=134, 14-frame prefix all matching; `fresh_45_to_82` POC50 `0xf` RC=134, 32-frame prefix all matching; `pad_1024` 38 frames RC=0, 36/38; EOF `aud` same-window 3x all RC=137/19 frames and identical (cross-window 22/18/19), `eos` 20 frames RC=134, `zeros` 27 frames 26/27. 20:25-20:31 benchmark: clean HW 30/1.212 s vs SW 30/1.621 s; pad 1920x1080 HW 38/1.585 s vs SW 38/2.295 s; short-sample, not steady-state | Explain/fix `0xf`, padding mismatch, and EOF drain; explain `aud` timeout-window count; add more real samples; run long-duration FPS/CPU/RSS/temperature/latency tests |
 | V08 | Kernel module/VDEC | Source module `ca46...` loaded after R3; HEVC advertised; 2026-11-08 dmesg shows `status=0x8` and `status=0xf` (POC21 for `no_sei`, POC50 for `fresh`); `pad` shows `0x8` plus two missing-reference substitutions; EOF drain remains problematic | `uname -r`, `lsmod`, vermagic, relevant `dmesg`, `status=0x8/0xf`; explain EOF state machine |
 | V09 | Source Change/POC50/EOF | 2026-11-08 expanded matrix: EOF SW 27 frames RC=0 and identical; HW `aud`/`eos` drain failed, `zeros` 26/27; `pad_1024` RC=0 but 36/38 (first mismatch index 36); `aud` same-window 3x was 19 frames and identical, cross-window counts 22/18/19 | Explain/fix EOF drain/flush and `0xf`; explain timeout-window frame-count variation; validate padding content differences |
-| V10 | Live wireless end-to-end | Not started | `AGENTS.md` §6 handoff: READY first, then human opens wireless link |
-| V11 | Performance/latency targets | 30–50 FPS and ~1024×576 remain unconfirmed | User acceptance criteria plus CM311 CPU/RSS/temperature/latency evidence |
+| V10 | Live wireless end-to-end | Not started; blocked by V14; current Python pipeline uses software PyAV `hevc` | `AGENTS.md` §6 handoff: READY first, then human opens wireless link; confirm hardware decode integration |
+| V11 | Performance/latency targets | 30–50 FPS and ~1024×576 remain unconfirmed; short-sample benchmark hardware about 24 fps wall, software about 16-18 fps wall; not steady-state | User acceptance criteria plus CM311 long-run CPU/RSS/temperature/latency evidence |
 | V12 | Cross-machine sync | Golden and parameter-set data match; source/docs not yet synced | Post-copy SHA256 verification and an updated ledger |
 | V13 | Remote test/PyAV compatibility | 49/50 pass; PyAV 11.0.0 exposes `OUTPUT_CORRUPT`, while the test expects lowercase `output_corrupt` | Fix the compatibility test or pin PyAV; rerun all tests and record RC |
+| V14 | USB receiver enumeration | 2026-11-08 19:54 HKT `doctor` RC=1; `lsusb` has no `2ca3:1020`; only root hub and SG Flash are present | Connect/enable the receiver; `doctor` RC=0; `lsusb -d 2ca3:1020`; usbfs access |
+| V15 | Verified live launcher | `.codex_runs/live_capture_verified.sh` is missing | Create a launcher using the real CLI, pass `bash -n`, emit READY evidence, and provide a bounded run/stop path |
+| V16 | Live pipeline hardware decode integration | `vt13_video/decoder.py` uses PyAV `hevc` software decode, not `hevc_v4l2m2m`; hardware decode exists only through the custom FFmpeg CLI; benchmark shows hardware faster on short samples | Explicitly use V4L2 M2M in the live/replay path; verify runtime logs, CPU/FPS/latency, and frame content |
 
 ## Data manifest
 
@@ -249,6 +258,73 @@ For any fetched copy or analysis artifact, create a step-specific directory unde
   `~/mobile_vt` as a Git repository on CM311.
 
 ## Change log
+
+### 2026-11-08 20:25-20:31 HKT — offline rate benchmark and decoder-path audit
+
+- Preconditions: `/dev/video0` was free; no `vt13_video`/`ffmpeg` process; no
+  live USB/HDMI/wireless run.
+- Samples: `clean_1832x1032.h265` SHA256
+  `2e13db183d5e562094e2952b169f3486cfaad5221b5a4ec8d97ff152f2a7d5bb`;
+  `pad_1024.h265` SHA256
+  `75e8eb4799d4a6b0341886a8d2fc35ec8fad4e8fc201b34d90cf6ac324b0938c`.
+  `pad_1024` ffprobe: 1920x1080, `r_frame_rate=60/1`, `avg_frame_rate=25/1`.
+- Commands: Bash built-in `time` plus FFmpeg `-benchmark`; `/usr/bin/time` is
+  absent on CM311 (first attempt RC=127), so wall/user/sys came from Bash and
+  FFmpeg supplied rtime/maxrss where available.
+- Results:
+  - `clean_1832x1032`: hardware 30 frames RC=0, wall 1.212 s, user 1.563 s,
+    sys 0.322 s; software 30 frames RC=0, wall 1.621 s, user 2.890 s,
+    sys 0.334 s, FFmpeg rtime 0.802 s, maxrss 123488 kB. FrameMD5 matched
+    29/30; the last hardware hash was `1517d50f...`, software `133559bb...`.
+  - `pad_1024` (1920x1080): hardware 38 frames RC=0, wall 1.585 s, user
+    1.984 s, sys 0.489 s, FFmpeg rtime 1.248 s, maxrss 118032 kB; software
+    38 frames RC=0, wall 2.295 s, user 5.243 s, sys 0.443 s, FFmpeg rtime
+    1.472 s, maxrss 143528 kB. FrameMD5 matched 36/38, differing at frames
+    37/38 (0-based index 36/37).
+- Interpretation: these are short-sample end-to-end FFmpeg+FrameMD5
+  benchmarks, not steady-state FPS. Hardware was about 24 fps wall; software
+  was about 16-18 fps wall. The 30-50 fps target remains unproven.
+- Decoder-path audit: `vt13_video/decoder.py` calls
+  `av.CodecContext.create(self.config.codec, "r")` with default
+  `decoder.codec: "hevc"`; it does not explicitly select `hevc_v4l2m2m`.
+  Therefore current `vt13_video stream/replay` is PyAV software decode. The
+  hardware benchmark above is from the custom FFmpeg CLI, not the live pipeline.
+- Evidence: `~/mobile_vt/.codex_tmp/cm311_hw_bench_20261108_202504/` and
+  `~/mobile_vt/.codex_tmp/cm311_hw_bench_pad_20261108_203050/`; local copies
+  under `.codex_tmp/`. Local/remote manifests matched 14 and 12 files,
+  respectively.
+- Next action: integrate `hevc_v4l2m2m` into the live/replay path, then measure
+  long-run FPS, CPU/RSS, temperature, latency, and frame content. Do not treat
+  the short-sample rate as an acceptance result.
+
+### 2026-11-08 19:54 HKT — CM311 R0 precheck for live smoke test
+
+- Preconditions: read-only SSH precheck; no `vt13_video`/`ffmpeg` process;
+  `/dev/video0` had no opener.
+- Identity: `armbian`, `aarch64`, kernel `6.18.59-ophub`.
+- Display: `/dev/dri` has `card0`, `card1`, and `renderD128`; SSH
+  `DISPLAY`/`WAYLAND_DISPLAY` are empty; `loginctl` shows an active
+  `seat0`/`tty7` session; physical HDMI output is not verified.
+- CLI: `python3 -m vt13_video --help` RC=0 and `stream --help` RC=0; confirmed
+  `--headless`, `--seconds`, `--record`, and `--json-stats`. The source has no
+  literal `READY`; use `USB source open` plus a `waiting_*` state as readiness
+  evidence.
+- USB: `python3 -m vt13_video doctor` RC=1; no matching `2ca3:1020` device;
+  `lsusb` shows only the root hub and `23a9:ef18` SG Flash. Live capture cannot
+  start until the receiver enumerates.
+- Runner: `.codex_runs/live_capture_verified.sh` is missing.
+- Commands: SSH `bash -s` read-only checks (`pgrep`, `fuser`, `ls /dev/dri`,
+  `loginctl`, `--help`, `stream --help`, `doctor`, `lsusb`, `dmesg` tail).
+- Evidence: `.codex_tmp/r0_precheck_20261108_1941/precheck.txt`, SHA256
+  `d8b7306e2b646bc7f27389184a231d38a32940c72e732941e9aa1f288cb66e51`.
+- Conclusion: CM311 is idle and the VDEC/DRM nodes exist, but the USB receiver
+  is absent; the real stream/READY path is still unverified because stream was
+  not run.
+- Next action: connect/enable the `2ca3:1020` receiver and re-run `doctor`
+  until RC=0; then create and verify `.codex_runs/live_capture_verified.sh`,
+  request R2 approval for a 30-60 s headless capture, and have the human open
+  the wireless link only after READY. No live USB/HDMI/wireless run occurred;
+  no CM311 files were modified.
 
 ### 2026-11-08 02:57-03:00 HKT — `test_eof_aud` hardware repeat
 

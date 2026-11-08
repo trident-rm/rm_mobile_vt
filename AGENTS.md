@@ -1,7 +1,7 @@
 # AGENTS.md — DJI C5 / VT13 → CM311 实时 HEVC 图传项目
 
 > **适用对象**：在 Ubuntu PC 上运行、通过 SSH 操作 CM311 的 Codex / coding agent。  
-> **项目状态基线**：2026-11-06；历史结果是排障线索，不自动等同于当前设备状态。  
+> **项目状态基线**：2026-11-06（2026-11-08 更新；离线硬解证据与 R0 实时烟测前预检见 §3.1）。历史结果是排障线索，不自动等同于当前设备状态。
 > **优先级**：人身/设备安全与可恢复性 > 原始数据保护 > 解码结果正确性 > 长期稳定性 > 延迟/性能 > 开发便利性。  
 > **首轮要求**：先盘点、确认、记录，**不要立即进行无线实测、改内核或安装系统组件**。
 
@@ -182,6 +182,9 @@ CM311 真正的版本信息应通过 `uname -m`、`uname -r`、`ldd --version`�
 14. **2026-11-08 02:57-03:00 HKT CM311 `aud` EOF 重复**：同一命令连续 3 次均为 RC=137、19 帧，FrameMD5 完全相同且 19/19 匹配 SW；本次窗口内输出稳定。结合先前 22 帧与 01:09 矩阵 18 帧，超时前已输出帧数会跨窗口变化；根因仍指向 EOF drain/超时窗口，未证实。**不能把 18、19 或 22 任一帧数当作完整 EOF 解码结果。**
 15. **2026-11-08 03:00 HKT 本地/远端证据一致性**：扩展矩阵证据目录 74 个文件、`aud` 重复证据目录 29 个文件，完整 SHA256 清单本地与 CM311 逐文件一致；清单保存在 `.codex_tmp/manifests_20261108/`。这是证据副本一致性，不代表硬解内容已验收。
 16. **2026-11-08 03:51 HKT 测试后状态**：CM311 无 `ffmpeg`/`vt13_video` 残留，`/dev/video0` 无 opener，源码 `meson_vdec` 仍加载；未启动 USB/HDMI/无线链路。
+17. **2026-11-08 19:54 HKT CM311 R0 实时烟测前预检**：CM311 仍为 `armbian`/`aarch64`/`6.18.59-ophub`；无 `vt13_video`/`ffmpeg` 进程，`/dev/video0` 无 opener；`/dev/dri` 有 `card0`、`card1`、`renderD128`，SSH 非交互环境 `DISPLAY`/`WAYLAND_DISPLAY` 为空，`loginctl` 有 active `seat0`/`tty7` 会话，实际 HDMI 输出仍未验证。`python3 -m vt13_video --help` 与 `stream --help` 均 RC=0，确认 `--headless`、`--seconds`、`--record`、`--json-stats` 等真实选项；源码没有字面 `READY`，应以 `USB source open` 后进入 `waiting_*` 状态作为接收端就绪证据。`doctor` RC=1：当前无匹配 `2ca3:1020`，`lsusb` 仅有 root hub 与 `23a9:ef18` SG Flash；USB 接收器未枚举，是实时烟测的硬阻塞。`.codex_runs/live_capture_verified.sh` 仍缺失。证据 `.codex_tmp/r0_precheck_20261108_1941/precheck.txt`，SHA256 `d8b7306e2b646bc7f27389184a231d38a32940c72e732941e9aa1f288cb66e51`。本轮未启动 USB/HDMI/无线链路，未修改 CM311 文件。
+18. **2026-11-08 20:25-20:31 HKT CM311 离线软/硬解速率基准**：`clean_1832x1032.h265`（SHA256 `2e13db18...`）硬件 `hevc_v4l2m2m` 30 帧 RC=0，wall 1.212 s，user 1.563 s，sys 0.322 s；软件 `hevc` 30 帧 RC=0，wall 1.621 s，user 2.890 s，sys 0.334 s，FFmpeg bench rtime 0.802 s、maxrss 123488 kB；FrameMD5 29/30，末帧硬件 `1517d50f...` vs 软件 `133559bb...`。`pad_1024.h265`（1920×1080；ffprobe `r_frame_rate=60/1`、`avg_frame_rate=25/1`；SHA256 `75e8eb47...`）硬件 38 帧 RC=0，wall 1.585 s，user 1.984 s，sys 0.489 s，bench rtime 1.248 s、maxrss 118032 kB；软件 38 帧 RC=0，wall 2.295 s，user 5.243 s，sys 0.443 s，bench rtime 1.472 s、maxrss 143528 kB；FrameMD5 36/38，差异在帧 37/38（0-based index 36/37）。这是短样本端到端 FFmpeg+FrameMD5 基准，不是稳态 FPS：硬件约 24 fps wall（clean 30/1.212、pad 38/1.585），软件约 18.5/16.6 fps wall；30–50 fps 目标仍未证明。证据远端 `~/mobile_vt/.codex_tmp/cm311_hw_bench_20261108_202504/`、`.../cm311_hw_bench_pad_20261108_203050/`，本地同路径；14/12 个文件 SHA256 全匹配。未启动 USB/HDMI/无线链路。
+19. **2026-11-08 代码核查：实时 Python 管线仍走软件解码**：`vt13_video/decoder.py` 使用 `av.CodecContext.create(self.config.codec, "r")`，默认 `decoder.codec: "hevc"`，没有显式选择 `hevc_v4l2m2m`。因此当前 `vt13_video stream/replay` 是 PyAV 软件 HEVC 解码；上述硬件基准来自 `~/ffmpeg-6.1.1-v4l2/ffmpeg -c:v hevc_v4l2m2m`。要把硬件解码用于实时管线，需要显式集成 V4L2 M2M（例如 PyAV 硬件 codec 或 FFmpeg 子进程），并以运行日志/CPU 证据确认。
 
 ### 3.2 已知实验性代码状态——需要审查，不应照单全收
 
@@ -221,15 +224,17 @@ CM311 真正的版本信息应通过 `uname -m`、`uname -r`、`ldd --version`�
 | 本地/远端代码一致性 | 用户确认：CM311 为最新实验代码，PC 为可用软解基线；2026-11-06 SHA256 对比为本地 24、远端 27；远端多 `config/vt13_video.no_status.yaml`、`config/vt13_video.yuvtest.yaml`、`vt13_video/async_usb.py`；`README.md`、`vt13_video/decoder.py`、`vt13_video/pipeline.py` 不同；远端 `.git` 仍无效；内核/FFmpeg 有未提交修改 | 逐文件审查/合并；记录 commit/diff/SHA256；两侧复测 |
 | CM311 最新实验代码测试兼容性 | 远端 50 项中 49 通过；`test_allow_corrupt_frames_controls_pyav_output_flag` 因 PyAV 11.0.0 仅暴露 `Flags.OUTPUT_CORRUPT`、测试访问小写 `output_corrupt` 而报错 | 修复测试兼容性，或固定 PyAV 版本；重跑完整测试并记录 RC |
 | CM311 最新捕获指针 | 2026-11-06 只读盘点时 `/tmp/dji_test_latest_dir` 不存在 | 指针存在且指向预期 capture root；不要猜测 |
-| CM311 当前运行进程 | 2026-11-08 00:51 HKT 只读检查未发现 `vt13_video`/`ffmpeg` 占用，`/dev/video0` 无 opener；源码 `meson_vdec` 仍加载；01:09-01:11 扩展硬解矩阵已跑完；未启动实时 USB/HDMI | `ps`/`fuser` 证据；确认无冲突占用 |
-| 显示技术栈 | 未核实 DRM/KMS、fbdev、X11/Wayland | `ls /dev/dri`、`loginctl`/`DISPLAY`、实际 HDMI 输出证据 |
-| `vt13_video` 入口与 READY | 远端 `python3 -m vt13_video --help` RC=0；未跑 stream | 真实 `stream` 命令、READY/LISTENING 日志、退出方式 |
+| CM311 当前运行进程 | 2026-11-08 00:51 HKT 只读检查未发现 `vt13_video`/`ffmpeg` 占用，`/dev/video0` 无 opener；01:09-01:11 扩展硬解矩阵已跑完；19:54 HKT R0 预检再次确认无进程/opener，但 USB `2ca3:1020` 未枚举 | `ps`/`fuser` 证据；确认无冲突占用；实时运行前重查 |
+| USB 接收器枚举 | 2026-11-08 19:54 HKT `doctor` RC=1；`lsusb` 无 `2ca3:1020`；当前仅有 root hub 与 `23a9:ef18` SG Flash | 连接接收器后 `doctor` RC=0；`lsusb -d 2ca3:1020` 可见；usbfs 可访问 |
+| 显示技术栈 | 部分核实：`/dev/dri` 有 `card0`/`card1`/`renderD128`；SSH 环境 `DISPLAY`/`WAYLAND_DISPLAY` 为空；`loginctl` 有 active `seat0`/`tty7`；实际 HDMI 输出未验证 | 实际 HDMI 输出证据；确认 DRM/KMS、fbdev 或其他显示路径 |
+| `vt13_video` 入口与 READY | `--help` 与 `stream --help` 均 RC=0；确认 `--headless`/`--seconds`/`--record`/`--json-stats`；源码无字面 `READY`，以 `USB source open` 后 `waiting_*` 状态为判据；尚未跑 stream | 真实 `stream` 命令、READY 证据、退出方式 |
 | golden capture | 本地与 CM311 的 `captures/cold_start/bulk_if0_ep81.bin` SHA256 已核对一致 | 记录大小、SHA256、来源路径；离线解码结果 |
-| FFmpeg 硬解 | R3 已加载源码模块，V4L2 已枚举 HEVC；2026-11-08 `-fps_mode passthrough`：clean 30 帧 RC=0、29/30；`no_sei` POC21 `0xf` RC=134（14 帧前缀全匹配）；`fresh_45_to_82` POC50 `0xf` RC=134（32 帧前缀全匹配）；`pad_1024` 38 帧 RC=0、36/38；EOF `aud` 3 次重复均 RC=137/19 帧且逐帧相同（跨窗口曾见 22/18/19）、`eos` 20 帧 RC=134、`zeros` 27 帧 26/27 | 解释/修复 EOF drain 与 `0xf`；说明 `aud` 超时前帧数跨窗口差异；继续覆盖真实样本 |
+| FFmpeg 硬解 | R3 已加载源码模块，V4L2 已枚举 HEVC；2026-11-08 `-fps_mode passthrough`：clean 30 帧 RC=0、29/30；`no_sei` POC21 `0xf` RC=134（14 帧前缀全匹配）；`fresh_45_to_82` POC50 `0xf` RC=134（32 帧前缀全匹配）；`pad_1024` 38 帧 RC=0、36/38；EOF `aud` 3 次重复均 RC=137/19 帧且逐帧相同（跨窗口曾见 22/18/19）、`eos` 20 帧 RC=134、`zeros` 27 帧 26/27。20:25-20:31 基准：clean HW 30 帧/1.212 s、SW 30 帧/1.621 s；pad 1920×1080 HW 38 帧/1.585 s、SW 38 帧/2.295 s；短样本非稳态 | 解释/修复 EOF drain 与 `0xf`；说明 `aud` 超时前帧数跨窗口差异；继续覆盖真实样本；做长时/实时 FPS、CPU、RSS、温度与延迟测量 |
 | 内核模块/VDEC | R3 已卸载 stock 并加载源码 `meson_vdec`（SHA256 `ca46...`）；HEVC 已注册；2026-11-08 dmesg 已见 `status=0x8` 与 `status=0xf`：`no_sei` POC21、`fresh` POC50 触发 `0xf`；`pad` 仅见 `0x8` 且两次缺失参考替代 | `uname -r`、模块 vermagic、dmesg、`status=0x8/0xf`；解释 EOF 状态机 |
 | Source Change / POC50 / EOF | 2026-11-08 扩展矩阵确认：三份 EOF SW 27 帧仍一致；HW `aud`/`eos` drain 失败，`zeros` 26/27；`pad_1024` 虽 RC=0 但 36/38，首差异 index 36；`aud` 同一窗口 3 次均为 19 帧且相同，但跨窗口帧数为 22/18/19 | 解释 EOF drain/flush 状态机与超时窗口；验证 `0xf` 根因与 padding 内容差异 |
-| 实时无线链路 | 本轮完全未启动 | 按 §6 人机交接；READY 后由人开图传 |
-| 性能/延迟目标 | 30–50 FPS、约 1024×576 仍是待确认目标 | 用户确认 + CM311 实测 CPU/RSS/温度/延迟 |
+| 实时管线硬解集成 | 未集成：`vt13_video/decoder.py` 使用 PyAV `hevc` 软件解码，未显式使用 `hevc_v4l2m2m`；硬件仅通过自定义 FFmpeg CLI 验证 | 让实时/回放路径显式使用 V4L2 M2M；比较 CPU/FPS/延迟/画面内容 |
+| 实时无线链路 | 本轮完全未启动；且 USB 接收器当前未枚举，需先连接接收器；当前 Python 管线仍是软件解码 | 按 §6 人机交接；READY 后由人开图传 |
+| 性能/延迟目标 | 30–50 FPS、约 1024×576 仍是待确认目标；短样本基准硬件约 24 fps wall，软件约 16–18 fps wall；非稳态 | 用户确认 + CM311 长时实测 CPU/RSS/温度/延迟与画面质量 |
 
 ---
 
