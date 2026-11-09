@@ -1,6 +1,44 @@
 # Remote Machine Usage Reference
 
-Status: 2026-11-08 20:31 HKT (source meson_vdec loaded; HEVC advertised; offline matrix and `aud` EOF repeat documented; R0 precheck found CM311 idle but USB `2ca3:1020` not enumerated, `doctor` RC=1; `/dev/dri` present, SSH `DISPLAY`/`WAYLAND_DISPLAY` empty; real `stream` CLI confirmed; offline rate benchmark shows hardware faster than software on short samples; current `vt13_video` still uses PyAV software `hevc`, not `hevc_v4l2m2m`; live smoke test blocked until receiver connection; offline tests/analysis no longer require approval)
+Status: 2026-11-09 22:05 HKT (duplicate ffplay window on resolution change
+fixed: run 17 started 1832 then 1080 without closing the old window; run 18
+after the fix has one start/one close and no residual process. ffmpeg_pipe
+`871af9b2...`. Earlier: no-request control run 17: 1 request, 30 aborts,
+31 IRAPs, 273 frames/60 s — the requested IDRs are NOT the trigger; the
+source sends IRAPs about every 2 s and each GOP still dies. Root is the
+damaged 1080p stream/link + firmware abort. Next: RF/link, 1832 mode, P0.
+Earlier: partial-green filter deployed: run 15 dropped
+23 full-green + 13 partial-green frames, so bottom-half green flashes are
+filtered; 195 frames, 33 aborts, 1582 POLLERR, 0 watchdog. The 0xf/POLLERR
+freeze remains. ffmpeg_pipe `2d99b0a0...`. Earlier: release Copy-Out live A/B
+run 14: 258 frames,
+31 aborts, 1507 POLLERR, 0 watchdog; Copy-Out active (no env), recovers but
+the 0xf cadence still limits the picture. Release Copy-Out is a cleaner live
+candidate via `DJI_FFMPEG_PATH`. Earlier: release patched FFmpeg built:
+Copy-Out mode
+45 fps, `FFMPEG_V4L2_NO_COPY=1` mode 249 fps offline. Live run 13 with
+no-copy: 219 frames/60 s, 34 aborts, 1503 POLLERR — no-copy cannot recover
+from `0xf`; Copy-Out is required live. The 210 fps is real but offline-only;
+the live limiter is the `0xf` cadence per requested IDR. Binary
+`~/ffmpeg-6.1.1-release/ffmpeg` SHA256 `1ed2b711...`. Earlier: 210 fps
+explained: the Nov 5 log is real; the
+custom `--enable-debug=2` FFmpeg caps at 45 fps, while `/usr/bin/ffmpeg`
+release reaches 221 fps on the same file. The system release binary cannot
+recover from the kernel 0xf (`output POLLERR`/EIO), so it is offline-only.
+A release build of the patched FFmpeg is running in
+`~/ffmpeg-6.1.1-release` (PID 104978). Earlier: run 11 added
+`recovery.kernel_abort_watch`:
+journalctl detects `0xf` and resets + requests in 116 ms median, 0 watchdog
+waits; abort rate rose to 33/min, so requested IDRs/link damage dominate.
+Clean 1080p hardware decode to raw measured 38.7 fps; >200 fps not reproduced.
+Deployed: config `f47c7d9b...`, pipeline `c700b8cd...`, launcher `673dd0f8...`.
+Earlier: runs 5–10 done. I-frame request hardware-verified
+(37–162 ms; 0.2 s startup). Display filters keep the ffplay window open and
+suppress green/grey/corrupt frames. Software decode is NOT viable (~3 cores,
+USB backpressure, grey concealment). Remaining: 14–29 `0xf` aborts per run at
+1920×1080; 1832×1032 was stable. Deployed: config `93b3d6b5...`, pipeline
+`a14b3aa2...`, ffmpeg_pipe `8e6c4411...`, launcher `ae7f3f42...`. Earlier:
+NV12 display sink INTEGRATED and DEPLOYED: `decoder.display: ffplay` taps NV12 before cv2 in the ffmpeg-pipe reader thread; verified on CM311 — segB replay 491 frames / 21.55 fps / 0 errors with HDMI window active (user confirmed dynamic video on the earlier BGR test; smoothness confirmation pending); display stack: Xorg :0/tty7 + meson-drm HDMI 1024x600, ffplay SDL NV12 overlay; hash-chain deployment with remote pre-backup; suite 57 tests only known V13; no commit; next: live run 4 when user confirms RF setup)
 
 This document describes how to access and operate the Armbian test machine used
 for VT13/HEVC capture and decoder experiments. It is intended as an operational
@@ -35,6 +73,67 @@ kernel module still follows the R2/R3 rules in `AGENTS.md`.
 > From the Codex workspace sandbox, SSH may fail with `socket: Operation not
 > permitted`. Rerun the same read-only command with network escalation; do not
 > assume the host is down.
+
+## Agent non-interactive access status (2026-11-09: askpass authorized and used)
+
+**2026-11-09 ~13:29 HKT: the user explicitly authorized the askpass pattern
+below for this test window** ("why we need ssh-copy-id, cannot we use
+askpass"). The agent extracted the password from this file into `SSH_PASSWORD`
+at runtime (never echoed in commands or output), used a credential-free helper
+at `.codex_tmp/v16_cm311_prep_20261109_122603/ssh-askpass.sh`, and reached
+CM311 with RC=0. This authorization is window-limited; future sessions must
+re-confirm before using the recorded password. Key auth is still not installed
+(`BatchMode=yes` probes at 12:03/12:20/12:26 were RC=255); `ssh-copy-id` plus
+password rotation remain the recommended hygiene fix.
+
+Earlier re-probes at 2026-11-09 12:20 and 12:26 HKT: the same `BatchMode=yes`
+command still returned RC=255 `Permission denied (publickey,password)`. A
+read-only V16 pre-test script is prepared at
+`.codex_tmp/v16_cm311_prep_20261109_122603/cm311_readonly_check.sh` (run on
+CM311; checks PyAV `hevc_v4l2m2m` availability, idle state, module, USB
+receiver, and remote source hashes). It was executed successfully via askpass
+(output: `cm311_readonly_output.txt` in the same directory).
+
+Verified from the Ubuntu PC:
+
+- `ssh`, `scp`, `rsync`, `ssh-copy-id`, `ssh-agent`, `ssh-add` are installed.
+  `sshpass` is **not** installed.
+- `~/.ssh/config` defines `220.241.224.120` (`bguo`), `192.168.50.142` (`guest`),
+  `10.192.1.3` (`guest`), and `github.com`. CM311 `10.42.0.11` has **no** Host
+  block, so it is addressed directly as `billieguo@10.42.0.11`.
+- The loaded agent identity and `~/.ssh/id_ed25519` are the same ED25519 key,
+  fingerprint `SHA256:+EPYDiNosoF8tOu7qDJmQ74L9GXw++Fa/O4zcZBLUz4`.
+- `ssh -T -o BatchMode=yes -o ConnectTimeout=8 billieguo@10.42.0.11 'hostname'`
+  returned **RC=255**, `Permission denied (publickey,password)`. `ssh -v` shows
+  the TCP connection and SSH handshake succeeded and the key was offered and
+  rejected. The host is up; the public key is simply not authorized there.
+
+Consequence: an agent shell cannot answer an interactive password prompt, so
+agent-driven CM311 work is blocked until key auth is installed. The askpass
+pattern below still works for a human-supplied credential, but agents must not
+use the password recorded in this file (see `AGENTS.md` §5).
+
+One-time fix, run by a human on the **Ubuntu PC** (precondition: CM311 reachable
+on the LAN; you will be asked for the CM311 account password once):
+
+```bash
+ssh-copy-id -i ~/.ssh/id_ed25519.pub billieguo@10.42.0.11
+```
+
+Expected: `Number of key(s) added: 1`. Verify non-interactive access:
+
+```bash
+ssh -o BatchMode=yes -o ConnectTimeout=8 billieguo@10.42.0.11 'hostname; uname -r'
+```
+
+Expected: `armbian`, `6.18.59-ophub`, RC=0. No remote service is restarted and no
+existing `authorized_keys` entry is removed by `ssh-copy-id`; it appends.
+
+Security note: this document stores the account and sudo password in plaintext
+and is tracked in Git, so the credential is present in repo history. Rotate it
+and move it out of the repository (environment variable, secret store, or key
+auth only) before sharing this repo. Tracked as V17 in
+`docs/INTERSESSION_TRANSFER.md`.
 
 ## Interactive access
 
@@ -136,6 +235,12 @@ Read-only inventory snapshot on 2026-11-06 15:52 HKT:
 - 2026-11-08 19:54 HKT R0 precheck for the first live smoke test: CM311 identity is `armbian`/`aarch64`/`6.18.59-ophub`; no `vt13_video`/`ffmpeg` process and no `/dev/video0` opener. `/dev/dri` contains `card0`, `card1`, and `renderD128`; `DISPLAY` and `WAYLAND_DISPLAY` are empty over SSH; `loginctl` shows an active `seat0`/`tty7` session, but physical HDMI output is not verified. `python3 -m vt13_video --help` and `python3 -m vt13_video stream --help` both returned RC=0 and confirmed `--headless`, `--seconds`, `--record`, and `--json-stats`. `python3 -m vt13_video doctor` returned RC=1: no matching `2ca3:1020` device; `lsusb` currently shows only the root hub and `23a9:ef18` SG Flash. The USB receiver must be connected/enumerated before live capture can run. `.codex_runs/live_capture_verified.sh` is still missing. Evidence: `.codex_tmp/r0_precheck_20261108_1941/precheck.txt`, SHA256 `d8b7306e2b646bc7f27389184a231d38a32940c72e732941e9aa1f288cb66e51`. No live USB/HDMI/wireless run occurred and no CM311 files were modified.
 
 - 2026-11-08 20:25-20:31 HKT offline soft/hardware rate benchmark: `clean_1832x1032.h265` hardware `hevc_v4l2m2m` produced 30 frames RC=0 with wall 1.212 s, user 1.563 s, sys 0.322 s; software `hevc` produced 30 frames RC=0 with wall 1.621 s, user 2.890 s, sys 0.334 s, FFmpeg bench rtime 0.802 s, maxrss 123488 kB. FrameMD5 matched 29/30; the last hardware frame was `1517d50f...` versus software `133559bb...`. `pad_1024.h265` is 1920x1080 with ffprobe `r_frame_rate=60/1` and `avg_frame_rate=25/1`; hardware produced 38 frames RC=0 with wall 1.585 s, user 1.984 s, sys 0.489 s, bench rtime 1.248 s, maxrss 118032 kB; software produced 38 frames RC=0 with wall 2.295 s, user 5.243 s, sys 0.443 s, bench rtime 1.472 s, maxrss 143528 kB. FrameMD5 matched 36/38, differing at frames 37/38 (0-based index 36/37). These are short-sample end-to-end FFmpeg+FrameMD5 benchmarks, not steady-state FPS: hardware was about 24 fps wall, software about 16-18 fps wall; the 30-50 fps target remains unproven. Evidence: `~/mobile_vt/.codex_tmp/cm311_hw_bench_20261108_202504/` and `~/mobile_vt/.codex_tmp/cm311_hw_bench_pad_20261108_203050/`; local copies have matching manifests (14 and 12 files). Code inspection: `vt13_video/decoder.py` uses `av.CodecContext.create("hevc", "r")`, so the current Python live/replay path is software PyAV decode, not the custom FFmpeg hardware decoder. No live USB/HDMI/wireless run occurred.
+
+- 2026-11-09 12:20-12:21 HKT PC-side V16 opt-in step (Ubuntu PC only; no CM311 command succeeded): SSH key-auth re-probe still RC=255 (V17). The PC worktree now accepts `decoder.codec: hevc_v4l2m2m` (config whitelist extended; default remains `hevc`), logs `HEVC decoder context created: requested=... actual=...`, and exposes `codec` in the decoder snapshot/`--json-stats`. Local regression: 54 tests RC=0 (3.191 s). Golden offline replay: default config RC=0, 105 frames, 0 errors (baseline unchanged); v4l2m2m config RC=1, 0 frames, `avcodec_open2` EINVAL because the PC has no V4L2 M2M HEVC device — a fail-safe negative control, not hardware acceptance. Evidence: `.codex_tmp/v16_pc_optin_20261109_122037/` (logs + SHA256 manifests). Changes are uncommitted. Next on CM311 after V17: check whether PyAV 11.0.0 exposes `hevc_v4l2m2m`, then run a bounded offline golden replay with the v4l2m2m config. Caution: PyAV links its own FFmpeg, not the patched `~/ffmpeg-6.1.1-v4l2` build, so Copy-Out/refcount workarounds do not apply and source-change hangs are possible; fallbacks are rebuilding PyAV against the custom libraries or an FFmpeg-subprocess backend.
+
+- 2026-11-09 13:29-13:41 HKT CM311 V16 hardware-decode verification (user-authorized askpass; no remote working-tree file modified): read-only inventory confirmed idle device, **PyAV 11.0.0 `hevc_v4l2m2m` available=True**, `meson_vdec` loaded refcount 0, USB `2ca3:1020` absent; remote `decoder.py`/`pipeline.py` hashes match the 2026-11-06 snapshot and remote `config.py` equals local HEAD (`062b4ccc...`). Raw clean-sample PyAV comparison: SW/HW 30 frames each RC=0, YUV MD5 29/30 (last frame differs), cross-checked against the 2026-11-08 CLI evidence (SW 30/30 and HW 29/30 identical; PyAV HW last frame `2a745ea3...` vs CLI `1517d50f...`). Full-pipeline golden replay via real `VT13Stream` (codec set by direct dataclass assignment): SW 105 frames/0 errors; HW 80 frames, EIO×3 → 1 reset → IRAP resync at the 1832→1920 source change, 25 frames lost, automatic recovery without hang, reproduced twice; YUV-layer comparison 1832 section 8/8 and 1920 section 71/72 bit-identical (last frame only). BGR-layer hashes differ everywhere due to swscale NV12→BGR vs YUV420P→BGR rounding (mean 0.44/255; common yuv420p intermediate MD5 identical) — acceptance must compare YUV. Transient `capture POLLERR`→EIO on the first device open after the aborted session; a fresh open minutes later succeeded without R3. Evidence run dirs: `v16_cm311_pyav_v2_20261109_133245`, `v16_cm311_pipeline_20261109_133439`, `v16_cm311_pyav_v2_20261109_133812`, `v16_cm311_pipeline_yuv_20261109_133941` (remote `~/mobile_vt/.codex_tmp/`, local copies under the same relative paths); 30 files, local/remote manifests all matched (`.codex_tmp/manifests_20261109/`). Post-run 13:41:12 HKT: device idle. No live USB/HDMI/wireless run, no reboot/module reload/package install, no commit.
+
+- 2026-11-09 14:06-14:15 HKT pre-build backup and Phase A launch (Plan 2): backup of CM311 FFmpeg source (tar + `git diff` patch + HEAD/status), `~/mobile_vt/{vt13_video,tests,config}` tar, and PC uncommitted changes stored at PC absolute path `/home/billieguo/billie_guo/src/rm/mobile_vt/.codex_tmp/backup_before_plan2_20261109_140638` (manifest `BACKUP_MANIFEST.md`, all SHA256 verified); CM311 mirror `~/mobile_vt/.codex_tmp/backup_plan2_20261109_140638`. Out-of-tree configure was rejected ("config.h in source dir"); instead `git archive HEAD` + backup patch extracted to NEW dir `~/ffmpeg-6.1.1-v4l2-shared`, 3 patched files SHA256-identical to the original tree, configured `--enable-shared --disable-static --prefix=$HOME/ffmpeg-6.1.1-v4l2-shared/install` (RC=0), `make -j2` running under `timeout -k 60 2400` (PID 46044), logs in `~/mobile_vt/.codex_tmp/plan2_build_20261109_140638/`. Original FFmpeg tree/binary untouched. Phase B will build PyAV 11.0.0 into `~/mobile_vt/.venv-v4l2` (system-site-packages venv; system av untouched). No source rewrite yet; no commit; no live run.
 
 ## Important paths
 
@@ -293,11 +398,11 @@ live run, driver change, or FFmpeg experiment.
 | Item | Status (latest evidence) | Evidence needed |
 |---|---|---|
 | Latest capture pointer | Missing | `test -f /tmp/dji_test_latest_dir`; explicit capture root; do not guess |
-| Idle/ownership | 2026-11-08 19:54 HKT R0 precheck: no `vt13_video`/`ffmpeg` process and no `/dev/video0` opener; source `meson_vdec` remains loaded; USB receiver is not enumerated | Re-check immediately before a live or hardware run; do not kill; require `doctor` RC=0 |
+| Idle/ownership | 2026-11-09 13:41 HKT post-run: no `vt13_video`/`ffmpeg` process, `/dev/video0` no opener, source `meson_vdec` refcount 0; USB receiver not enumerated | Re-check immediately before a live or hardware run; do not kill; require `doctor` RC=0 |
 | USB receiver enumeration | 2026-11-08 19:54 HKT `doctor` RC=1; `lsusb` has no `2ca3:1020`; only root hub and `23a9:ef18` SG Flash are present | Connect/enable the receiver; `doctor` RC=0; `lsusb -d 2ca3:1020`; usbfs access |
 | Display stack | Partially checked: `/dev/dri` has `card0`/`card1`/`renderD128`; SSH `DISPLAY`/`WAYLAND_DISPLAY` are empty; `loginctl` shows active `seat0`/`tty7`; physical HDMI output not verified | `ls /dev/dri`, `DISPLAY`, `loginctl`, and actual HDMI output evidence |
 | `vt13_video` stream/READY | `--help` and `stream --help` returned RC=0; confirmed `--headless`, `--seconds`, `--record`, `--json-stats`; source has no literal `READY`, so use `USB source open` plus a `waiting_*` state as readiness evidence; current decoder path is PyAV software `hevc`; stream not run yet | Real `stream` command, READY evidence, stop/exit method; confirm decoder identity at runtime |
-| Live pipeline hardware decode integration | Not integrated: `vt13_video/decoder.py` uses PyAV `hevc` software decode, not `hevc_v4l2m2m`; hardware decode exists only through the custom FFmpeg CLI | Explicitly use V4L2 M2M in the live/replay path; verify with runtime logs, CPU/FPS/latency, and frame content |
+| Live pipeline hardware decode integration | **PyAV-native verified; patched venv built (2026-11-09)**: system PyAV 11.0.0 and rebuilt venv PyAV (`~/mobile_vt/.venv-v4l2`, ldd-verified against `~/ffmpeg-6.1.1-v4l2-shared/install`) both decode raw clean 29/30 YUV-correct. Golden pipeline loss (25 frames) root-caused via dmesg to **POC8 `HEVC_LCU_CHECK status=0xf` firmware abort** (P0 family, deterministic ×6, gap-independent) — NOT source change; Copy-Out does not fix it. Emitted frames YUV-identical (1832 8/8, 1920 71/72); compare YUV not BGR (swscale artifact) | P0 `0xf` driver/firmware investigation; clean synthetic switch stream to isolate Copy-Out reinit; long-run FPS/CPU/RSS/temperature; Phase D live smoke (R2) for IRAP cadence + live `0xf` occurrence |
 | `/dev/video0` function | Source `meson-vdec` loaded; V4L2 output formats include `HEVC`; clean and EOF offline hardware runs executed | `v4l2-ctl --all`; meson-vdec binding; no conflicting opener |
 | Custom FFmpeg decode | 2026-11-08 `-fps_mode passthrough`: clean 30 frames RC=0, 29/30; `no_sei` POC21 `0xf` RC=134, 14-frame prefix all matching; `fresh_45_to_82` POC50 `0xf` RC=134, 32-frame prefix all matching; `pad_1024` 38 frames RC=0, 36/38; EOF `aud` 3x repeat all RC=137/19 frames and identical (cross-window counts 22/18/19), `eos` 20 frames RC=134, `zeros` 27 frames 26/27. Rate benchmark: clean HW 30/1.212 s vs SW 30/1.621 s; pad 1920x1080 HW 38/1.585 s vs SW 38/2.295 s; short-sample, not steady-state | Explain/fix `0xf`, padding mismatch, and EOF drain; explain `aud` cross-window timeout count; add more real samples; run long-duration FPS/CPU/RSS/temperature/latency tests |
 | Kernel module/VDEC | R3 loaded source module (`ca46...`) with matching vermagic; HEVC advertised; 2026-11-08 dmesg shows `status=0x8` and `status=0xf` (POC21 for `no_sei`, POC50 for `fresh`); `pad` shows only `0x8` plus two missing-reference substitutions | `uname -r`, `lsmod`, module vermagic, `dmesg`, `status=0x8/0xf`; explain EOF state machine |
@@ -437,6 +542,92 @@ Non-interactive equivalent:
 printf '%s\n' '020816' | ssh -T billieguo@10.42.0.11 \
   'sudo -S dmesg | grep -Ei "Missing L[01] reference|HEVC_LCU_CHECK status=0xf|HEVC_DBG unexpected|Aborting"'
 ```
+
+### Control port and on-demand I-frame request (DUML)
+
+The receiver exposes two CDC-ACM ports: `/dev/ttyACM0` is the DUML control
+channel (interface 2, "DJI USB VCOM For Protocol") and `/dev/ttyACM1` is the
+debug console (interface 4). The pipeline opens `ttyACM0` only when
+`control.enabled: true`; otherwise the port remains free for the standalone
+probe below.
+
+The official client asks the transmitter for an I-frame on connect and whenever
+its decoder needs a keyframe (DUML command set 1 / id 1 to module 14/0). The
+pipeline now sends the same frame, plus a 1 Hz pairing query:
+
+```yaml
+control:
+  enabled: true            # opt-in; video path unchanged
+  port: null               # null = auto-detect interface 2
+  iframe_on_connect: true
+  iframe_on_recovery: true
+  iframe_retry_s: 2.0      # retry while waiting for a keyframe
+  min_iframe_interval_s: 0.5
+  pairing_poll_s: 1.0
+decoder:
+  stall_restart_s: 5.0     # optional silent-0xf watchdog; 0 disables
+```
+
+The exact request frame (verified byte-for-byte against the official client):
+
+```text
+55 17 04 38 aa 0e 00 00 40 01 01 00 00 00 00 00 24 00 00 00 24 8f 06
+```
+
+For a control-only test without changing the pipeline config, the standalone
+probe remains available (copy the single dependency-free file first):
+
+```bash
+cd ~/mobile_vt
+python3 .codex_tmp/rmrx_probe/vt_iframe_probe.py \
+  --port /dev/ttyACM0 --repeat 12 --interval 5
+```
+
+Watch `capture.log` / JSON stats for `control: requested I-frame`, new IRAPs
+(`keyframe_starts`), and dmesg recovery after `0xf`. Port access relies on the
+same udev `uaccess` rule as the video interface; over SSH the active `tty7`
+session currently supplies the ACL.
+
+Live results (2026-11-09): run 5 proved the transmitter honors the request
+(10/10, IRAP in 37–162 ms); run 6 ran 150 s at 1920×1080 with 34 watchdog
+resets, 565 frames, display starts = 1, USB 0 errors/timeouts, and 29 kernel
+`0xf` aborts. The on-connect request started decoding in 0.2 s when the VT was
+already on. The remaining instability is the 1080p `0xf` cadence; run 4 at
+1832×1032 had 1 abort in 90 s. Next A/B: lock the transmitter to
+1832×1032@30 and rerun the same launcher with `DJI_STALL_RESTART_S=2.0`.
+
+### Capture-layer A/B: PyUSB vs `rmrx dump`
+
+Staged on the PC under `.codex_tmp/rmrx_probe/`:
+
+- `rmrx-aarch64-musl` — static aarch64 CLI, SHA256 `b05a5fbe...` (3,281,112 B)
+- `capture_pyusb.py` — pure capture via the pipeline's `VT13UsbSource`
+- `timestamp_stdin.py` — timestamps `rmrx dump -` output
+- `summarize_capture.py` — bytes/AU/IRAP/gap comparison
+- `live_capture_run5.sh` — run-4 pipeline + control + watchdog
+
+Copy them to CM311, then run one mode at a time on the same link:
+
+```bash
+# A: PyUSB capture only (no decode, no control); enable VT after READY
+cd ~/mobile_vt
+.venv-v4l2/bin/python .codex_tmp/rmrx_probe/capture_pyusb.py \
+  captures/ab_$(date +%Y%m%d_%H%M%S)_pyusb.bin --seconds 60
+```
+
+```bash
+# B: Rust capture; --port /dev/null disables control for a fair A/B.
+# READY evidence: "VideoConnected" in the log, then enable VT.
+cd ~/mobile_vt
+RUST_LOG=info .codex_tmp/rmrx_probe/rmrx-aarch64-musl --port /dev/null \
+  dump - --seconds 60 2>rmrx_capture.log \
+  | .venv-v4l2/bin/python .codex_tmp/rmrx_probe/timestamp_stdin.py \
+      captures/ab_$(date +%Y%m%d_%H%M%S)_rmrx.h265
+```
+
+Compare with `summarize_capture.py <A> <B>`. Sequential runs are not
+RF-identical; repeat 2–3 times and compare medians. The rmrx binary's musl
+runtime on CM311 is still unverified — run `rmrx --help` first.
 
 ## HEVC POC isolation workflow
 

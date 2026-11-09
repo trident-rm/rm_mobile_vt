@@ -5,11 +5,13 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 import logging
 from pathlib import Path
+import subprocess
 import threading
 import time
 from typing import Iterator
 
 from .config import AppConfig
+from .control import ControlLink
 from .decoder import Frame, FrameQueue, HevcDecoder
 from .nal import (
     AccessUnit,
@@ -36,9 +38,10 @@ class VT13Stream:
     """Run the USB read/decode loop in a background thread.
 
     Frames are exposed through a bounded queue (``read_frame`` / ``latest_frame``)
-    or through ``frames()``.  The pipeline never sends vendor-specific OUT
+    or through ``frames()``.  The pipeline never sends vendor-specific USB OUT
     requests; recovery is limited to re-claiming the IN endpoint and optional
-    device reset/clear-halt as configured.
+    device reset/clear-halt as configured.  With ``control.enabled`` it also
+    writes DUML I-frame requests and pairing queries to the CDC control port.
     """
 
     def __init__(
@@ -46,10 +49,13 @@ class VT13Stream:
         config: AppConfig,
         source: ByteSource | None = None,
         logger: logging.Logger | None = None,
+        control: ControlLink | None = None,
     ) -> None:
         self.config = config
         self.logger = logger or logging.getLogger("vt13_video.pipeline")
         self.source = source or VT13UsbSource(config.device, config.read, self.logger)
+        self._control = control
+        self._control_owned = control is None
         self.parser = AnnexBParser()
         self.assembler = AccessUnitAssembler()
         self.params = ParameterSetCache()
@@ -67,7 +73,12 @@ class VT13Stream:
                     config.decoder.parameter_sets_file,
                     exc,
                 )
-        self.decoder = HevcDecoder(config.decoder, self.logger)
+        if config.decoder.backend == "ffmpeg-pipe":
+            from .ffmpeg_pipe import FfmpegPipeDecoder
+
+            self.decoder = FfmpegPipeDecoder(config.decoder, self.logger)
+        else:
+            self.decoder = HevcDecoder(config.decoder, self.logger)
         self.frames = FrameQueue(config.decoder.queue_size, config.decoder.drop_oldest)
         self.stats = StreamStats()
         self.recovery = RecoveryController(config.recovery)
@@ -94,6 +105,15 @@ class VT13Stream:
         self._save_first_done = False
         self._saved_parameter_sets_path: Path | None = None
         self._last_saved_parameter_bytes: bytes | None = None
+        self._next_iframe_at = 0.0
+        self._last_frame_at: float | None = None
+        self._last_vcl_au_at: float | None = None
+        self._decode_started_at: float | None = None
+        self._data_epoch_started_at: float | None = None
+        self._stall_resets = 0
+        self._kernel_abort_event = threading.Event()
+        self._kernel_watcher: subprocess.Popen | None = None
+        self._kernel_watcher_thread: threading.Thread | None = None
 
         self._record_fh = None
         self._times_fh = None
@@ -110,6 +130,15 @@ class VT13Stream:
         self._stop_event.clear()
         self.stats.start()
         self.stats.device_identity = self.source.identity
+        if self.config.control.enabled and self._control is None:
+            try:
+                self._control = ControlLink(self.config.control, self.logger)
+                self._control_owned = True
+                self._control.start()
+            except Exception as exc:
+                self.logger.warning("control link disabled after setup failure: %r", exc)
+                self._control = None
+        self._start_kernel_watch()
         self._open_recording()
         self._thread = threading.Thread(target=self._run, name="vt13-video", daemon=True)
         self._thread.start()
@@ -183,6 +212,10 @@ class VT13Stream:
             "streaming": result["state"] == "streaming",
         }
         result["recovery"] = asdict(self.recovery.snapshot())
+        result["control"] = (
+            self._control.snapshot() if self._control is not None else {"enabled": False}
+        )
+        result["watchdog"] = {"output_stall_resets": self._stall_resets}
         result["source"] = self.source.identity
         result["queue"] = {"size": self.frames.qsize(), "dropped": self.frames.dropped}
         return result
@@ -206,12 +239,20 @@ class VT13Stream:
             f", irap={'yes' if self._irap_seen_since_reset else 'no'}"
             f", keyframe={'yes' if self._keyframe_started_since_reset else 'no'}"
         )
+        if self._control is not None:
+            ctrl = self._control.snapshot()
+            line += f", ctrl=tx{ctrl['tx_frames']}/rx{ctrl['rx_frames']}"
+            if ctrl.get("iframe_requests"):
+                line += f"/idr{ctrl['iframe_requests']}"
+        if self._stall_resets:
+            line += f", stall_resets={self._stall_resets}"
         return line
 
     # ------------------------------------------------------------------ main loop
     def _run(self) -> None:
         try:
             while not self._stop_event.is_set():
+                self._check_kernel_abort()
                 now = time.monotonic()
                 if self.config.runtime.max_seconds > 0:
                     started = self.stats.started_at or now
@@ -447,6 +488,92 @@ class VT13Stream:
         self._suppressed_error_logs += 1
         return False
 
+    @staticmethod
+    def _is_kernel_abort_line(line: str) -> bool:
+        return "HEVC_LCU_CHECK status=0xf" in line or "Aborting decoding session" in line
+
+    def _start_kernel_watch(self) -> None:
+        if not self.config.recovery.kernel_abort_watch:
+            return
+        try:
+            proc = subprocess.Popen(
+                ["journalctl", "-k", "-f", "-o", "cat", "--since", "now"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+            )
+        except Exception as exc:
+            self.logger.warning("kernel abort watch unavailable: %r", exc)
+            return
+        self._kernel_watcher = proc
+        self._kernel_watcher_thread = threading.Thread(
+            target=self._kernel_watch_loop, args=(proc,), name="vt13-kernel-watch", daemon=True
+        )
+        self._kernel_watcher_thread.start()
+        self.logger.info("kernel abort watch enabled (journalctl -k -f)")
+
+    def _kernel_watch_loop(self, proc: subprocess.Popen) -> None:
+        try:
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                if self._stop_event.is_set():
+                    break
+                if self._is_kernel_abort_line(line):
+                    self._kernel_abort_event.set()
+        except Exception as exc:
+            if not self._stop_event.is_set():
+                self.logger.debug("kernel abort watch stopped: %r", exc)
+
+    def _check_kernel_abort(self) -> None:
+        if not self._kernel_abort_event.is_set():
+            return
+        self._kernel_abort_event.clear()
+        if self.decoder.needs_keyframe:
+            return
+        self.logger.warning("kernel VDEC abort detected; resetting decoder immediately")
+        self._event("kernel_abort", "0xf")
+        self._mark_discontinuity("kernel_0xf")
+
+    def _stop_kernel_watch(self) -> None:
+        proc = self._kernel_watcher
+        self._kernel_watcher = None
+        if proc is not None:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+            try:
+                proc.wait(timeout=2.0)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+        thread = self._kernel_watcher_thread
+        self._kernel_watcher_thread = None
+        if thread is not None:
+            thread.join(timeout=2.0)
+
+    def _data_flowing(self, now: float) -> bool:
+        return bool(
+            self._source_open
+            and self._last_data_at is not None
+            and now - self._last_data_at <= self.config.read.stall_timeout_s
+        )
+
+    def _request_iframe(self, reason: str) -> None:
+        control = self._control
+        if control is None or not self.config.control.iframe_on_recovery:
+            return
+        now = time.monotonic()
+        if now < self._next_iframe_at:
+            return
+        if not self._data_flowing(now):
+            return
+        if control.request_iframe(reason):
+            self._event("control_iframe", reason)
+        self._next_iframe_at = now + max(self.config.control.iframe_retry_s, 0.5)
+
     def _mark_discontinuity(self, reason: str, *, log: bool = True) -> None:
         self.parser.reset()
         self.assembler.reset()
@@ -462,6 +589,12 @@ class VT13Stream:
         self._irap_seen_since_reset = False
         self._keyframe_started_since_reset = False
         self._event("discontinuity", reason)
+        self._last_frame_at = None
+        self._last_vcl_au_at = None
+        self._decode_started_at = None
+        self._data_epoch_started_at = time.monotonic()
+        if self.config.control.iframe_on_recovery:
+            self._request_iframe("discontinuity")
         if log:
             self.logger.warning(
                 "stream discontinuity (%s); waiting for a fresh VPS/SPS/PPS + IRAP",
@@ -481,6 +614,8 @@ class VT13Stream:
                 if result.source_gap_s is not None
                 else now - self._last_read_at
             )
+            if gap > self.config.read.stall_timeout_s:
+                self._data_epoch_started_at = now
             if gap > self.config.recovery.gap_threshold_s:
                 reason = f"read_gap_{gap:.3f}s"
                 if self.config.recovery.reset_on_gap:
@@ -507,6 +642,7 @@ class VT13Stream:
         for nal in nals:
             self._process_nal(nal, now)
         self._refresh_waiting_state(now)
+        self._check_output_stall(now)
 
     def _process_nal(self, nal: NALUnit, now: float) -> None:
         self.stats.record_nal(nal)
@@ -553,12 +689,7 @@ class VT13Stream:
             self.stats.set_state("waiting_keyframe", "no usable IRAP yet")
         if not self._keyframe_hint_logged:
             waiting_since = self._waiting_data_since
-            data_flowing = (
-                self._source_open
-                and waiting_since is not None
-                and self._last_data_at is not None
-                and now - self._last_data_at <= self.config.read.stall_timeout_s
-            )
+            data_flowing = waiting_since is not None and self._data_flowing(now)
             if (
                 data_flowing
                 and waiting_since is not None
@@ -588,11 +719,52 @@ class VT13Stream:
                     "seen" if self._irap_seen_since_reset else "not seen",
                 )
                 self._keyframe_hint_logged = True
+        if (
+            self._control is not None
+            and self.config.control.iframe_on_recovery
+            and self.config.control.iframe_retry_s > 0
+            and now >= self._next_iframe_at
+            and self._data_flowing(now)
+        ):
+            self._request_iframe("waiting_keyframe")
+
+    def _check_output_stall(self, now: float) -> None:
+        threshold = self.config.decoder.stall_restart_s
+        if threshold <= 0 or self.decoder.needs_keyframe:
+            return
+        if self._last_vcl_au_at is None:
+            return
+        if now - self._last_vcl_au_at > max(1.0, self.config.read.stall_timeout_s):
+            return
+        reference = max(
+            (
+                value
+                for value in (
+                    self._last_frame_at,
+                    self._decode_started_at,
+                    self._data_epoch_started_at,
+                )
+                if value is not None
+            ),
+            default=None,
+        )
+        if reference is None or now - reference < threshold:
+            return
+        stalled = now - reference
+        self._stall_resets += 1
+        self.logger.warning(
+            "no decoded output for %.2fs while VCL access units are arriving; "
+            "resetting the decoder and requesting an I-frame",
+            stalled,
+        )
+        self._event("output_stall", f"{stalled:.3f}s")
+        self._mark_discontinuity("output_stall")
 
     def _handle_au(self, au: AccessUnit, now: float) -> None:
         self.stats.record_au(au)
         if not au.has_vcl:
             return
+        self._last_vcl_au_at = now
         if au.has_irap:
             self._irap_seen_since_reset = True
 
@@ -635,6 +807,7 @@ class VT13Stream:
         if starting_keyframe and not self.decoder.needs_keyframe:
             self._keyframe_started_since_reset = True
             self._reopened_after_disconnect = False
+            self._decode_started_at = now
             self.stats.record_keyframe_start()
             self.stats.set_state("streaming")
         if self.decoder.resets > resets_before:
@@ -645,9 +818,15 @@ class VT13Stream:
             self._keyframe_hint_logged = False
             self._irap_seen_since_reset = False
             self._keyframe_started_since_reset = False
+            self._last_frame_at = None
+            self._last_vcl_au_at = None
+            self._decode_started_at = None
             self._event("decoder_reset", self.decoder.waiting_reason or "")
+            if self.config.control.iframe_on_recovery:
+                self._request_iframe("decoder_reset")
 
         if frames:
+            self._last_frame_at = now
             self.stats.set_state("streaming")
             self._waiting_logged = False
         for frame in frames:
@@ -657,7 +836,7 @@ class VT13Stream:
 
     def _maybe_save_first(self, frame: Frame) -> None:
         path = self.config.output.save_first
-        if path is None or self._save_first_done:
+        if path is None or self._save_first_done or frame.image is None:
             return
         try:
             import cv2
@@ -737,6 +916,8 @@ class VT13Stream:
         except Exception as exc:
             self.logger.debug("final flush failed: %r", exc)
         self._close_source()
+        self._close_control()
+        self._stop_kernel_watch()
         self.stats.dropped_frames = self.frames.dropped
         if self.stats.state not in {"error", "eof", "stopped"}:
             self.stats.set_state("stopped")
@@ -754,6 +935,15 @@ class VT13Stream:
             self._source_open = False
             self._data_logged = False
             self._waiting_data_since = None
+
+    def _close_control(self) -> None:
+        control = self._control
+        if control is None or not self._control_owned:
+            return
+        try:
+            control.close()
+        except Exception as exc:
+            self.logger.debug("control close failed: %r", exc)
 
     def _call_source(self, name: str, *args):
         method = getattr(self.source, name, None)

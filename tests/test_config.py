@@ -136,12 +136,79 @@ class ConfigTests(unittest.TestCase):
                 }
             )
 
+    def test_v4l2m2m_codec_is_accepted(self) -> None:
+        config = from_dict({"decoder": {"codec": "hevc_v4l2m2m"}})
+        self.assertEqual(config.decoder.codec, "hevc_v4l2m2m")
+
+    def test_unknown_codec_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ConfigError, "decoder.codec"):
+            from_dict({"decoder": {"codec": "h264"}})
+
+    def test_backend_default_and_validation(self) -> None:
+        self.assertEqual(from_dict({}).decoder.backend, "pyav")
+        config = from_dict({"decoder": {"backend": "ffmpeg-pipe", "ffmpeg_codec": "hevc"}})
+        self.assertEqual(config.decoder.backend, "ffmpeg-pipe")
+        self.assertEqual(config.decoder.ffmpeg_codec, "hevc")
+        with self.assertRaisesRegex(ConfigError, "decoder.backend"):
+            from_dict({"decoder": {"backend": "bogus"}})
+        with self.assertRaisesRegex(ConfigError, "ffmpeg_codec"):
+            from_dict({"decoder": {"ffmpeg_codec": "  "}})
+
+    def test_display_config_validation(self) -> None:
+        self.assertEqual(from_dict({}).decoder.display, "none")
+        config = from_dict({"decoder": {"display": "ffplay", "display_width": 1024, "display_height": 576}})
+        self.assertEqual(config.decoder.display, "ffplay")
+        self.assertEqual(config.decoder.display_width, 1024)
+        with self.assertRaisesRegex(ConfigError, "decoder.display"):
+            from_dict({"decoder": {"display": "sdl"}})
+        with self.assertRaisesRegex(ConfigError, "display_width"):
+            from_dict({"decoder": {"display_width": 8}})
+
     def test_save_parameter_sets_directory_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             target = Path(temp_dir) / "parameter_sets"
             target.mkdir()
             with self.assertRaisesRegex(ConfigError, "is a directory"):
                 from_dict({"decoder": {"save_parameter_sets": str(target)}})
+
+    def test_kernel_abort_watch_can_be_enabled(self) -> None:
+        self.assertTrue(from_dict({"recovery": {"kernel_abort_watch": True}}).recovery.kernel_abort_watch)
+
+    def test_convert_bgr_can_be_disabled(self) -> None:
+        self.assertFalse(from_dict({"decoder": {"convert_bgr": False}}).decoder.convert_bgr)
+
+    def test_control_config_and_stall_watchdog(self) -> None:
+        default = from_dict({})
+        self.assertFalse(default.control.enabled)
+        self.assertTrue(default.control.iframe_on_connect)
+        self.assertTrue(default.control.iframe_on_recovery)
+        self.assertEqual(default.decoder.stall_restart_s, 0.0)
+
+        config = from_dict(
+            {
+                "control": {
+                    "enabled": True,
+                    "port": "/dev/ttyACM0",
+                    "iframe_retry_s": 3,
+                    "pairing_poll_s": 0,
+                },
+                "decoder": {"stall_restart_s": 5},
+            }
+        )
+        self.assertTrue(config.control.enabled)
+        self.assertEqual(config.control.port, "/dev/ttyACM0")
+        self.assertEqual(config.control.iframe_retry_s, 3.0)
+        self.assertEqual(config.control.pairing_poll_s, 0.0)
+        self.assertEqual(config.decoder.stall_restart_s, 5.0)
+
+    def test_control_negative_timers_are_rejected(self) -> None:
+        for key in ("iframe_retry_s", "min_iframe_interval_s", "pairing_poll_s"):
+            with self.assertRaisesRegex(ConfigError, f"control.{key}"):
+                from_dict({"control": {key: -1}})
+        with self.assertRaisesRegex(ConfigError, "stall_restart_s"):
+            from_dict({"decoder": {"stall_restart_s": -1}})
+        with self.assertRaisesRegex(ConfigError, "control.port"):
+            from_dict({"control": {"port": "  "}})
 
 
 if __name__ == "__main__":

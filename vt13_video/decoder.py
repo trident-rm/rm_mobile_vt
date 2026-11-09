@@ -111,6 +111,11 @@ class HevcDecoder:
         if self.config.allow_corrupt_frames:
             flag = getattr(self.av.codec.context.Flags, "output_corrupt", 1 << 3)
             ctx.flags |= int(flag)
+        self.logger.info(
+            "HEVC decoder context created: requested=%s actual=%s",
+            self.config.codec,
+            ctx.codec.name,
+        )
         return ctx
 
     def reset(self) -> None:
@@ -238,6 +243,7 @@ class HevcDecoder:
 
     def snapshot(self) -> dict[str, Any]:
         return {
+            "codec": self.config.codec,
             "needs_keyframe": self.needs_keyframe,
             "waiting_reason": self.waiting_reason,
             "errors": self.errors,

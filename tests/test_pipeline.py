@@ -7,7 +7,7 @@ import tempfile
 import time
 import unittest
 
-from vt13_video.config import AppConfig, RecoveryConfig
+from vt13_video.config import AppConfig, ControlConfig, DecoderConfig, RecoveryConfig
 from vt13_video.decoder import HevcDecoder
 from vt13_video.nal import AccessUnit, scan_nals
 from vt13_video.pipeline import RecordingError, VT13Stream
@@ -150,6 +150,23 @@ class GoldenReplayTests(unittest.TestCase):
             self.assertEqual(snapshot_with_cache["decode"]["frames"], 105)
             self.assertEqual(snapshot_with_cache["stream"]["skipped_access_units"], 16)
             self.assertEqual(snapshot_with_cache["decoder"]["errors"], 0)
+
+
+@unittest.skipUnless(_HAS_AV, "PyAV is required for decoder tests")
+class DecoderCodecSelectionTests(unittest.TestCase):
+    def test_default_codec_remains_software_hevc(self) -> None:
+        decoder = HevcDecoder(DecoderConfig())
+        self.assertEqual(decoder._ctx.codec.name, "hevc")
+        self.assertEqual(decoder.snapshot()["codec"], "hevc")
+
+    def test_v4l2m2m_context_is_created_when_available(self) -> None:
+        try:
+            av.codec.Codec("hevc_v4l2m2m", "r")
+        except ValueError:
+            self.skipTest("PyAV build lacks the hevc_v4l2m2m decoder")
+        decoder = HevcDecoder(DecoderConfig(codec="hevc_v4l2m2m"))
+        self.assertEqual(decoder._ctx.codec.name, "hevc_v4l2m2m")
+        self.assertEqual(decoder.snapshot()["codec"], "hevc_v4l2m2m")
 
 
 @unittest.skipUnless(_HAS_AV, "PyAV is required for pipeline tests")
@@ -674,6 +691,122 @@ class PipelineStateTests(unittest.TestCase):
         self.assertIsNone(stream._record_fh)
         self.assertIsNone(stream._times_fh)
         self.assertIsNone(stream._events_fh)
+
+
+class _FakeControl:
+    def __init__(self) -> None:
+        self.reasons: list[str] = []
+        self.closed = False
+
+    def request_iframe(self, reason: str = "") -> bool:
+        self.reasons.append(reason)
+        return True
+
+    def snapshot(self) -> dict:
+        return {
+            "enabled": True,
+            "port": "fake",
+            "connected": True,
+            "tx_frames": len(self.reasons),
+            "rx_frames": 0,
+            "iframe_requests": len(self.reasons),
+            "pairing_queries": 0,
+            "errors": 0,
+            "dropped_bytes": 0,
+            "last_frame": None,
+            "pairing_poll_s": 0.0,
+            "iframe_retry_s": 2.0,
+        }
+
+    def close(self) -> None:
+        self.closed = True
+
+
+@unittest.skipUnless(_HAS_AV, "PyAV is required for decoder tests")
+class ControlRecoveryIntegrationTests(unittest.TestCase):
+    def _stream(self, *, stall_restart_s: float = 0.0):
+        config = AppConfig()
+        config.control = ControlConfig(enabled=True, iframe_retry_s=2.0)
+        config.decoder.stall_restart_s = stall_restart_s
+        control = _FakeControl()
+        stream = VT13Stream(config, source=_FakeSource(), control=control)
+        return stream, control
+
+    def test_discontinuity_requests_iframe(self) -> None:
+        stream, control = self._stream()
+        stream._source_open = True
+        stream._last_data_at = time.monotonic()
+        stream._mark_discontinuity("test")
+        self.assertIn("discontinuity", control.reasons)
+        self.assertTrue(stream.decoder.needs_keyframe)
+
+    def test_discontinuity_request_is_throttled(self) -> None:
+        stream, control = self._stream()
+        stream._source_open = True
+        stream._last_data_at = time.monotonic()
+        stream._mark_discontinuity("first")
+        stream._mark_discontinuity("second")
+        self.assertEqual(control.reasons.count("discontinuity"), 1)
+
+    def test_no_iframe_request_when_no_data_is_flowing(self) -> None:
+        stream, control = self._stream()
+        stream._source_open = True
+        stream._last_data_at = time.monotonic() - 10.0
+        stream._mark_discontinuity("stall")
+        self.assertEqual(control.reasons, [])
+
+    def test_waiting_keyframe_retries_request(self) -> None:
+        stream, control = self._stream()
+        now = time.monotonic()
+        stream.decoder.needs_keyframe = True
+        stream._source_open = True
+        stream._last_data_at = now
+        stream._waiting_data_since = now - 1.0
+        stream._next_iframe_at = 0.0
+        stream._refresh_waiting_state(now)
+        self.assertIn("waiting_keyframe", control.reasons)
+
+    def test_output_stall_watchdog_resets_and_requests(self) -> None:
+        stream, control = self._stream(stall_restart_s=1.0)
+        now = time.monotonic()
+        stream.decoder.needs_keyframe = False
+        stream._source_open = True
+        stream._last_data_at = now
+        stream._last_vcl_au_at = now - 0.1
+        stream._last_frame_at = now - 5.0
+        stream._decode_started_at = now - 5.0
+        stream._data_epoch_started_at = now - 5.0
+        stream._check_output_stall(now)
+        self.assertEqual(stream._stall_resets, 1)
+        self.assertIn("discontinuity", control.reasons)
+        self.assertTrue(stream.decoder.needs_keyframe)
+
+    def test_snapshot_exposes_control_and_watchdog(self) -> None:
+        stream, _ = self._stream()
+        snapshot = stream.snapshot()
+        self.assertTrue(snapshot["control"]["enabled"])
+        self.assertEqual(snapshot["watchdog"]["output_stall_resets"], 0)
+
+    def test_kernel_abort_line_detection(self) -> None:
+        self.assertTrue(
+            VT13Stream._is_kernel_abort_line(
+                "meson-vdec ... HEVC_LCU_CHECK status=0xf poc=5 idx=1692"
+            )
+        )
+        self.assertTrue(
+            VT13Stream._is_kernel_abort_line("meson-vdec ... Aborting decoding session!")
+        )
+        self.assertFalse(VT13Stream._is_kernel_abort_line("HEVC_REG status=0x8"))
+
+    def test_kernel_abort_triggers_immediate_recovery(self) -> None:
+        stream, control = self._stream()
+        stream._source_open = True
+        stream._last_data_at = time.monotonic()
+        stream.decoder.needs_keyframe = False
+        stream._kernel_abort_event.set()
+        stream._check_kernel_abort()
+        self.assertIn("discontinuity", control.reasons)
+        self.assertTrue(stream.decoder.needs_keyframe)
 
 
 class RecoveryControllerTests(unittest.TestCase):

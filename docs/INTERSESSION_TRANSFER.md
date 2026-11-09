@@ -1,6 +1,19 @@
 # Intersession Transfer: VT13 / CM311
 
-Status: 2026-11-08 20:31 HKT
+Status: 2026-11-09 21:04 HKT — run 11 added kernel-abort fast recovery
+(`journalctl -k -f` → reset + I-frame request). Median recovery is **116 ms**
+(60–303 ms) with 0 watchdog waits, but the abort rate rose to **33/min** and
+only 166 frames/60 s were produced; each requested IDR dies after a few frames.
+That makes the requested IDR/link damage — not recovery latency — the limiting
+factor. Hardware clean-sample throughput measured 38.7 fps for 1080p raw output
+(no 200 fps reproduced; CPU idle is expected). Display filters keep the window
+open and suppress green/grey. Next: a no-request control run to measure natural
+abort rate, RF/link mitigation, and POC/missing-AU analysis. Earlier: software
+decode ruled out on CM311; runs 5–10; consolidated
+progress snapshot in `docs/PROGRESS_20261109.md` (verified capabilities,
+deployed hashes, P0 root cause: upstream stream damage → firmware 0xf session
+death → IRAP starvation; evidence index, backups, next tracks A/B/C/D).
+Nothing committed (user instruction).
 
 Scope of this entry: documentation, read-only inventory, source-authority
 decision, experimental-code diff audit, and offline V4L2 hardware decode,
@@ -164,13 +177,19 @@ Documentation and repository changes made in this session:
 | V07 | Custom FFmpeg hardware decode | 2026-11-08 `-fps_mode passthrough`: clean 30 frames RC=0, 29/30; `no_sei` POC21 `0xf` RC=134, 14-frame prefix all matching; `fresh_45_to_82` POC50 `0xf` RC=134, 32-frame prefix all matching; `pad_1024` 38 frames RC=0, 36/38; EOF `aud` same-window 3x all RC=137/19 frames and identical (cross-window 22/18/19), `eos` 20 frames RC=134, `zeros` 27 frames 26/27. 20:25-20:31 benchmark: clean HW 30/1.212 s vs SW 30/1.621 s; pad 1920x1080 HW 38/1.585 s vs SW 38/2.295 s; short-sample, not steady-state | Explain/fix `0xf`, padding mismatch, and EOF drain; explain `aud` timeout-window count; add more real samples; run long-duration FPS/CPU/RSS/temperature/latency tests |
 | V08 | Kernel module/VDEC | Source module `ca46...` loaded after R3; HEVC advertised; 2026-11-08 dmesg shows `status=0x8` and `status=0xf` (POC21 for `no_sei`, POC50 for `fresh`); `pad` shows `0x8` plus two missing-reference substitutions; EOF drain remains problematic | `uname -r`, `lsmod`, vermagic, relevant `dmesg`, `status=0x8/0xf`; explain EOF state machine |
 | V09 | Source Change/POC50/EOF | 2026-11-08 expanded matrix: EOF SW 27 frames RC=0 and identical; HW `aud`/`eos` drain failed, `zeros` 26/27; `pad_1024` RC=0 but 36/38 (first mismatch index 36); `aud` same-window 3x was 19 frames and identical, cross-window counts 22/18/19 | Explain/fix EOF drain/flush and `0xf`; explain timeout-window frame-count variation; validate padding content differences |
-| V10 | Live wireless end-to-end | Not started; blocked by V14; current Python pipeline uses software PyAV `hevc` | `AGENTS.md` §6 handoff: READY first, then human opens wireless link; confirm hardware decode integration |
+| V10 | Live wireless end-to-end | **First live smoke done 2026-11-09 16:12 (R2 approved)**: 43 correct frames via venv v4l2m2m, clean bounded exit; IRAP only at link establishment (3/90 s, user observation confirmed); live `0xf` at POC24 → reset → ~35 s IRAP-starvation freeze; 117 USB stall recoveries + 33.3 s gap (wireless-vs-USB attribution unproven); HDMI not used (headless) | Stable-link throughput run; stall attribution; recovery-policy experiment (continue-without-reset vs WAIT_IDR); HDMI R2; raw capture offline analysis |
 | V11 | Performance/latency targets | 30–50 FPS and ~1024×576 remain unconfirmed; short-sample benchmark hardware about 24 fps wall, software about 16-18 fps wall; not steady-state | User acceptance criteria plus CM311 long-run CPU/RSS/temperature/latency evidence |
 | V12 | Cross-machine sync | Golden and parameter-set data match; source/docs not yet synced | Post-copy SHA256 verification and an updated ledger |
 | V13 | Remote test/PyAV compatibility | 49/50 pass; PyAV 11.0.0 exposes `OUTPUT_CORRUPT`, while the test expects lowercase `output_corrupt` | Fix the compatibility test or pin PyAV; rerun all tests and record RC |
-| V14 | USB receiver enumeration | 2026-11-08 19:54 HKT `doctor` RC=1; `lsusb` has no `2ca3:1020`; only root hub and SG Flash are present | Connect/enable the receiver; `doctor` RC=0; `lsusb -d 2ca3:1020`; usbfs access |
-| V15 | Verified live launcher | `.codex_runs/live_capture_verified.sh` is missing | Create a launcher using the real CLI, pass `bash -n`, emit READY evidence, and provide a bounded run/stop path |
-| V16 | Live pipeline hardware decode integration | `vt13_video/decoder.py` uses PyAV `hevc` software decode, not `hevc_v4l2m2m`; hardware decode exists only through the custom FFmpeg CLI; benchmark shows hardware faster on short samples | Explicitly use V4L2 M2M in the live/replay path; verify runtime logs, CPU/FPS/latency, and frame content |
+| V14 | USB receiver enumeration | **Satisfied 2026-11-09 16:05 HKT**: user connected receiver; `lsusb` `2ca3:1020 DJI C5`; `doctor` RC=0; usbfs accessible | Re-check immediately before the live run |
+| V15 | Verified live launcher | **Created 2026-11-09**: `~/mobile_vt/.codex_runs/live_capture_verified.sh`, bash -n OK, SHA256 `c254b631...`; verified CLI, READY=`USB source open`, bounded 90 s, pid/log/raw/stats in DJI_RUN_DIR | Execute under R2 approval; confirm READY evidence in the real run |
+| V16 | Live pipeline hardware decode integration | **CM311-verified via PyAV-native route (2026-11-09)**: PyAV 11.0.0 exposes `hevc_v4l2m2m`; raw clean sample SW/HW 30 frames, YUV MD5 29/30 (last frame differs); full-pipeline golden replay HW 80/105 frames — 1832 section 8/8 and 1920 section 71/72 YUV-identical; source change causes EIO×3 → reset → IRAP resync losing 25 frames, automatic recovery, no hang (reproduced twice). BGR-layer hashes differ systematically (swscale NV12→BGR vs YUV420P→BGR rounding; mean 0.44/255) — acceptance must compare YUV. Transient `capture POLLERR` on first open after an aborted session; a later fresh open succeeded. PC opt-in config change still uncommitted | Decide source-change mitigation: tolerate IRAP-resync gap vs rebuild PyAV against patched FFmpeg (Copy-Out) vs FFmpeg-subprocess backend; then long-run FPS/CPU/RSS/temperature/latency; last-frame EOF difference still open (V09) |
+| V17 | Agent non-interactive SSH auth to CM311 | **Unblocked 2026-11-09 ~13:29 HKT via user-authorized askpass** (documented `SSH_ASKPASS_REQUIRE=force` pattern; password extracted from `docs/REMOTE_MACHINE_USAGE.md` into env at runtime, never echoed; helper in `.codex_tmp/`). Key auth still not installed; `BatchMode=yes` probes at 12:03/12:20/12:26 were RC=255 | Recommended hygiene: human runs `ssh-copy-id -i ~/.ssh/id_ed25519.pub billieguo@10.42.0.11` once and rotates the plaintext password out of the repo; askpass authorization was for this test window only |
+| V18 | On-demand IRAP (DUML I-frame request) | **Hardware-verified 2026-11-09**: run 5 10/10 requests → IRAP in 37–162 ms; run 6 35 requests/34 IRAP starts; on-connect request decoded in 0.2 s with the VT already on. Integrated in the pipeline (`control.enabled`), pairing poll 1 Hz | Closed for recovery; re-verify the same latency in 1832×1032 mode |
+| V19 | Capture layer A/B (PyUSB vs `rmrx dump`) | 2026-11-09: static aarch64 `rmrx` built (SHA256 `b05a5fbe...`); `capture_pyusb.py`, `timestamp_stdin.py`, `summarize_capture.py`, `live_capture_run5.sh` staged and syntax-checked. **Not run live** | CM311: same link, sequential 60 s runs; compare bytes/AU, gaps ≥500 ms, CPU/RSS, dmesg stalls; confirm nusb works on aarch64 |
+| V20 | 1080p `0xf` cadence | Run 5: 11/107 s; run 6: 29/150 s; run 7: 19/90 s; run 10: 14/60 s; run 11: 33/60 s; POC 5/7 with missing references. Run 4 at 1832×1032: 1/90 s. Display filters + fast kernel-abort recovery added; freeze time now ~0.1 s but abort rate dominates | RF/link mitigation; offline POC/missing-AU comparison of run 11 vs run 4 to separate packet loss from firmware |
+| V21 | Software decode viability | Runs 8/9: 0 `0xf`, 0 resets, but ~3 cores, 1.8–2 Mbps read, grey concealment dominates; user confirmed unusable. `convert_bgr=false` only slightly helps | Not viable on CM311 at 1080p60; keep as diagnostic contrast only |
+| V22 | Requested IDR vs `0xf` | Run 11 recovers in 116 ms but abort rate rose to 33/60 s; each requested IDR dies after a few frames. Run 4 had 1 `0xf`/90 s without requests. Suspect large IDR bursts on a weak link or an incomplete requested GOP | No-request control run (disable `iframe_on_recovery`) to measure natural abort rate; POC/missing-AU trace after a requested IDR; RF mitigation |
 
 ## Data manifest
 
@@ -237,9 +256,11 @@ The clean sample has now been re-run with `-fps_mode passthrough`; `no_sei.h265`
 `fresh_45_to_82.h265`, `pad_1024.h265`, and the EOF variants were tested with
 `timeout -k`. The clean last-frame difference, POC21/POC50 `0xf` aborts, padding
 content differences, and EOF drain remain unresolved. The test suite is a
-regression gate, not hardware-decode acceptance. Next: choose EOF
-instrumentation or a CLI drain-policy change. PyAV compatibility remains a
-sidecar; live streaming and HDMI remain later R2 work.
+regression gate, not hardware-decode acceptance. V16 now has a PC-side opt-in
+`hevc_v4l2m2m` config path (54 local tests pass), but CM311-side acceptance is
+blocked by V17 key auth; EOF instrumentation or a CLI drain-policy change
+remains the parallel open track. PyAV compatibility (V13) remains a sidecar;
+live streaming and HDMI remain later R2 work.
 
 For any fetched copy or analysis artifact, create a step-specific directory under
 `.codex_tmp/` in this repository and record it in the change log.
@@ -258,6 +279,1271 @@ For any fetched copy or analysis artifact, create a step-specific directory unde
   `~/mobile_vt` as a Git repository on CM311.
 
 ## Change log
+
+### 2026-11-09 22:00-22:05 HKT — duplicate ffplay window on resolution change fixed (run 18)
+
+- User observed two display windows. Run 17's log shows two
+  `ffplay display started` lines: 1832×1032 at 22:00:47 and 1920×1080 at
+  22:00:49. `_ensure_display` only closed the old display when the size was
+  unchanged and the process had exited; a resolution change spawned a new
+  ffplay **without closing the old one**, leaving the 1832 window on screen.
+- Fix: `_ensure_display` now calls `_close_display()` whenever the size
+  differs or the old process is dead, then starts the new display;
+  `_close_display` logs `ffplay display closed`. 81/81 tests pass.
+- Verification run 18 (`dji_20261109_220409`, 45 s, 1920 only): one
+  `ffplay display started` + one `ffplay display closed`; no ffplay process
+  remains afterward. A run with a real 1832→1080 switch will now show
+  start/close/start (one window at a time). `pgrep -fc ffplay` can report 2
+  because the tmux shell command contains `DJI_DISPLAY=ffplay`; use
+  `ps -eo cmd | grep '[f]fplay'` for the real count.
+- Deployed `ffmpeg_pipe.py` `871af9b2...`; backup `backup_run18_*`. No commit.
+
+### 2026-11-09 22:00-22:01 HKT — no-request control run (run 17): requests are not the trigger
+
+- User re-enabled the VT link and requested the no-recovery-request control.
+  Run `dji_20261109_220040` (60 s): `iframe_on_recovery=false`,
+  `iframe_on_connect=true`, `stall_restart_s=0`, release Copy-Out,
+  kernel-abort watch, `convert_bgr=false`, ffplay.
+- Result: **1 I-frame request, 30 kernel aborts, 31 IRAPs, 273 frames,
+  45.2 MB USB, 0 USB errors/timeouts**. The abort rate without recovery
+  requests (30/60 s) equals the rates with requests (run 15: 33/60 s,
+  run 14: 31/60 s).
+- Conclusion: the requested IDRs are **not** the cause of the `0xf`; the
+  earlier correlation was confounded by the stream/link state. In this state
+  the source itself sends an IRAP about every 2 s, and each IRAP's GOP dies
+  after a few frames. The root remains the damaged 1080p stream/link plus the
+  meson-vdec firmware abort. I-frame requests remain useful for fast
+  startup/recovery but do not change the abort rate.
+- Next: RF/link investigation (run 2 decoded clean 1080p60 at 1.5 m with
+  obstruction, while the current 0.5 m setup is worse), 1832×1032 mode, and
+  the P0 firmware/driver root cause. No commit.
+
+### 2026-11-09 21:48-21:50 HKT — partial-green frame filter (run 15)
+
+- User reported bottom-half green flashes in run 14. Cause: after a
+  `0xf`/POLLERR the Copy-Out path copies a **partially written** frame whose
+  bottom half is zeroed (Y=0, U=V=0); the old full-frame green detector
+  missed it because the frame mean was not green.
+- Fix: `_looks_like_partial_green` samples the NV12 planes and drops a frame
+  when more than 20% of both Y and UV are near zero; the display holds the
+  last complete frame. New counter `display_partial_green_dropped`.
+  81/81 tests pass.
+- Run 15 (`dji_20261109_214849`): release Copy-Out (no no-copy env),
+  `stall_restart_s=2.0`, kernel watch, `convert_bgr=false`, ffplay, 60 s.
+  Result: **195 frames, 33 aborts, 1582 POLLERR, 23 green + 13 partial-green
+  frames dropped, 0 watchdog resets**. Green flashes are filtered; the
+  `0xf`/POLLERR freeze remains.
+- Deployed `ffmpeg_pipe.py` `2d99b0a0...`; backup `backup_run15_*`. No commit.
+
+### 2026-11-09 21:45-21:46 HKT — release Copy-Out live A/B (run 14)
+
+- User requested the release Copy-Out comparison. Run `dji_20261109_214510`
+  (21:45:10-21:46:16, 60 s): `ffmpeg_path=~/ffmpeg-6.1.1-release/ffmpeg`,
+  **no** `FFMPEG_V4L2_NO_COPY` (verified via tmux and `/proc/PID/environ`),
+  `stall_restart_s=2.0`, `kernel_abort_watch=true`, `convert_bgr=false`,
+  ffplay 1024×576. Result: **258 frames, 31 kernel aborts, 1507
+  `output POLLERR`, 0 watchdog resets, USB 47.1 MB/0 errors**.
+- Copy-Out recovers and yields frames, but does **not** eliminate POLLERR;
+  the live picture remains limited by the 0xf cadence (~6–8 frames per
+  requested IDR). Run 13 no-copy had 219 frames vs run 14 Copy-Out 258;
+  the difference does not change the conclusion that `0xf`/link damage is
+  the primary limiter. The release Copy-Out binary is a cleaner live
+  candidate (no debug logs), selected via `DJI_FFMPEG_PATH`; the launcher
+  default remains the custom binary. No commit.
+
+### 2026-11-09 21:25-21:38 HKT — release patched build: 249 fps no-copy, but Copy-Out required live
+
+- Built the patched FFmpeg in release mode (`--disable-debug`, `-O3`,
+  minimal HEVC/v4l2m2m/nut/rawvideo components). With Copy-Out it still runs
+  **45 fps**; adding an env-gated bypass (`FFMPEG_V4L2_NO_COPY=1`) skips the
+  per-frame copy and reaches **1127 frames / 4.516 s = 249 fps**, matching
+  the system build (221 fps).
+- However, no-copy cannot survive live: run 13 (release no-copy, kernel-abort
+  watch, 2 s watchdog, 60 s) produced 219 frames, 34 kernel aborts, **1503
+  `output POLLERR`** and 0 watchdog resets. Each requested IDR decodes about
+  6 frames, then `0xf` → POLLERR; no-copy never recovers. Copy-Out releases
+  the CAPTURE references and is what allows recovery, at a 249→45 fps cost.
+- Conclusion: the 210 fps is a real **offline no-copy** figure, but it does
+  not translate to the live damaged stream. The live limiter is the `0xf`
+  cadence per requested IDR (~6 frames), not decoder throughput. The working
+  live path remains the Copy-Out build (release copy is cleaner than the
+  custom debug build); smoothing requires fixing the `0xf`/link or returning
+  to 1832×1032, not more decoder optimization.
+- Release binary: `~/ffmpeg-6.1.1-release/ffmpeg`, SHA256 `1ed2b711...`;
+  `FFMPEG_V4L2_NO_COPY=1` selects no-copy (offline/clean-stream only), unset
+  selects Copy-Out (live recovery, 45 fps). No commit.
+
+### 2026-11-09 21:09-21:19 HKT — 210 fps explained: custom debug build regression; release build started
+
+- User supplied the original Nov 5 command/log (`~/vdec_hevc_hw_test.log`):
+  20 MB `idr_test/vt13_idr_02.h265`, 1127 frames, **fps 210–222**, 0 decode
+  errors. Reproduced today with `/usr/bin/ffmpeg` (release): 1127 frames in
+  5.1 s = **221 fps**. The custom `~/ffmpeg-6.1.1-v4l2/ffmpeg` and its shared
+  build are both `--enable-debug=2` and only reach **45 fps**. The 210 fps is
+  real; the later debug/diagnostic build is the regression.
+- Live test with the system release binary (run 12, `DJI_FFMPEG_PATH=/usr/bin/ffmpeg`)
+  fails after the first kernel `0xf`: repeated `output POLLERR` and
+  `Error submitting packet to decoder: EIO`, 7 frames / 28 resets in 60 s.
+  The system v4l2m2m wrapper does not recover; the custom patched build does.
+  This is why the user saw one starting frame then a freeze; the system binary
+  is suitable only for offline benchmarks.
+- Started a release build of the patched FFmpeg in
+  `~/ffmpeg-6.1.1-release` (`--disable-debug`, minimal hevc/v4l2m2m/nut/
+  rawvideo components), PID 104978, log
+  `~/ffmpeg-6.1.1-release/buildlog/build.log`. Next: benchmark the 20 MB file
+  (target ≥100 fps), then live test with `DJI_FFMPEG_PATH` pointing at the new
+  binary. The current launcher default remains the working custom binary.
+- Hypothesis: the debug build's 45 fps caused USB backpressure/reference loss
+  and amplified the `0xf`; the release patched build should reduce both the
+  decode overhead and the abort rate. The 0xf/link remains the primary issue.
+- No commit.
+
+### 2026-11-09 20:58-21:04 HKT — hardware throughput benchmark + kernel-abort fast recovery
+
+- CPU observation: hardware decode usually uses <50% of the 4 cores because the
+  VDEC does the work; the idle CPU cannot help while the decoder session is
+  dead/restarting. Software decode saturates all cores and is not viable.
+- Offline benchmark: 30-frame 1832×1032 `clean_1832x1032.h265` with
+  `hevc_v4l2m2m -f null` took 1.04 s (≈29 fps wall including init); the
+  498-frame 1080p60 `run2_segB_bootstrapped.h265` decoded to raw NV12 at
+  **38.7 fps** (12.85 s, 15.1 s CPU). `-f null` hangs at EOF drain (known
+  issue), so its short-run `fps` line is not a valid steady-state metric.
+  The historical >200 fps figure was not reproduced; it is most likely a
+  short-burst/progress-line artifact or a different output path, not an
+  end-to-end rate.
+- Added `recovery.kernel_abort_watch`: a background thread watches
+  `journalctl -k -f` for `HEVC_LCU_CHECK status=0xf` / `Aborting decoding
+  session` and triggers an immediate decoder reset + I-frame request instead
+  of waiting for the 2 s watchdog. Run 11 (60 s): 33 kernel aborts, **0
+  watchdog resets**, median abort→IRAP **116 ms** (60–303 ms), 34 IRAPs, 166
+  frames, USB 49.5 MB, 0 errors.
+- Key finding: faster recovery did not raise the frame count because the abort
+  rate doubled (run 10: 14/60 s → run 11: 33/60 s). Each requested IDR dies
+  after a few frames; run 4 with no requests had 1 `0xf`/90 s. This strongly
+  associates the requested IDRs (or the large IDR bursts on a weak link) with
+  the aborts. Next: a no-request control run, RF mitigation, and a POC/
+  missing-AU comparison after a requested IDR.
+- Deployed hashes: config `f47c7d9b...`, pipeline `c700b8cd...`, launcher
+  `673dd0f8...` (ffmpeg_pipe `8e6c4411...` unchanged). Backups:
+  `backup_run11_*`. No commit.
+
+### 2026-11-09 20:46-20:55 HKT — display filters + software/hardware decode A/B
+
+- User feedback on runs 5/6: ~5 s delay, frequent green curtain, window
+  closing/restarting. Root cause was twofold: every watchdog reset killed
+  ffplay, and the display tap wrote corrupt/green frames synchronously.
+- Display fixes deployed: async drop-oldest display queue (decode reader no
+  longer blocks on ffplay), skip `is_corrupt`, zeroed/green (Y≈0, U=V≈0) and
+  uniform grey (Y≈128, low variance) frames, ffplay low-latency flags, and
+  `decoder.convert_bgr` to skip BGR conversion when only the NV12 display is
+  needed.
+- Hardware runs 7/10: display starts = 1, green frames dropped (22 in 90 s;
+  14 in 60 s), window stays open; 19 and 14 `0xf` aborts respectively. Frames
+  still freeze for the watchdog interval.
+- Software A/B (runs 8/9): 0 `0xf`, 0 resets, display starts = 1, but
+  ffmpeg+Python+ffplay ≈3 cores; only 1.8–2 Mbps of the 1080p stream was read
+  (USB backpressure), POC gaps led to uniform-grey concealment, and the user
+  confirmed the picture was mostly grey. `convert_bgr=false` cut Python CPU
+  from 131% to 97% but did not make it viable. **Software decode ruled out on
+  CM311.**
+- Conclusion: keep hardware decode + display filters + 2 s watchdog. The
+  remaining `0xf` cadence is upstream stream damage/firmware at 1920×1080;
+  1832×1032 was much more stable. Resolution cannot be controlled by the
+  pipeline/user. Next: RF/link mitigation and an offline POC/missing-AU
+  comparison of run 10 vs run 4 to separate packet loss from a firmware bug.
+- Deployed hashes: config `93b3d6b5...`, pipeline `a14b3aa2...`, ffmpeg_pipe
+  `8e6c4411...`, launcher `ae7f3f42...`. Backups: `backup_run7/8/9/10_*`.
+  No commit.
+
+### 2026-11-09 20:31-20:41 HKT — live runs 5/6: I-frame request hardware-verified; display/restart fixes
+
+- Run 5 (`dji_20261109_203158`, 20:31:58-20:34:34, 150 s): receiver enumerated,
+  `/dev/ttyACM0` rw, control link opened, VT enabled by the user at ~20:32:37.
+  **10/10 watchdog I-frame requests were followed by an IRAP within 37–162 ms**
+  — the transmitter honors the request on demand. The run also hit 11 kernel
+  `HEVC_LCU_CHECK status=0xf` aborts (POC 5/7, 1920×1080) → silent decoder
+  death → 5 s watchdog → request → IRAP → resume. Each reset closed and
+  reopened ffplay, which the user saw as continuous window restarts and lag.
+  VT-off period produced 56 request messages (0.5 s throttle only). Run 5:
+  152 frames, 10.8 fps, 64 requests, 12 IRAP starts, 10 display starts,
+  raw 99,967,789 B SHA256 `ee2f3b370ada58ff66e6bd0d6becb846039c352d7163a78fc272a0a8c993830e`.
+- Fixes (PC 76/76 tests, remote golden replay 105 frames): `FfmpegPipeDecoder`
+  keeps ffplay alive across `reset()`, defers the next ffmpeg spawn until a
+  usable IRAP, and keeps the display across SPS restarts; `_request_iframe`
+  only sends while data is flowing and is throttled by `_next_iframe_at`;
+  `_mark_discontinuity` no longer resets that throttle.
+- Run 6 (`dji_20261109_203830`, 20:38:30-20:41:00, 150 s,
+  `DJI_STALL_RESTART_S=2.0`): **display starts = 1** (no window close/reopen
+  across 34 resets), 565 frames, 13.14 fps, 34 watchdog resets, 35 requests /
+  34 IRAP starts, 149 pairing queries, USB 0 errors/timeouts, raw
+  127,890,043 B SHA256
+  `ed1329e80842d6e4df6f61139d05ed45c7840b181ea80b1b4c481bfb73c67769`.
+  With the VT already on, the on-connect request started decoding in **0.2 s**
+  (20:38:36.519 request → 20:38:36.735 IRAP).
+- Remaining: 29 `0xf` aborts in run 6, all at 1920×1080; each requested IRAP
+  yields only a few decodable frames before the firmware aborts. Run 4 at
+  1832×1032 had 1 `0xf` in 90 s. The watchdog/request loop now recovers, but
+  the 1080p cadence limits smoothness to ~2 s freeze every ~5 s.
+- Backups: `~/mobile_vt/.codex_tmp/backup_run5_20261109_203028/`,
+  `~/mobile_vt/.codex_tmp/backup_run6_20261109_203755/`.
+  Installed hashes: pipeline `a99d6a81...`, ffmpeg_pipe `756fe77e...`,
+  control `cc0cbcdc...`, config `5b42c925...`. No commit.
+- Next A/B: user locks the transmitter to 1832×1032@30, rerun with the same
+  control+watchdog; if `0xf` drops sharply, mode is confirmed as the driver.
+  Otherwise trace the POC/reference chain after a requested IDR in the raw
+  capture.
+
+### 2026-11-09 20:15-20:45 HKT — control plane + recovery architecture integrated; capture A/B staged
+
+- User instruction: keep the working Python pipeline; adapt only rm-receiver's
+  control plane and recovery architecture, test the capture layer, absorb the
+  protocol findings, and follow the recommended adoption order.
+- Backup before edits: `.codex_tmp/backup_before_control_20261109_201531`
+  (13 files, `SHA256SUMS` verified).
+- Added `vt13_video/control.py` (SHA256
+  `cc0cbcdc93a58e408d4609a608e623d34654be65b3b9edeeb5370ee375b2b525`):
+  DUML v1 encode/decode, CRC-8/16, sysfs control-port discovery (interface 2),
+  `ControlLink` reader/writer thread with reconnect, the exact official
+  I-frame request, 1 Hz pairing query, and downlink frame decode/log. Stdlib
+  only.
+- Config: new `[control]` section (`enabled`, `port`, `iframe_on_connect`,
+  `iframe_on_recovery`, `iframe_retry_s`, `min_iframe_interval_s`,
+  `pairing_poll_s`) and `decoder.stall_restart_s` (default 0 = off).
+- Recovery integration: request an I-frame on control-port connect, on
+  discontinuity, after a decoder reset, and every 2 s while waiting for a
+  keyframe; optional output-stall watchdog resets the decoder when VCL access
+  units keep arriving but no frames are produced for N seconds, then requests
+  an I-frame (targets the silent 0xf session death).
+- Tests: 8 control tests (real DUML frame + PTY), 2 config tests, 4 pipeline
+  tests; full suite **73/73 in 7.36 s**. Golden replay with a PTY control
+  link: 105 frames, 1 on-connect I-frame request, 4 pairing queries, 0
+  watchdog resets — no regression.
+- Capture layer: static aarch64-musl `rmrx` built via rustup target
+  `aarch64-unknown-linux-musl` + `rust-lld` (3,281,112 B, SHA256
+  `b05a5fbe7e13e1b3e0655827e30e939f30bef16a0eaa1006530c6353a8989fae`,
+  ELF64 AArch64 statically linked). Staged scripts: `capture_pyusb.py`
+  (`3a75902f...`), `timestamp_stdin.py` (`47941799...`),
+  `summarize_capture.py` (`aeb7a81b...`), `live_capture_run5.sh`
+  (`132b3444...`, `bash -n` OK). **Not run live**: no receiver on the PC and
+  no CM311 access this session.
+- Cognitive gains folded into README: EP 0x81 is raw Annex-B (no private video
+  framing); IRAP scarcity is by design (the official client requests on
+  demand); `ttyACM0` is control and `ttyACM1` is debug.
+- Risks: the I-frame request's live effect is unverified; the watchdog may
+  false-positive under heavy corruption (default off); control writes are
+  best-effort; the musl binary's CM311 runtime is unverified; run 5 is not
+  deployed. No commit.
+- Next: deploy run 5 (control + watchdog) to CM311, do a live run, then the
+  capture A/B on the same link.
+
+### 2026-11-09 19:05-19:18 HKT — rm-receiver (Rust) evaluated offline: DUML I-frame request is the missing recovery primitive
+
+- Scope: PC-only evaluation of `/home/billieguo/billie_guo/src/rm/rm-receiver`
+  (HEAD `10e381b`), reverse-engineered from RoboMaster Client 12.0.0.213 for the
+  same USB `2ca3:1020` receiver. No receiver attached to the PC; no CM311
+  access; no live USB/HDMI/wireless run.
+- Build: HEAD fails `cargo test --workspace` because the workspace dependency
+  `rm-receiver` does not declare `default-features = false` while
+  `rm-receiver-cli` overrides it. One-line fix applied in the root
+  `Cargo.toml` (uncommitted). With FFmpeg 9.0.2 from conda env `colmap`,
+  `/usr/lib/llvm-14/lib` libclang and the GCC-12 include path for bindgen:
+  the full workspace passes 37 tests (proto 28, receiver 2, decode 3, doctest
+  1, plus integration cases), clippy is clean, and `rm-receiver-viewer` builds. System FFmpeg 4.4 is too old for `decode`.
+- Codec equivalence on the run-4 capture (`raw_ep81.bin`, SHA256
+  `b5b5339f...`): Rust `AccessUnitSplitter` and Python
+  `AccessUnitAssembler` both yield 2147 AUs / 2 IRAP AUs / 1 PS-bearing AU and
+  byte-identical output (41,417,070 bytes, SHA256
+  `ceef970ea1b4908ad19c41bd46e6558a16c2063c86c1c3b3af39104aafad9f08`);
+  ffprobe reports 2148 packets / 2 keyframes. Output is chunk-size invariant.
+  On the run-3 capture the only delta is one invalid 5-byte pseudo-NAL that
+  Python rejects and Rust keeps (no decode impact).
+- DUML decoder on the real control-port captures: 1,421 frames from
+  `cold_start` (431 non-`Other`) and 552 from `linked`, 0 dropped bytes;
+  command addresses/types decode as expected.
+- Control logic exercised without hardware (PTY as `--port`): `rmrx` emits
+  exactly `55170438aa0e0000400101000000000024000000248f06` (request I-frame,
+  DUML 1/1 → 14/0) on control-port open and the pairing query
+  `550f04a2aa0e00004009550002e742` at 1 Hz.
+- Architecture: keyframe-gated AUs, I-frame request on queue overflow, and
+  decode error → reset → request I-frame in the viewer. Caveat: FFmpeg
+  reports missing parameter sets as log-only, not `DecodeError`; the
+  bootstrapped 1080p60 segment decoded 0 frames, and the run-4 capture decoded
+  42 frames only from the PS-bearing IRAP at AU 2105. Parameter-set priming
+  remains required; this repo does not replace it.
+- New probe `.codex_tmp/rmrx_probe/vt_iframe_probe.py` (SHA256
+  `d4b5ab428a9c0acc900ebeba1a6df7a799aaf8fa9d8933b8fc6a4e3163eac69b`),
+  dependency-free DUML encoder; dry-run and PTY test emitted the exact request
+  3/3. Intended use: run alongside the existing CM311 pipeline (which never
+  opens `ttyACM0`) to test whether the transmitter honors an on-demand I-frame
+  request. Candidate fix for 0xf session death + IRAP starvation, unverified on
+  hardware.
+- No tracked `mobile_vt` changes; the rm-receiver one-line fix is uncommitted.
+  No commit. Next: CM311 live test — start the pipeline, wait for READY, run
+  the probe (`--repeat 12 --interval 5`), and count new IRAPs in
+  `capture.log`/dmesg; if honored, integrate into the watchdog recovery path.
+
+### 2026-11-09 18:54-19:05 HKT — recovery experiments: primary killer is 0xf session death + IRAP starvation
+
+- User smoothness verdict (run 4): first segment UNUSABLE (freeze/corrupt),
+  second segment choppy-but-watchable. Effective live display ≈1.2 fps wall.
+- Recovery A/B on run-4 recording: first attempt invalid — discovered
+  **FileSource.realtime defaults False and CLI replay never paces** (times
+  file only shapes chunks/gap metadata); "timed" replays were full-speed
+  floods. Redone with realtime=True via stdin scripts:
+  - reset policy (reset_on_gap=true, max_err=3): 84 frames/90.3 s, 2048/2144
+    AUs skipped, 3 resets — reproduces live-like loss.
+  - continue policy (reset_on_gap=false, max_err=100000, concurrent
+    consumer, drop-oldest): **68 frames/88.7 s, 0 errors/resets/corrupt/
+    drops, 26 skipped** — same ~68 as without consumer fixes.
+- Diagnosis: 68 ≈ clean prefix before **POC70 `0xf` firmware abort**
+  (dmesg-confirmed in run 4). ffmpeg process stays alive but the decode
+  session is dead; ~2000 subsequent AUs swallowed until the second
+  (link-reestablishment) IRAP at t≈87 s. Reset policy is SECONDARY; primary
+  = firmware abort + establishment-only IRAP = decode halt until link
+  cycle. Matches live run-4 110-frame pattern.
+- Earlier "timed replay" conclusions corrected where they assumed pacing;
+  throughput capacity tests (gapless, full-speed) remain valid.
+- Options: (A) backend output-stall watchdog → restart ffmpeg + re-prime
+  params (mitigation; may show concealment artifacts; no IDR still limits
+  recovery); (B) P0 `0xf` driver/firmware root-cause track (kernel work);
+  (C) RF environment investigation (0.5 m still corrupt → interference/
+  transmitter health; user-side experiments); (D) accept + document.
+  Recommendation: A (quick mitigation) + C in parallel; B long-term.
+- Evidence: `recovery_rt_20261109_185610`, `recovery_continue_fixed_20261109_190011`
+  (remote; outputs in prep dir). No commit; no working-tree writes.
+
+### 2026-11-09 18:48-18:55 HKT — live run 4 (full chain, 0.5 m): 0 pipeline errors, 0xf absorbed
+
+- R2 approved; current setup ≈0.5 m (user confirmed run 3/current = 0.5 m;
+  run 2 was 1.5 m + person/laptop obstruction). Device's normal
+  1832→1080p startup behavior accepted as-is (no mode locking available;
+  this run stayed 1832 throughout). Launcher `live_capture_run4.sh`
+  (SHA256 `e5df70bc...`, bash -n both sides): ffmpeg-pipe backend +
+  display ffplay + DISPLAY/:0 defaults; priming `params_1832.h265`
+  (`64ecfdeb...`, hashes cross-verified vs run-2 seg1 params).
+- Run `dji_20261109_184856`: READY 18:49:02; user cycled wireless; first
+  IRAP 18:49:40 (37.3 s establishment gap), ffplay window 18:49:41 (+1.13 s,
+  consistent with measured startup); second segment IRAP 18:50:29 after
+  9.465 s gap (in-band params), window restarted 1832.
+- Results: **110 frames, 17.52 fps run-average (incl. 37.3/9.5/4.9 s gaps),
+  0 decoder errors, 0 corrupt**; 146 USB stall recoveries (0 failures);
+  61 live-queue drops (drop-oldest); **skipped AUs 25/2145 (1.2%) vs run-3
+  87%**; 2/2 IRAPs started immediately (priming + in-band).
+- dmesg: **1 firmware `0xf` abort at POC70** (idx=570/1914) — **absorbed by
+  ffmpeg CLI error tolerance; pipeline saw zero errors** (vs runs 1-3 where
+  EIO propagated → reset → IRAP starvation). Major robustness win of the
+  subprocess backend.
+- Evidence: `.codex_tmp/live_smoke_20261109_184856/` (raw 41,424,636 B
+  SHA256 `b5b5339f63ca206bb78a69a6321a98d36c3632c5706948eed6a3185cddd25662`
+  local==remote; capture.log, times/events, params_latest.h265 1832 config);
+  dmesg excerpt `dmesg_live_smoke4.txt`. Post-run: no process, device free.
+- User HDMI smoothness verdict pending (moving content this run; asked).
+- Conclusions: `verified` — full chain live at 0.5 m: receive→HW decode→
+  HDMI with 0 pipeline errors; 0xf no longer fatal; priming eliminates
+  param-missing stalls; startup ~1.1 s. `unverified` — subjective
+  smoothness (user), long-run stability, 1080p live switch (not triggered
+  this run), RF damage mode at 0.5 m (POC70 0xf indicates some corruption
+  still present close-range — obstruction not the sole cause).
+- No commit; no working-tree writes (launcher/params in .codex_runs/.codex_tmp).
+
+### 2026-11-09 19:00 HKT — user RF setup disclosure; attribution nuance corrected
+
+- User: run 3 and current setup ≈ **0.5 m**; run 2 ≈ **1.5 m with a person
+  and laptop-corner obstruction**. This CORRECTS the simple distance
+  attribution: run 2 (farther, obstructed) delivered 99.8% clean frames
+  (damage = gaps/disconnects), while run 3 (0.5 m) delivered CORRUPT frames
+  (POC chaos + 0xf at POC269). Two distinct failure modes; distance alone
+  does not explain them — likely link-adaptation behavior or time-varying
+  interference. Run 4 at 0.5 m with the new backend will discriminate:
+  corruption at close range rules out simple obstruction.
+- "Mode locking" explained to user: transmitter auto-switched
+  1832x1032@30 ↔ 1920x1080@60 mid-stream (run 1 t=53.8 s, run 2 ~39.7 s),
+  each switch with ~11 s outage + new VPS/SPS + IRAP; locking = fixing
+  output resolution/framerate in DJI app/device settings. Asked user which
+  device and whether the setting exists; backend already handles SPS-change
+  restarts if auto-switching remains.
+- Smoothness verdict still deferred to run 4 (moving content). No code
+  change; no commit.
+
+### 2026-11-09 18:50 HKT — display startup-delay analysis (user question)
+
+- User reported a long wait before the HDMI window appeared and stationary
+  content (smoothness unjudgeable; deferred to live run 4).
+- Root cause of the perceived ~2 min wait: the verification command ran the
+  111 s test suite BEFORE the display replay (verify dir created 18:30:41;
+  replay started 18:32:54). Command-ordering issue, not decoder latency;
+  future display tests run first.
+- Actual startup latency measured from `display_replay.log`: backend init
+  18:32:54.466 → source open +23 ms → first IRAP +41 ms → **first decoded
+  frame / ffplay launch +1.21 s** (v4l2m2m firmware init + DPB fill). Normal
+  for hardware decode; window follows immediately. Optional pre-spawn of
+  ffplay would shave a few hundred ms — not pursued.
+- Smoothness verdict deferred to live run 4 (moving content); user will
+  confirm RF setup first. No code change; no commit.
+
+### 2026-11-09 18:30-18:40 HKT — display sink deployed + verified: 21.55 fps integrated HDMI
+
+- R2 approved and executed: remote pre-backup
+  `~/mobile_vt/.codex_tmp/backup_display_remote_20261109_183007/` (4 files,
+  hashes recorded); staging `display_20261109_183007`; all pre/post hashes
+  verified (config `4d76e34a→b33c6b81`, ffmpeg_pipe `4889a2fc→7c31bbbe`,
+  test_config `2f57e7f4→f148d609`, test_ffmpeg_pipe `7867fc71→223ec850`);
+  pipeline.py untouched this round; config check passed.
+- R1 verification (evidence `display_verify_20261109_183041`, local copy +
+  manifests MATCH): suite 57 tests, only known V13 error; **integrated
+  display replay (segB_clean, backend ffmpeg-pipe + display ffplay on :0):
+  491 frames, 21.55 fps, 0 errors, display=ffplay active, pipe_dropped 0,
+  RC=0, no ffplay residual, device free**. Full pipeline overhead ~15% vs
+  the raw ffmpeg→ffplay chain (25.13 fps). User visual confirmation of the
+  VT13-Video window pending (asked).
+- Product display path now built into the pipeline: `decoder.display:
+  ffplay` (+ display_width/height, ffplay_path); operator sets DISPLAY/
+  XAUTHORITY; graceful disable on ffplay failure; resolution-change restart.
+- No commit. Rollback: cp back from backup_display_remote_20261109_183007.
+- Next: live run 4 (user will confirm RF info), recovery-policy experiment,
+  long-run stability; V13 one-line fix optional.
+
+### 2026-11-09 18:24-18:30 HKT — NV12 display sink integrated (PC): 59/59 tests
+
+- User order: integration first; live run 4 info later. Backup #3:
+  `/home/billieguo/billie_guo/src/rm/mobile_vt/.codex_tmp/backup_before_display_20261109_182449`
+  (manifest inside).
+- Implemented in `ffmpeg_pipe.py`: reader thread taps NV12 before cv2
+  conversion → ffplay rawvideo NV12 SDL window (`decoder.display: ffplay`,
+  `display_width/height` default 1024x576, `ffplay_path` optional; DISPLAY/
+  XAUTHORITY inherited from operator env). Lazy start on first frame;
+  restart on resolution change (with the ffmpeg process); broken pipe /
+  missing binary → graceful disable, decode continues; cleanup on
+  terminate/flush. `_pack_nv12` strips stride padding (unit-tested);
+  `_frame_to_bgr` refactored onto it. Config fields validated.
+- PC regression: **59/59 RC=0** (5.43 s), incl. golden pipe 105 frames
+  1832→1920, display-degrades-without-X (105 frames, 0 errors), NV12 pack
+  correctness. Evidence `.codex_tmp/display_integration_tests_20261109_182646/`
+  (unittest.log + changed_files.sha256).
+- R2 deployment package presented (config.py, ffmpeg_pipe.py, 2 test files;
+  pipeline.py unchanged this round); CM311 verification will replay segB
+  with display=ffplay on :0 for user visual confirmation + stats.
+- No commit.
+
+### 2026-11-09 18:18-18:30 HKT — NV12-direct HDMI retest: 25.1 fps; user confirmed video on first test
+
+- **User visually confirmed dynamic video on HDMI** (first BGR test) —
+  display path functionally established (V04 core evidence).
+- NV12-direct retest (R2 approved): custom ffmpeg HW decode → rawvideo NV12
+  pipe → ffplay `-pixel_format nv12` SDL window 1024x576 on :0. Result:
+  **498/498 frames displayed, 19.82 s, 25.13 fps** (vs 5.4 fps BGR path,
+  4.6×), ffmpeg RC=0, ffplay RC=0, clean exit, no residual, device free.
+  Evidence `~/mobile_vt/.codex_tmp/hdmi_nv12_20261109_181828/` (local copy
+  + manifest fetched).
+- Interpretation: ffplay NV12 overlay + Xorg rendering caps ~25 fps on this
+  box (decode free-run 33 fps); BGR→SDL conversion was the 5.4 fps
+  bottleneck. Product integration should tap NV12 before cv2 conversion
+  for the display sink (backend option), keeping cv2 BGR for recording/
+  processing consumers.
+- No commit; no working-tree writes (standalone scripts).
+- Next options: (1) integrate NV12 display sink into the pipeline/backend
+  (PC implementation + R2 deploy); (2) live run 4 with new backend +
+  priming (R2; RF setup questions still unanswered); (3) recovery-policy
+  offline experiment; (4) long-run stability/thermals.
+
+### 2026-11-09 18:15-18:25 HKT — HDMI display test executed (R2 approved): video on screen, ffplay BGR path slow
+
+- R2 approved via question; executed standalone stdin script (no tree
+  writes): segB_clean replay → ffmpeg-pipe HW decode → BGR frames → ffplay
+  rawvideo bgr24 1920x1080 window 1024x576 on DISPLAY=:0 (XAUTHORITY
+  ~/.Xauthority). Evidence `~/mobile_vt/.codex_tmp/hdmi_test_20261109_181557/`
+  (local copy fetched: stats.json, ffplay.log).
+- Results: **162 frames displayed / 30.01 s = 5.4 fps**, write_errors 0,
+  ffplay RC=0 clean exit, decoder 251 frames / 0 errors / 0 resets /
+  pipe_dropped 0; post-run no ffplay process, `/dev/video0` free.
+  Display-side backpressure throttled the pipeline (ffplay BGR→SDL texture
+  conversion on A53 is the new bottleneck; decode free-runs at 33 fps).
+- User visual confirmation of HDMI content pending (asked).
+- Next proposed: NV12-direct ffplay retest (SDL native NV12 overlay, skip
+  BGR conversion) — new R2 package after user confirms; also recovery-policy
+  offline experiment and live run 4 (RF questions still open).
+- No commit; no working-tree writes.
+
+### 2026-11-09 18:20 HKT — display stack probe (V04): X11 + ffplay is the minimal HDMI path
+
+- Read-only probe (`.codex_tmp/v16_cm311_prep_20261109_122603/display_stack_probe.txt`):
+  HDMI-A-1 **connected+enabled**; meson-drm card0 (lima card1 = GPU, not
+  display); `/dev/fb0` mesondrmfb 32bpp virtual 1920x2160; **Xorg running on
+  :0/tty7 via lightdm, billieguo session active**; `~/.Xauthority` readable;
+  `DISPLAY=:0 XAUTHORITY=~/.Xauthority xrandr` RC=0 — **X access verified**;
+  HDMI current mode **1024x600@59.82** (1920x1080@60 available); modetest/
+  kmscube absent; libdrm present; **system cv2 is headless (no GUI backend)
+  → cv2.imshow unusable**; **ffplay available** (system ffmpeg).
+- Minimal display path chosen: pipeline frames → rawvideo pipe → ffplay SDL
+  window on :0 (no installs, no tree changes; standalone test script).
+  cv2 GUI alternative would need pip opencv-python (not pursued).
+- V04 status: display stack now identified (X11/meson-drm/HDMI 1024x600);
+  actual video-on-HDMI evidence pending the R2 display test (package
+  presented). RF setup questions for live run 4 still unanswered by user.
+- No remote writes; no commit.
+
+### 2026-11-09 18:02-18:12 HKT — Plan 3 CM311 deployment + verification: 33.3 fps @1080p60
+
+- R2 approved and executed: staging `plan3_20261109_180206`, all pre/staging/
+  post hashes verified (config `3bf1229e→4d76e34a`; pipeline experimental
+  `85e57ea8` → factory-hunk merge `62382e56`, VT13_LOW_LATENCY_MS marker
+  preserved; ffmpeg_pipe.py `4889a2fc`; test_config `24d02c30→2f57e7f4`;
+  test_ffmpeg_pipe `7867fc71`). Config check passed on target.
+- R1 verification (device idle pre-checked; evidence
+  `~/mobile_vt/.codex_tmp/plan3_verify_20261109_180248/`, local copy fetched,
+  4 evidence files hash-matched):
+  - **Throughput: segB_clean (1080p60) via ffmpeg-pipe + custom HW binary:
+    497 frames, 33.32 fps, 0 errors, 0 pipe drops, RC=0 clean exit** —
+    vs 7.3 fps (cv2 PyAV path) / ~2 fps (to_ndarray). 30-50 fps target range
+    reached (stream is 60 fps; decode ceiling ~33 fps).
+  - Golden HW via pipe: 72 frames (= the 1920 section), 0 errors/0 resets;
+    dmesg confirms the expected POC8 `0xf` abort (1832 section lost to the
+    known P0 firmware issue); ffmpeg CLI error tolerance + reinit at the
+    1920 IDR recovered the rest without pipeline-level resets.
+  - Remote suite (venv): 54 tests, 53 pass, **only the known V13 error**
+    (`Flags.output_corrupt` lowercase on PyAV 11) — no new failures; the new
+    ffmpeg-pipe golden test passes on target.
+  - Post-run: no process, `/dev/video0` free.
+- Conclusions: `verified` — ffmpeg-pipe backend meets throughput target on
+  CM311 with correct clean-stream content (497/498; the 1 corrupt frame is
+  the stream's own); deployment hash-chain intact; rollback available from
+  backup tar. `unverified` — live-link behavior with the new backend (needs
+  R2 run 4), HDMI output, YUV hash comparison of the golden 72 frames
+  (count + prior 71/72 evidence inherited), long-run thermals/RSS.
+- No commit (user instruction). Remote working tree now carries: config.py
+  (backend fields), pipeline.py (factory merge), ffmpeg_pipe.py (new),
+  tests (new/updated) — all hash-recorded; prior backups cover rollback.
+- Next options: (1) live run 4 with ffmpeg-pipe + priming (R2; confirm RF
+  setup first); (2) HDMI display integration (R2); (3) recovery-policy
+  redesign (stall→continue-without-reset experiment); (4) trivial V13 test
+  compat fix; (5) long-run stability/thermal measurement.
+
+### 2026-11-09 17:46-18:05 HKT — Plan 3 PC implementation complete (ffmpeg-pipe backend)
+
+- User approved recommendation: FFmpeg-subprocess backend. Backup #2 before
+  implementation: `/home/billieguo/billie_guo/src/rm/mobile_vt/.codex_tmp/backup_before_plan3_20261109_174637`
+  (manifest.sha256 inside; PC source snapshot + uncommitted patch + HEAD).
+- Implemented `vt13_video/ffmpeg_pipe.py` (`FfmpegPipeDecoder`, subclasses
+  HevcDecoder reusing IRAP gating/error-reset): ffmpeg subprocess
+  (`-c:v <ffmpeg_codec> -f hevc -i pipe:0 ... -pix_fmt nv12 -c:v rawvideo
+  -flush_packets 1 -f nut pipe:1`), reader thread demuxes nut via PyAV
+  (correct per-frame dimensions), cv2 NV12→BGR conversion, bounded frame
+  queue (256, drop-oldest), stderr drain to logger, EOF drain 10 s guard
+  then kill (V09 workaround), version-aware `-fps_mode`/`-vsync`.
+- Config: `decoder.backend: pyav|ffmpeg-pipe` (default pyav),
+  `decoder.ffmpeg_path`, `decoder.ffmpeg_codec` (default hevc_v4l2m2m);
+  pipeline factory selects backend. Default behavior unchanged.
+- Key bug found and fixed during PC validation: the CLI raw-hevc demuxer
+  sets extradata, after which the decoder IGNORES mid-stream same-id SPS
+  updates (CLI stayed 1832x1032 on the golden while PyAV CodecContext —
+  no extradata — correctly produced 33x1832 + 72x1920, verified on CM311
+  with the same 6.1.1 library; nut packet sizes/framemd5 confirmed).
+  Fix: backend detects SPS payload hash change and gracefully restarts the
+  ffmpeg process (drain old frames ≤5 s, new process initializes from new
+  in-band params). Also sidesteps nut dynamic-header limitations.
+  Earlier reader bug (`au.au_index` AttributeError) fixed to `self._au_index`.
+- PC validation: **56/56 tests RC=0** (4.544 s), including new golden
+  ffmpeg-pipe test on system ffmpeg 4.4 SOFTWARE hevc: 105 frames,
+  1832x1032 → 1920x1080 via SPS restart, 0 errors. Evidence
+  `.codex_tmp/plan3_pc_tests_20261109_174910/` (logs + changed_files.sha256:
+  ffmpeg_pipe.py `4889a2fc...`, config.py `4d76e34a...`, pipeline.py
+  `c05d63db...`, test_ffmpeg_pipe.py `7867fc71...`, test_config.py
+  `2f57e7f4...`).
+- No commit (user instruction). CM311 deployment is R2 (working-tree
+  writes): package presented, awaiting approval. Remote pipeline.py is the
+  experimental version (`85e57ea8...`) — merge = apply ONLY the decoder
+  factory hunk, preserve async-USB/catch-up experiments; verify markers.
+- Next: on approval, staging sync (ffmpeg_pipe.py new; config.py replace
+  with hash checks; pipeline.py hunk merge; tests), remote test suite,
+  segB_clean 30 s throughput with custom ffmpeg + hevc_v4l2m2m
+  (target ≥20 fps), golden HW replay behavior, manifests, docs.
+
+### 2026-11-09 17:30-17:55 HKT — offline throughput profiling: Python serial path is the bottleneck
+
+- User order: run 3 first, then offline work. Run 3 results in previous entry;
+  this entry covers the offline profiling campaign (all R1, device idle
+  verified before each run, evidence in prep dir + CM311
+  `plan2_build_20261109_140638/prof_*`, `tput_*`).
+- Isolation matrix (30 s gapless replay, run2_nogap.bin): v4l2m2m bgr24
+  22 frames/2.08 fps; v4l2m2m gray 22/2.25; SW hevc bgr24 25/5.67; SW gray
+  25/5.32. Output format barely matters; HW slower than SW inside the
+  pipeline (opposite of raw-codec benchmarks).
+- Instrumented profile: `_convert_frame` (to_ndarray) 470 ms/frame in situ;
+  v4l2m2m decode itself ~5 ms/AU excluding convert; parser/reads negligible.
+  BUT cv2 monkeypatch experiment cut convert to 31 ms/frame with NO wall-time
+  change → conversion was not the sole limiter; also discovered the 22-frame
+  count was an ARTIFACT: without priming, run2 raw's first two IRAPs lack
+  parameter sets → 554/579 AUs skipped, only the last 25 AUs decodable.
+- Microbench (1080p NV12): custom swscale 81 ms/frame == Ubuntu swscale
+  83 ms (HAVE_NEON=yes; "no accelerated colorspace conversion" C fallback is
+  inherent to this conversion, not a build defect); **cv2.cvtColor
+  NV12→BGR = 10.8 ms (7.5× faster)**.
+- True steady-state test on fully-decodable `segB_clean.h265` (498 frames,
+  params bootstrapped, 1080p60): to_ndarray run hit 40 s timeout with no
+  final JSON (`--seconds 30` did not terminate promptly — stop-responsiveness
+  issue, V09 family); **cv2 path: 220 frames/30 s = 7.3 fps**, still running
+  at 30 s. Per-AU serial v4l2m2m round-trips (~400 ms/AU when fed one-by-one)
+  + Python per-chunk plumbing dominate. Custom FFmpeg CLI does 24 fps at
+  1080p (2026-11-08 benchmark) → hardware capable; the Python integration
+  pattern is the ceiling.
+- Conclusions: `verified` — cv2 conversion is a 3.5–7.5× win worth adopting;
+  `verified` — current PyAV-serial pipeline tops out ~7 fps at 1080p60,
+  cannot meet 30–50 fps; `verified` — profile artifacts from missing params
+  (always prime for throughput tests); `unverified` — batched/asynchronous
+  PyAV feeding ceiling; subprocess-backend end-to-end latency.
+- Options for 30+ fps: (a) optimize PyAV path (batch packets in flight,
+  async drain, cv2, chunk batching) — moderate work, uncertain ceiling;
+  (b) FFmpeg-subprocess backend using the verified 24 fps custom binary
+  (rawvideo pipe + cv2) — clearer path; (c) accept lower fps temporarily.
+- No source changes made (all monkeypatch/stdin experiments); no commit.
+- Next: user decision on backend direction; recovery-policy redesign still
+  open (stall→WAIT_IDR devastating with establishment-only IRAPs); RF setup
+  confirmation still pending; HDMI later R2.
+
+### 2026-11-09 17:20-17:30 HKT — live run 3 (priming): mitigation verified; RF damage persists
+
+- Third R2 smoke, user approved; launcher updated (SHA256 `c565cc22...`,
+  bash -n both sides) with `DJI_PARAMS_FILE` priming + `--save-parameter-sets`.
+  Priming file SHA256 `f9f019a1...` == project's `live_runs/vt13_params.h265`
+  (cross-verified 1080p60 config). User cycled wireless at READY and once
+  mid-run. Session `dji_20261109_172018`; evidence local
+  `.codex_tmp/live_smoke_20261109_172018/`, raw SHA256
+  `f263935b20aea921aefcaee61456e43bb6086a46db604bd9b8106bab1f47099d`;
+  `params_latest.h265` auto-saved (same 1080p60 hash). Post-run idle.
+- **Priming VERIFIED**: all 4 IRAPs started the decoder immediately
+  (`keyframe_starts=4`), no "parameter sets incomplete" stalls — run 2's
+  failure mode eliminated. Frames 22→70, corrupt 0, 1920x1080.
+- **But RF damage persists**: 32.7 s dropout before first establishment;
+  data arrives in ~0.5 s periodic bursts; 123 USB stall recoveries; driver
+  POCs jump 46→110→205→235→269 (missing frames); **1 firmware `0xf` abort
+  at POC269** (idx=1078/2040, dmesg `dmesg_live_smoke3.txt`); recurring
+  `output POLLERR` → 12 decode errors. Distance/obstruction during runs 2-3
+  still unconfirmed by user.
+- **Recovery policy still devastating**: 127 decoder resets (123 from
+  usb_stall discontinuities + 4 error resets), 615/709 AUs skipped (87%).
+  With IRAP only at establishment, every stall-reset discards video until
+  the next link cycle. Priming alone cannot fix this; the stall→WAIT_IDR
+  policy needs redesign (continue-without-reset / concealment tolerance).
+- Conclusions: `verified` — parameter-cache priming removes the
+  missing-params failure; `verified` — good-link content decodes clean
+  (run 2 offline 497/498; run 3 corrupt=0 on arrived frames); `unverified`
+  — RF environment quality (POC jumps indicate ongoing loss), pipeline
+  throughput root cause (~2-4 fps), HDMI.
+- No commit; no working-tree writes beyond .codex_runs launcher (own
+  scratch file, hash-recorded).
+- Next (user ordered: offline work now): (1) throughput isolation matrix
+  (codec × output_format, bounded gapless replays); (2) recovery-policy
+  replay experiments; (3) user to confirm RF setup/distance and mode-lock
+  options before further live runs.
+
+### 2026-11-09 17:02-17:12 HKT — live run 2 (close-range): RF attribution resolved; param-cache mitigation verified
+
+- Second R2 smoke (user approved "launch the experiment"; user cycled wireless
+  off once; expected two 1080p segments). Session `dji_20261109_170226`,
+  evidence local `.codex_tmp/live_smoke_20261109_170226/`, raw 11,103,382 B
+  SHA256 `624a0f93a11ec4a210d2ea019f54afd92b9bfdd0dd8c5c3f5737fa1f4d62b6c0`
+  (local==remote). Data stopped at t=58.5 s of the 90 s window.
+- Run 2 timeline: 4 IRAPs (t=0.375/27.81/39.688/58.547); **first two IRAPs
+  arrived WITHOUT VPS/SPS/PPS** → pipeline logged "parameter sets incomplete",
+  never started decoding those segments; 26.3 s gap (user off-cycle) + 11.0 s
+  gap coinciding with mode change 1080p60→1832x1032@30 at t=39.7 (in-band
+  params, decoder started, ~22-25 clean frames); 1080p60 params reappeared at
+  t=58.5 just before data stopped. 124 USB stall recoveries; final line:
+  22 frames, data=no.
+- **RF attribution resolved (offline bootstrap test)**: run 2's 1080p60
+  segments decoded with run 1's hash-identical 1080p60 parameter sets
+  prepended: **segB 497/498 clean (99.8%), segA 34/35 clean**; authoritative
+  trace of the 1832 section: POC 1–21 sequential; **zero NEW `0xf` events in
+  dmesg for run 2** (the 2 grep hits are run-1/Phase-C old events). Conclusion:
+  **run 1's 97% corruption was RF-environment damage; 1080p60 mode itself and
+  the CM311 decoder produce clean output on a good link.** (Distance during
+  run 2 not yet confirmed by user.)
+- **Parameter-cache mitigation verified (R1 replay)**: run 2 raw (gapless
+  copy) + `--parameter-sets-file params_1080p60.h265` (102 B, extracted from
+  run 1, hash-verified config) + venv v4l2m2m: decoding started at the first
+  IRAP, **222+ frames, 0 errors, 0 recoveries** before the 120 s replay
+  timeout (RC=124, not EOF). Live run 2 without priming had been stuck at
+  22 frames/124 errors. Evidence `plan2_build_20261109_140638/` on CM311
+  (`run2_nogap.bin`, `params_1080p60.h265`, `replay_v4l2.yaml`) + local
+  `param_cache_replay_output.txt` in prep dir; forensic artifacts in
+  `.codex_tmp/live_smoke_forensics_20261109_163037/` (incl.
+  `run2_segB_bootstrapped.h265`, `run2_seg3.trace.log` on CM311).
+- **NEW performance finding (V11)**: gapless pipeline replay on CM311 runs
+  at only ~2–4 fps end-to-end (222 frames/120 s), while raw codec tests do
+  17–24 fps — pipeline overhead (likely per-AU serial v4l2m2m round-trips,
+  Copy-Out memcpy, bgr24 swscale+numpy on A53) must be profiled before any
+  30–50 fps claim. Regular 0.5 s "read gaps" in gapless replay indicate
+  source-thread backpressure from the slow decode path, not USB timing.
+- Reader-bug note: a quick inline POC reader produced garbage on run 2
+  (wrong offset); authoritative `trace_headers` overruled it — always
+  cross-check bit readers against trace (run 1 reader was trace-verified).
+- Conclusions: `verified` — good-link 1080p60 stream is clean; param-cache
+  priming recovers decoding when re-establishment IRAPs lack parameter sets;
+  mode auto-switching causes ~11 s outages; IRAP-only-at-establishment
+  reconfirmed. `unverified` — run-2 physical distance; pipeline throughput
+  root cause; HDMI.
+- No commit; remote writes limited to .codex_tmp test artifacts.
+- Next: (1) user confirms run-2 distance + how to lock DJI output mode;
+  (2) live run 3 WITH primed parameter cache (R2) to validate end-to-end
+  recovery; (3) pipeline throughput profiling (offline); (4) HDMI later R2.
+
+### 2026-11-09 16:30-16:55 HKT — live-capture forensics: upstream stream damage, 1080p60 mode switch
+
+- PC-side forensics of `live_smoke_20261109_161254` (R1; evidence
+  `.codex_tmp/live_smoke_forensics_20261109_163037/`): 90 s, 41.6 MB,
+  2161 AUs; 12 gaps >0.5 s incl. **33.3 s zero-data dropout (t≈9.7–43 s)**
+  despite user's controller LED showing link-on; 117 USB stall recoveries.
+- Timeline: t=0–10 s sparse 1832x1032@30 (23 VCL); t=40–50 s sparse
+  (18 VCL); **t=53.8 s transmitter switches to 1920x1080@60** (IRAP #3 with
+  NEW VPS+SPS; authoritative trace: seg1 `pic_width=1832 height=1032
+  time_scale=30`, seg3 `1920/1080/60`; PPS identical throughout); t=54–90 s
+  full-rate ~600 VCL/10 s (~10 Mbps).
+- Stream integrity (PyAV SW with OUTPUT_CORRUPT): **2161 frames = 65 clean +
+  2096 corrupt (97%)**; clean per IRAP segment: 22 / 24 / 19 then corrupt to
+  end. Firmware `0xf` at POC24 (dmesg) agrees with SW corruption onset.
+- POC sequence (custom-FFmpeg `trace_headers`, TRACE_RC=0 both segments,
+  logs on CM311 `plan2_build_20261109_140638/segment{1,3}_vps.trace.log`):
+  seg1 POC 1–22 sequential; seg3 POC 1–16 sequential then **erratic jumps
+  (~+30 with occasional +1 runs: 16,32,61,62,95,126,156,...,247,248,249,250,
+  52,53,82,...,208–221...)** — inconsistent with a healthy sequential 60 fps
+  stream; indicates severe bursty loss or slice-header bit corruption
+  arriving from upstream (wireless/transmitter), NOT a CM311 decoder bug.
+- Corrections to earlier entries: (1) "3 identical SPS" was a NAL-type
+  labeling error (VPS=32/SPS=33/PPS=34; the 6-byte NAL is the PPS, normal);
+  VPS+SPS actually CHANGE at segment 3 (the 1080p60 switch). (2) "35 s of
+  healthy video discarded after the 0xf reset" is wrong — that video was
+  97% corrupt; the pipeline's IRAP wait discarded mostly unusable input.
+  (3) The 33 s dropout contradicts the LED; link-layer health cannot be
+  judged by the controller LED alone.
+- Conclusions: `verified` — live receiver→USB→pipeline path delivers and
+  records faithfully; decoder reactions (SW corrupt marking, HW 0xf abort)
+  are consistent with damaged input; IRAP-only-at-establishment + no IDR
+  request makes any damage persistent until physical link re-establish.
+  `unverified` — damage attribution (RF loss vs transmitter 1080p60-mode
+  anomaly vs receiver); needs controlled experiments.
+- User info received: link took ~10 s to establish after program start, LED
+  stayed on, no other link-loss indicator available, no active IDR request
+  found in DJI ecosystem.
+- Next (needs human/hardware): (1) close-range ideal-RF smoke to isolate RF
+  vs mode; (2) if configurable, lock transmitter to 1832x1032@30 and retest;
+  (3) question: how is the DJI output mode selected (auto/app/goggles)?
+  Offline meanwhile: recovery-policy replay experiments (lower priority than
+  link integrity); driver 0xf-abort robustness remains a long track.
+- No commit; no new remote working-tree writes (trace logs in .codex_tmp).
+
+### 2026-11-09 16:12-16:20 HKT — Phase D live smoke executed (R2 approved): IRAP starvation confirmed
+
+- Approval: user replied "批准" to the R2 package; executed exactly the
+  approved scope (config sync + one 90 s headless run). Wireless was already
+  flowing at launch (data + IRAP immediately after `USB source open`).
+- Config sync verified: pre `062b4ccc...` → staging → post `3bf1229e...`;
+  `from_dict({'decoder':{'codec':'hevc_v4l2m2m'}})` accepted on CM311.
+  Remote working tree now carries the PC whitelist edit (rollback: backup tar).
+- Run: session `dji_20261109_161254`, RUN_DIR
+  `~/mobile_vt/captures/manual_live/20261109_161254`, launcher READY confirmed
+  (`USB source open` 16:13:00.677), bounded exit ~16:14:30, clean post-state
+  (no process, `/dev/video0` free, no dji session).
+- Evidence (local `.codex_tmp/live_smoke_20261109_161254/`): `capture.log`
+  (21,624 B), `raw_ep81.bin` 41,592,763 B SHA256
+  `beb6057b9634878bbe552e8e16c43f5e2e86e574341c5a7ed2b5510fb723507b`
+  (local==remote), `raw_ep81.times.tsv`, `raw_ep81.events.tsv`, `smoke.yaml`;
+  dmesg tail `plan2_build_20261109_140638/dmesg_live_smoke.txt` (local copy in
+  prep dir).
+- Results (venv PyAV + patched shared FFmpeg, `hevc_v4l2m2m`, 1832x1032):
+  - **43 frames decoded, 0 corrupt**; run-average fps 2.03 (includes freeze
+    periods — NOT decode throughput); 2160 AUs / 39.67 MiB over 90 s.
+  - **IRAP cadence: 3 IRAPs in 90 s, only at link (re-)establishment** —
+    start (16:13:00), after a **33.3 s read gap** (16:13:43), and near end.
+    No periodic IRAPs: **user's prior observation CONFIRMED live**.
+  - **Live content triggers P0 `0xf`**: dmesg `HEVC_LCU_CHECK status=0xf
+    poc=24 idx=910 total=1914 over=1` → `Aborting decoding session!`
+    (16:13:55) → EIO×3 → decoder reset → **no further IRAP → ~35 s freeze
+    until run end** (the predicted IRAP-starvation failure mode, observed).
+  - **USB/wireless instability**: 117 stall errors/recoveries/halt-clears
+    (all successful, 0 failures), 128 read timeouts, 129 discontinuities,
+    frequent 0.5–1 s gaps + one 33.3 s gap; each `usb_stall` forces
+    `_mark_discontinuity` → decoder reset → IRAP wait. 2108/2160 AUs skipped
+    (97.6%) mostly waiting for IRAP after resets. Attribution wireless-vs-USB
+    not proven; the 33 s gap + IRAP-on-reestablish pattern points to wireless
+    link drops.
+  - Recovery architecture mismatch (P0): pipeline resets to WAIT_IDR on
+    stalls/errors, but the link provides IRAP only at establishment → any
+    mid-stream reset freezes video until link re-establishment.
+- Conclusions: `verified` — live USB→v4l2m2m→frames path works end-to-end
+  when data flows (43 correct frames, clean bounded exit, no SSH loss);
+  IRAP-only-at-establishment; live `0xf` at POC24; IRAP-starvation freeze.
+  `unverified` — stall attribution (wireless vs USB), decode throughput under
+  stable link, 1920x1080 live behavior, HDMI output (headless run).
+- No reboot/module reload/service stop; no commit. Remote config.py change is
+  the only working-tree write (approved, backed up, hash-verified).
+- Human questions raised: wireless environment/distance and whether link drops
+  were observed around 16:13:43; whether the link can request a fresh IDR;
+  acceptance for stall-reset policy change (continue-without-reset vs WAIT_IDR).
+- Next: analyze the recorded raw capture offline (replay with/without reset
+  policies, 0xf reproduction at POC24); decide recovery-policy experiment;
+  stable-link throughput run; HDMI path remains later R2.
+
+### 2026-11-09 16:05-16:15 HKT — receiver connected; Phase D R2 package prepared
+
+- User connected the USB receiver. Read-only verification: `lsusb` shows
+  `2ca3:1020 DJI Technology Co., Ltd. C5` (bus 1, addr 5);
+  `python3 -m vt13_video doctor` **RC=0** (usbfs exists, deps OK); no
+  decode process; `/dev/video0` free; venv python + tmux present; 105G disk.
+  V14 (receiver enumeration) is now satisfied; V03 idle re-verified.
+- Created and verified `.codex_runs/live_capture_verified.sh` on CM311
+  (V15 closed): bash -n OK both sides, SHA256
+  `c254b6315d8090f0c37b95a6b4ac65ebd121a9037cd274e27787b830a825f54f`;
+  local copy in the prep dir. Uses verified CLI (`stream --config
+  --headless --seconds --record --json-stats`), venv python, run config
+  with `decoder.codec: hevc_v4l2m2m`, READY = `USB source open` log line
+  (pipeline.py:297), bounded 90 s default, pid/log/raw/JSON-stats in
+  `DJI_RUN_DIR`. venv `stream --help` re-confirmed RC=0.
+- Remote `config.py` pre-hash re-verified `062b4ccc...` (== local HEAD);
+  the R2 package includes a staged per-file sync of the PC whitelist edit
+  (post-hash `3bf1229e...`), rollback from the backup tar.
+- R2 approval package presented to user (config sync + 90 s headless live
+  smoke; wireless enabled by human only after READY). **Awaiting explicit
+  approval; no live stream started.** No commit.
+- Next: on approval, execute the package, report READY, human opens
+  wireless; collect IRAP cadence / `0xf` occurrence / FPS / errors; then
+  analyze and update docs.
+
+### 2026-11-09 15:27-15:55 HKT — Phase B success; Phase C root-cause correction (POC8 `0xf`)
+
+- Phase B v3 **RC=0**: PyAV 11.0.0 built into `~/mobile_vt/.venv-v4l2`
+  (Cython 3.0.12, `--no-build-isolation`, PKG_CONFIG_PATH exported before
+  metadata generation). Identity verified: `ldd` resolves
+  `libavcodec.so.60`/`libavutil.so.58` to
+  `~/ffmpeg-6.1.1-v4l2-shared/install/lib` (rpath baked in); libavcodec
+  (60,31,102); both `hevc` and `hevc_v4l2m2m` available. System Python/av
+  untouched. (`libswresample` resolves to system — audio-only, no patches
+  there; the patched code is all in libavcodec.)
+- Phase C raw clean (venv): SW/HW 30 frames RC=0, YUV 29/30 (index 29);
+  HW drain now yields 4 frames (vs 2 with system PyAV) — patched DPB
+  behavior confirmed active. Evidence `v16_cm311_pyav_v2_20261109_154228`.
+- Phase C full-pipeline golden (venv, timed replay ×2): HW 80 frames,
+  errors=3, resets=1 — **identical to unpatched system PyAV**; run 2 also
+  hit the 60 s join timeout at EOF drain (78 frames). Copy-Out did NOT
+  reduce the loss. Evidence `v16_cm311_pipeline_yuv_20261109_154304/154346`.
+- Hypothesis 1 (read-gap firmware idle abort): timed replay logs showed
+  `output POLLERR` 0.46 s after a 9.502 s read gap; FileSource auto-loads
+  the sibling `.times.tsv` (sources.py:434). Tested with a gapless copy
+  (no times file): **same 80-frame/EIO×3 result, discontinuities=0, ×2** —
+  hypothesis FALSIFIED. Evidence `v16_cm311_pipeline_nogap_20261109_154851/154928`.
+- Hypothesis 2 (earlier attribution "loss at resolution switch"): also
+  wrong — after the reset the decoder starts a NEW context at the 1920
+  IRAP, so no dynamic reinit was ever exercised in these runs.
+- **Root cause (dmesg, deterministic across all 6 pipeline runs)**:
+  `HEVC_LCU_CHECK status=0xf poc=8 idx=489 total=1914 over=1` →
+  `HEVC_DBG unexpected status=0000000f curr_poc=8` → `Aborting decoding
+  session!` — the golden's POC8 (1832 section) triggers the same firmware
+  LCU-check failure family as POC21 (`no_sei`) / POC50 (`fresh`) from the
+  2026-11-08 matrix. Driver aborts → EIO×3 → pipeline reset → IRAP resync
+  at the 1920 section → 25 frames lost. This is the unresolved P0 `0xf`
+  issue (AGENTS.md §3.3), NOT a refcount/source-change problem; Copy-Out
+  cannot fix it. Full dmesg: `plan2_build_20261109_140638/dmesg_phase_c.txt`
+  (local copy in the prep dir; abort lines ~1837/2046-2052).
+- Evidence consistency: 5 Phase C run dirs fetched, local/remote manifests
+  all matched (6+9+9+10+10 = 44 files), `.codex_tmp/manifests_20261109/`.
+- Conclusions:
+  - `verified`: Plan 2 Phases A/B — patched shared FFmpeg + venv PyAV work;
+    content correct on clean samples; rollback = delete new dirs/venv.
+  - `verified`: golden pipeline loss is the P0 firmware `0xf` abort at
+    POC8; deterministic; independent of input gaps and of Copy-Out.
+  - `falsified`: "Copy-Out rebuild reduces golden loss 25→≈1" and
+    "read-gap idle abort" hypotheses.
+  - `untested`: dynamic source-change reinit in the pipeline (preempted by
+    the POC8 abort); needs a clean synthetic switch stream to isolate.
+  - User's IRAP observation raises the stakes: any `0xf` abort mid-live-stream
+    waits for an IRAP that may only come at link re-establishment.
+- No source file rewritten (all work in new dirs/venv); no commit; no live
+  USB/HDMI/wireless run; device idle at close.
+- Next decisions: (1) P0 `0xf` driver/firmware investigation (kernel work);
+  (2) optional synthetic clean-switch test to isolate Copy-Out's reinit
+  benefit; (3) Phase D live smoke (R2, needs USB receiver + human) to measure
+  live IRAP cadence and whether live content hits `0xf` — user notified.
+
+### 2026-11-09 15:20-15:27 HKT — Phase B v2 metadata failure, v3 relaunched
+
+- v2 result: **RC=1**. Keyring fix worked (Cython 3.0.12 aarch64 wheel
+  installed at 5.2 MB/s), but `pip download --no-build-isolation` failed at
+  metadata generation: `pkg-config could not find libraries [...,
+  libswresample, ...]` — the script exported `PKG_CONFIG_PATH` AFTER the
+  download step, and the system has no FFmpeg dev packages. Script ordering
+  bug, not a toolchain problem.
+- v3 fix: `PKG_CONFIG_PATH`/`CFLAGS`/`LDFLAGS(rpath)` exported before any pip
+  invocation. Verified all 7 `.pc` files present in
+  `~/ffmpeg-6.1.1-v4l2-shared/install/lib/pkgconfig/`. Launched via nohup,
+  PID 58076, logs `phase_b3.*`; waiter armed. Cython already in venv (no-op).
+- No source rewrite; no commit; no live run. Next: on notification, check
+  `pyav_identity.txt` ldd paths point at the custom install, then Phase C.
+
+### 2026-11-09 15:13-15:20 HKT — Phase B v1 timeout, v2 relaunched
+
+- Phase B v1: **RC=124**. The 3.7 MB PyAV sdist downloaded fine (4.9 MB/s),
+  but pip stalled 300 s at "Installing build dependencies" (isolated build
+  env) — likely non-interactive keyring backend blocking or isolated-env
+  resolution; root cause not proven. No pip process left running.
+- Fix (v2 script `phase_b_pyav_venv_v2.sh`): `PIP_KEYRING_PROVIDER=disabled`,
+  `PIP_DISABLE_PIP_VERSION_CHECK=1`, per-command `--timeout 30 --retries 2`,
+  preinstall `Cython>=3.0,<3.1` + `wheel` into the venv, then
+  `pip download`/`pip wheel` with `--no-build-isolation` (uses venv
+  setuptools/Cython directly). Same PKG_CONFIG_PATH/CFLAGS/rpath and
+  venv-only force-reinstall; identity check via ldd unchanged.
+- v2 launched via nohup, PID 57221, logs `phase_b2.*`/`cython_install.log`/
+  `pyav_download2.log`/`pyav_build.log` in the build dir; waiter armed.
+- No source rewrite; no commit; no live run. Next: on notification, verify
+  ldd points at `~/ffmpeg-6.1.1-v4l2-shared/install/lib`, then Phase C.
+
+### 2026-11-09 15:05-15:10 HKT — Phase A complete; Phase B launched
+
+- Resumed `make -j3` finished: **MAKE2_RC=0** (shared libs + ffmpeg linked).
+- `make install` → RC=0 into `~/ffmpeg-6.1.1-v4l2-shared/install`
+  (`libavcodec.so.60.31.102` etc.). Original tree/binary untouched.
+- Device idle re-checked (no decode process, `/dev/video0` free). Clean-sample
+  regression with the NEW shared binary (`LD_LIBRARY_PATH=install/lib`,
+  `-fps_mode passthrough -flush_packets 1`, `timeout -k 5 45`): **RC=0,
+  30 frames, MATCHED=29/30 vs the 2026-11-08 SW reference, first mismatch
+  index 29** — identical to the patched static build's known result; the
+  Copy-Out/refcount patches are functional in the shared build. Evidence:
+  `plan2_build_20261109_140638/shared_regression.framemd5` + `.log`.
+- Linkage caveat verified: the installed binary has no rpath and defaults to
+  the SYSTEM `libavcodec.so.60` (same SONAME); with `LD_LIBRARY_PATH` set,
+  ldd resolves to `~/ffmpeg-6.1.1-v4l2-shared/install/lib/libavcodec.so.60`.
+  Phase B must therefore bake an rpath into the PyAV extension and verify
+  with ldd; version numbers alone cannot distinguish custom vs system.
+- Phase B launched: `phase_b_pyav_venv.sh` uploaded and run via nohup
+  (PID 56270, internal bounds 300/1500/300 s), log/rc/pid `phase_b.*` in the
+  same build dir; local background waiter armed. Creates
+  `~/mobile_vt/.venv-v4l2` (--system-site-packages), pip-downloads PyAV
+  11.0.0 sdist, builds with PKG_CONFIG_PATH/CFLAGS/rpath against the new
+  shared install, force-reinstalls into the venv only, prints ldd identity.
+- No source rewrite; no commit; no live USB/HDMI/wireless. Next: on Phase B
+  notification verify ldd points at the custom lib, then Phase C comparisons.
+
+### 2026-11-09 14:52 HKT — Phase A build timeout and resume
+
+- First `make -j2` hit the 2400 s hard bound: `make.rc` = **124**, terminated
+  mid-libavcodec. Progress check: 1554/2033 objects (~76%) built; no leftover
+  build process; 1.3Gi RAM available; load dropping.
+- Resumed incremental `make -j3` (concurrency raised per AGENTS.md §7.3
+  load-based rule; memory headroom verified) under `timeout -k 60 3600`,
+  remote PID 53066; log/rc/pid `make2.*` in the same
+  `~/mobile_vt/.codex_tmp/plan2_build_20261109_140638/` directory. Local
+  background waiter armed. No source change; no commit; no live run.
+- Next: on notification, if RC=0 → `make install`, clean-sample regression of
+  the new shared binary, then Phase B/C.
+
+### 2026-11-09 14:06-14:15 HKT — pre-build backup; Phase A shared FFmpeg build launched
+
+- User instruction: do not commit yet; back up source to the PC `.codex_tmp`
+  before any rewrite and markdown the absolute backup path; proceed with
+  Plan 2; inform when real-hardware live streaming is needed (Phase D).
+- **Backup absolute path (Ubuntu PC):**
+  `/home/billieguo/billie_guo/src/rm/mobile_vt/.codex_tmp/backup_before_plan2_20261109_140638`
+  (contents and restore procedures: `BACKUP_MANIFEST.md` in that directory).
+  CM311 mirror: `/home/billieguo/mobile_vt/.codex_tmp/backup_plan2_20261109_140638`.
+  Includes: FFmpeg source tar (no objects/binaries/.git) + `git diff` patch +
+  HEAD/status; CM311 `vt13_video/tests/config` tar; PC uncommitted code+docs
+  tar + patch. `sha256sum -c remote_manifest.sha256` → all OK, RC=0.
+- Phase A attempt 1 (out-of-tree `build-shared/`): configure RC=1 —
+  "Out of tree builds are impossible with config.h in source dir" (the
+  original static build was in-tree). Original tree NOT modified; the failed
+  `build-shared/` scratch dir remains (harmless, documented).
+- Phase A attempt 2 (clean-copy approach): `git archive HEAD` from
+  `~/ffmpeg-6.1.1-v4l2` extracted to NEW dir `~/ffmpeg-6.1.1-v4l2-shared`;
+  applied the backed-up `ffmpeg_uncommitted.patch`; all 3 patched files
+  SHA256-verified identical to the original tree (`patch_verify.txt`:
+  `v4l2_buffers.c` `6b7eecc6...`, `v4l2_m2m.c` `c077a4b5...`,
+  `v4l2_m2m_dec.c` `6a87d081...`). In-tree configure there with the original
+  flags + `--enable-shared --disable-static --prefix=$HOME/ffmpeg-6.1.1-v4l2-shared/install`
+  → **RC=0**. `make -j2` launched via nohup, remote PID 46044, hard bound
+  `timeout -k 60 2400`; log/rc/pid under
+  `~/mobile_vt/.codex_tmp/plan2_build_20261109_140638/`. Local background
+  waiter will notify on completion.
+- Phase B script prepared locally:
+  `.codex_tmp/v16_cm311_prep_20261109_122603/phase_b_pyav_venv.sh` — venv
+  `--system-site-packages` at `~/mobile_vt/.venv-v4l2`, pip-download PyAV
+  11.0.0 sdist (PyPI reachable), build wheel with
+  `PKG_CONFIG_PATH`/`CFLAGS`/rpath pointing at the new shared install,
+  `--force-reinstall --no-deps` into the venv (shadows system av only),
+  then ldd/codec-availability identity check. System Python untouched.
+- No source file rewritten anywhere yet; no commit; no live USB/HDMI/wireless.
+- Next: on build notification, verify MAKE_RC=0, `make install`, regression-
+  test the new shared binary on the clean sample (expect 30 frames 29/30),
+  then run Phase B and Phase C. Live hardware streaming is NOT needed until
+  Phase D (R2) — user will be informed then.
+
+### 2026-11-09 13:59 HKT — Plan 2 build recon; user IRAP observation
+
+- User operational knowledge (prior hardware use, `unverified` live): the
+  wireless VT link appears to send **only one IRAP at link establishment**,
+  not periodic IRAPs. If confirmed, any mid-stream decoder reset that waits
+  for an IRAP could freeze indefinitely — this raises the Copy-Out fix from
+  optimization to critical path, and the live smoke test must measure IRAP
+  cadence. The golden capture's 3 IRAPs coincide with 2 read gaps/link
+  re-establishments, consistent with this observation.
+- User asked for the total Plan 2 (rebuild PyAV against the patched FFmpeg).
+  Read-only recon on CM311 via askpass (`.codex_tmp/v16_cm311_prep_20261109_122603/plan2_recon.txt`,
+  SHA256 `910aacab5b32567379bb6d95fdc49275f38fac3dc55570b58a182a438a8de27e`):
+  - Custom FFmpeg: `CONFIG_STATIC=yes`, `CONFIG_PIC=yes`; `install/lib` has
+    no shared libraries; configure = `--prefix=.../install --disable-doc
+    --disable-ffplay --disable-ffprobe --enable-debug=2
+    --enable-decoder=hevc_v4l2m2m --enable-demuxer=hevc --enable-parser=hevc
+    --enable-muxer=null` (defaults otherwise enabled; both `hevc` and
+    `hevc_v4l2m2m` present). Git HEAD `e38092e`, 3 patched files modified.
+  - PyAV 11.0.0 = system apt package (`/usr/lib/python3/dist-packages`,
+    cpython-312), linked to system `/lib/aarch64-linux-gnu/libavcodec.so.60`
+    (unpatched) — confirms PyAV bypasses the custom build today.
+  - Toolchain: gcc 13.3, make 4.3, pkg-config 1.8.1, pip 24.0, setuptools
+    68.1.2, venv OK; Cython missing (installable into venv). PyPI reachable
+    (HTTP 200). Disk 106G free; 1.3Gi RAM available; 4 cores → `-j2` builds.
+- Plan 2 outline (presented to user, awaiting GO): (A) out-of-tree shared
+  FFmpeg rebuild into a NEW prefix `install-shared`, original binary/tree
+  untouched, regression-test the new binary on the clean sample; (B) venv
+  with `--system-site-packages`, pip-download PyAV 11.0.0 sdist + Cython,
+  build with `PKG_CONFIG_PATH`/rpath against `install-shared`, install into
+  venv only; (C) re-run raw + full-pipeline YUV comparisons with the venv
+  python, acceptance = source-change loss ≈1 frame instead of 25, no hang,
+  2x reproducible; (D) later R2: sync PC opt-in config per-file and live
+  smoke test. Rollback at every phase: delete new build dir/prefix/venv;
+  system Python and the verified static binary never modified.
+- No build started yet; no remote file modified; no commit. Next action:
+  user GO for Phase A (R1 offline build, bounded `-j2`, logged).
+
+### 2026-11-09 13:29-13:41 HKT — CM311 V16 hardware-decode verification (user-authorized askpass)
+
+- Authorization: user explicitly directed use of the `Local askpass helper`
+  pattern from `docs/REMOTE_MACHINE_USAGE.md` ("why we need ssh-copy-id,
+  cannot we use askpass"), relaxing the prior conservative §5 interpretation
+  for this window. Password was extracted from the doc into `SSH_PASSWORD`
+  at runtime (never echoed in commands or output); helper script
+  `.codex_tmp/v16_cm311_prep_20261109_122603/ssh-askpass.sh` contains no
+  credential. Key auth remains uninstalled; `ssh-copy-id` + password rotation
+  still recommended. User also instructed: **do not commit**.
+- Access probe: askpass SSH `hostname; uname -m; uname -r` → RC=0,
+  `armbian`/`aarch64`/`6.18.59-ophub`.
+- Read-only inventory (`.codex_tmp/v16_cm311_prep_20261109_122603/cm311_readonly_output.txt`,
+  SHA256 `3d6c95fd0692b156a66467bd9abfae779a7c32ab0ecb79ada9b591b0331d8522`):
+  idle (no `vt13_video`/`ffmpeg` process, `/dev/video0` no opener);
+  **PyAV 11.0.0 `hevc_v4l2m2m available: True`, context create OK**;
+  `meson_vdec` loaded refcount 0; USB `2ca3:1020` still not enumerated;
+  custom FFmpeg `n6.1.1` present. Remote hashes: `decoder.py`
+  `0a63d896...` and `pipeline.py` `85e57ea8...` match the 2026-11-06 snapshot;
+  `config.py` `062b4cccdb20b6478353331dc0ac3002de9047a8b6e6fb92316540484b948edc`
+  equals local `git show HEAD:vt13_video/config.py` — remote config is the
+  pre-edit baseline, so the PC whitelist diff is the only config divergence.
+- All tests ran as stdin scripts over SSH with `ulimit -c 0` and nested
+  `timeout -k`; outputs only in fresh `~/mobile_vt/.codex_tmp/` run dirs.
+  **No remote working-tree file was modified.** Scripts kept locally under
+  `.codex_tmp/v16_cm311_prep_20261109_122603/`.
+- Raw PyAV comparison v1 (`v16_cm311_pyav_20261109_133037`, remote only):
+  methodological flaws found — parser not flushed (29/30 AUs) and HW hashed
+  at aligned 1840x1040 instead of visible 1832x1032 (0/29 match artifact).
+  Not used as acceptance evidence.
+- Raw PyAV comparison v2 (`v16_cm311_pyav_v2_20261109_133245`): parser flush
+  + plane-crop to visible size + planar Y+U+V hashing (framemd5 convention).
+  SW 30 frames RC=0 wall 2.114 s; HW 30 frames RC=0 wall 1.752 s, drain OK
+  (2 frames); **YUV MD5 29/30, first mismatch index 29** — reproduces the
+  custom-CLI baseline exactly. Cross-check vs 2026-11-08 CLI evidence:
+  SW 30/30 identical; HW 29/30 identical, only last frame differs
+  (CLI `1517d50f...` vs PyAV `2a745ea3...`); frame-0 hash `8071e636...`
+  identical across all four. Repeat run `v16_cm311_pyav_v2_20261109_133812`
+  gave the same 30/30 and 29/30 result.
+- Full-pipeline golden replay, BGR output
+  (`v16_cm311_pipeline_20261109_133439`): real `VT13Stream` + `FileSource`,
+  `decoder.codec` set by direct dataclass assignment (bypasses the remote
+  tree's older config whitelist without editing it). SW 105 frames, 0 errors,
+  0 resets; HW 80 frames, **3× `[Errno 5] Input/output error` → 1 reset →
+  IRAP resync**, finished without hang. SW switches 1832→1920 at seq 34; HW
+  emitted 8×1832 then 72×1920 — the 25 lost frames are the 1832-section tail
+  in flight when the driver aborted the old session at the source change.
+  BGR hashes matched 0 everywhere → conversion-artifact suspicion.
+- BGR rounding isolation (`cm311_bgr_rounding_output.txt`): frame 0 converted
+  to a common `yuv420p` intermediate has **identical MD5** (`8071e636...`)
+  for SW and HW; direct BGR outputs differ with mean abs 0.44/255, max 93,
+  9.3% pixels affected — swscale NV12→BGR24 vs YUV420P→BGR24 path difference,
+  not decode corruption. **Acceptance comparisons must use the YUV layer.**
+  First attempt of this script failed with `capture POLLERR` ×22 → EIO on
+  the first HW open after the pipeline's aborted session; device idle check
+  was clean; a fresh open ~4 min later decoded normally (v2 repeat above).
+  Observation: post-abort first open can be transiently broken; retry
+  succeeds; no R3 reload was needed. Root cause unverified.
+- Full-pipeline golden replay, YUV output (definitive,
+  `v16_cm311_pipeline_yuv_20261109_133941`): `output_format="yuv420p"` by
+  direct assignment. SW 105 frames / 0 errors; HW 80 frames / 3 errors /
+  1 reset — **identical counts to the BGR run (reproducible)**. Section
+  comparison: **1832: HW 8/8 YUV-identical; 1920: HW 72 frames, 71/72
+  YUV-identical, only last frame (index 71) differs** — the same known
+  EOF/last-frame pattern as the clean sample. Every HW frame except the last
+  is bit-identical to software through the real pipeline.
+- Evidence consistency: 4 run dirs fetched; local/remote SHA256 manifests
+  all matched (9+9+6+6 = 30 files), under
+  `.codex_tmp/manifests_20261109/*.local.sha256` / `*.remote.sha256`.
+- Post-run state 13:41:12 HKT (`post_run_state.txt`, SHA256
+  `7240fa57f624d449e7a9ba7ce122acf659177399f1c3a5cce90bf7ab78ffc848`): no
+  `vt13_video`/`ffmpeg` process, `/dev/video0` no opener, `meson_vdec`
+  refcount 0. No live USB/HDMI/wireless run; no reboot/module reload/package
+  install; no commit (per user instruction); local worktree remains dirty.
+- Conclusions:
+  - `verified`: PyAV-native `hevc_v4l2m2m` works on CM311 with the loaded
+    source `meson_vdec`; decoded content is YUV-bit-identical to software for
+    all emitted frames except the known last-frame EOF difference; the
+    pipeline's existing error→reset→IRAP state machine recovers automatically
+    from the source-change EIO without hanging.
+  - `verified` limitation: unpatched PyAV FFmpeg (no Copy-Out) loses 25 frames
+    at the 1832→1920 source change in this golden capture (EIO×3 then IRAP
+    resync). Live acceptability is a user decision.
+  - `unverified`: root cause of the transient post-abort POLLERR; whether a
+    PyAV rebuild against the patched FFmpeg libraries removes the
+    source-change loss; long-run performance/thermals; live link behavior.
+- Human decisions needed next:
+  1. Source-change mitigation: (a) tolerate the IRAP-resync gap; (b) rebuild
+     PyAV against `~/ffmpeg-6.1.1-v4l2` libraries (Copy-Out); (c) FFmpeg
+     subprocess backend using the verified custom binary.
+  2. Hygiene: run `ssh-copy-id` and rotate the plaintext password (askpass
+     authorization was window-limited).
+  3. Connect the USB receiver (V14) when ready for the R2 live smoke test.
+- Next single action: user chooses the source-change mitigation; meanwhile
+  the PC opt-in change can be synced per-file to CM311 staging (R2 approval)
+  so `decoder.codec: hevc_v4l2m2m` works through the normal YAML path.
+
+### 2026-11-09 12:26 HKT — third V17 probe; CM311 V16 pre-test package prepared
+
+- User instruction: do not commit; continue and test on CM311.
+- Host: Ubuntu PC. V17 re-probe (R0): same `BatchMode=yes` SSH command →
+  **RC=255** again. Key auth still not installed; agent cannot reach CM311
+  non-interactively, and per `AGENTS.md` §5 the plaintext password recorded in
+  `docs/REMOTE_MACHINE_USAGE.md` is not used by the agent.
+- Prepared a read-only CM311 pre-test package (no device occupation, no file
+  modification): `.codex_tmp/v16_cm311_prep_20261109_122603/cm311_readonly_check.sh`,
+  `bash -n` RC=0, SHA256
+  `109056361b57ee55ed0f9103e577d5b7df65c93f29efbd89f60683f9519f1717`.
+  It checks identity, process/`/dev/video0` idle state, PyAV version and
+  `hevc_v4l2m2m` availability plus context creation, `meson_vdec` module,
+  USB `2ca3:1020` enumeration, remote `decoder.py`/`config.py`/`pipeline.py`
+  SHA256 for merge planning, and custom FFmpeg presence.
+- Awaiting human choice: (a) run `ssh-copy-id` once so the agent can execute
+  the full sequence autonomously; (b) run the read-only script manually in a
+  CM311 SSH shell and return the output; (c) explicitly authorize a one-time
+  askpass login with the recorded password (would relax §5 for this window;
+  not recommended, credential would appear in command logs).
+- No CM311 command executed successfully; no USB/HDMI/wireless activity; no
+  commit made (per user instruction); local worktree remains dirty.
+- Next single action: once access is available, run the read-only check, then
+  decide the CM311 V16 path (PyAV-native vs FFmpeg-subprocess) based on the
+  codec-availability result.
+
+### 2026-11-09 12:20-12:21 HKT — V17 re-probe and V16 PC-side opt-in hardware path
+
+- Trigger: user asked to continue from the last experiment/plan. The declared
+  next action was V16 (integrate `hevc_v4l2m2m` into the live/replay path),
+  gated by V17 (agent key auth to CM311).
+- Host: Ubuntu PC only. No CM311 command executed successfully this round; no
+  CM311 file read or written; no USB/HDMI/wireless activity.
+- V17 re-probe (R0): `timeout -k 2 15 ssh -T -o BatchMode=yes -o
+  ConnectTimeout=8 -o StrictHostKeyChecking=accept-new billieguo@10.42.0.11
+  'hostname; uname -m; uname -r'` → **RC=255**, `Permission denied
+  (publickey,password)`. Key auth is still not installed; the human one-time
+  `ssh-copy-id` remains the blocker for all remote steps.
+- PC-side review (R0): `vt13_video/config.py` `validate_config` restricted
+  `decoder.codec` to `hevc`/`h265`, rejecting `hevc_v4l2m2m`, even though
+  `HevcDecoder._new_context()` already passes `config.codec` to
+  `av.CodecContext.create`. PC `rm` env PyAV 17.1.0 (libavcodec 62.28.101)
+  exposes `hevc_v4l2m2m`; context creation succeeds without any V4L2 device.
+  The remote snapshot `.codex_tmp/cm311_latest_20261106/vt13_video/decoder.py`
+  differs only by the `VT13_AV_THREADS` experiment block inside
+  `_new_context`; the new log line was placed at the end of that method to
+  keep the future per-file merge clean.
+- Changes (PC worktree, **uncommitted**):
+  - `vt13_video/config.py`: codec whitelist now `hevc`, `h265`,
+    `hevc_v4l2m2m`; default remains `hevc` (opt-in only).
+  - `vt13_video/decoder.py`: INFO log `HEVC decoder context created:
+    requested=... actual=...` on every context creation/reset; `snapshot()`
+    now includes `codec` so `--json-stats` carries decoder identity evidence.
+  - `tests/test_config.py`: +2 tests (v4l2m2m accepted; unknown codec
+    rejected).
+  - `tests/test_pipeline.py`: +2 tests (default stays software `hevc`;
+    v4l2m2m context created when the PyAV build exposes it, else skipped).
+- Verification (R1, PC):
+  - `timeout -k 5 300 /home/billieguo/miniconda3/envs/rm/bin/python -m
+    unittest discover -s tests -t . -v` → **RC=0, 54 tests, 3.191 s, OK**;
+    all 4 new tests ran without skips. Baseline was 50 tests.
+  - Golden offline replay, default config: RC=0, 105 frames, 0 errors,
+    0 resets, log `requested=hevc actual=hevc` — software baseline unchanged.
+  - Golden offline replay, `decoder.codec: hevc_v4l2m2m`: RC=1, 0 frames,
+    `avcodec_open2("hevc_v4l2m2m") returned 22` (PC has no V4L2 M2M HEVC
+    device), 9 errors / 3 resets, clean exit at EOF. Negative control only:
+    the opt-in path is wired and fails safe without hardware; this is **not**
+    hardware-decode acceptance.
+- Evidence: `.codex_tmp/v16_pc_optin_20261109_122037/` with `unittest.log`,
+  `replay_sw.log`, `replay_v4l2m2m.log`, `v4l2m2m.yaml`, `manifest.sha256`,
+  and `changed_files.sha256`. Changed-file SHA256: `config.py`
+  `3bf1229e600a4756748c5f73ee6692217909e81d0dc0b09ad2937ef8de6ae9e7`;
+  `decoder.py` `4d1205c94c875869d752b4dc87f9bf572f237414222fde49488eb5b3bb5f0a0b`;
+  `test_config.py` `7c53740345b227375c63effba155aa9f22693489ece3bfa57865595e053852e1`;
+  `test_pipeline.py` `632d4fa07ec279d2c87f072c72d6448223afc256f9b58c8dcd7d4f9deda94e0b`.
+- Unverified / risks:
+  - CM311 PyAV 11.0.0 may not expose `hevc_v4l2m2m` (its FFmpeg build is
+    unknown); must check on target after V17 is unblocked.
+  - Even if exposed, PyAV links its own FFmpeg, not the patched
+    `~/ffmpeg-6.1.1-v4l2` build: the Copy-Out / refcount workarounds do not
+    apply, so dynamic-resolution source change may hang. Fallback options:
+    rebuild PyAV against the custom libraries, or an FFmpeg-subprocess
+    backend using the verified custom binary.
+  - Local Git worktree is dirty: 3 control docs from the prior round plus
+    the 4 files above; nothing committed this round.
+- Human action needed (one time, on the Ubuntu PC):
+  `ssh-copy-id -i ~/.ssh/id_ed25519.pub billieguo@10.42.0.11`, then verify
+  `ssh -o BatchMode=yes -o ConnectTimeout=8 billieguo@10.42.0.11 'hostname;
+  uname -r'` → `armbian` / `6.18.59-ophub`, RC=0.
+- Next single action: after key auth works, re-run the `AGENTS.md` §2.2
+  read-only inventory, then check CM311 PyAV `hevc_v4l2m2m` availability and
+  run a bounded offline golden replay with the v4l2m2m config (R1), comparing
+  frame count/content against the software reference.
+
+### 2026-11-09 12:03 HKT — agent SSH access probe (read-only, Ubuntu PC)
+
+- Trigger: user asked whether the agent can reach another machine over SSH.
+  No project experiment was requested; this entry records only the access
+  probe and its consequence for future CM311 work.
+- Host: Ubuntu PC. Commands and exit codes:
+  - `command -v ssh scp rsync sshpass` → RC=0; `ssh`, `scp`, `rsync` present at
+    `/usr/bin/`; `sshpass` **not installed**.
+  - `command -v ssh-copy-id ssh-agent ssh-add` → RC=0; all three present.
+  - `ssh-add -l` → RC=0; one ED25519 identity loaded in the agent,
+    `SHA256:+EPYDiNosoF8tOu7qDJmQ74L9GXw++Fa/O4zcZBLUz4`.
+  - `ssh-keygen -lf ~/.ssh/id_ed25519.pub` → same fingerprint, so the agent key
+    and the on-disk default identity are the same key.
+  - `timeout -k 2 12 ssh -T -o BatchMode=yes -o ConnectTimeout=8 -o
+    StrictHostKeyChecking=accept-new billieguo@10.42.0.11 'hostname; uname -m;
+    uname -r'` → **RC=255**, `Permission denied (publickey,password)`.
+  - `ssh -v` variant → TCP connect and SSH handshake succeeded; the server
+    offered `publickey,password`; the ED25519 key was offered and rejected;
+    no other default identity file exists.
+- Conclusion (`verified`): CM311 `10.42.0.11` is network-reachable from this PC
+  and its SSH daemon answers, but the PC's ED25519 public key is **not** in the
+  remote `authorized_keys`. Non-interactive key auth therefore fails.
+- Conclusion (`verified`): the agent's shell is non-interactive, so it cannot
+  type a password at an SSH prompt. `sshpass` is absent. Password-based
+  automation would require either an askpass helper holding the credential or
+  a new package install; neither was attempted.
+- Action deliberately **not** taken: `docs/REMOTE_MACHINE_USAGE.md` records the
+  account and sudo password in plaintext (lines 29-30, 79, 95, 437). The agent
+  did not use, echo, or copy that credential, per `AGENTS.md` §5 (no requesting,
+  echoing, or recording human passwords). This is flagged to the user as a
+  separate hygiene issue: the file is Git-tracked, so the password is in repo
+  history and should be rotated and removed if the repo is ever shared.
+- No remote file was read or written; no CM311 command executed successfully;
+  no USB/V4L2/HDMI/wireless activity, reboot, module reload, or package install.
+- Human action needed to unblock agent-driven CM311 work (one time, on the
+  Ubuntu PC, requires typing the CM311 password once):
+  `ssh-copy-id -i ~/.ssh/id_ed25519.pub billieguo@10.42.0.11`
+  then verify with
+  `ssh -o BatchMode=yes -o ConnectTimeout=8 billieguo@10.42.0.11 'hostname; uname -r'`
+  which should print `armbian` and `6.18.59-ophub` with RC=0.
+- Next single action: after key auth works, re-run the `AGENTS.md` §2.2 read-only
+  inventory before any hardware or live step. Tracked as V17.
 
 ### 2026-11-08 20:25-20:31 HKT — offline rate benchmark and decoder-path audit
 

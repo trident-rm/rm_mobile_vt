@@ -41,9 +41,10 @@ VT03 camera -> wireless link -> VT13 -> USB Bulk IN 0x81
 - `device.status_drain` performs a read-only drain of `0x82`. It is enabled in
   the example configuration but remains experimental and optional; testing did
   not establish that it is required for video stability.
-- The receiver never sends vendor-specific OUT or control commands. Recovery is
-  limited to clearing a stalled endpoint and optional USB device reset when
-  explicitly enabled.
+- The pipeline never issues vendor-specific USB OUT transfers. It can optionally
+  write DUML control frames to the CDC port (`control.enabled`) to request an
+  I-frame and poll pairing status; the video endpoint is unaffected. Recovery is
+  still limited to clearing a stalled endpoint and optional USB device reset.
 
 ## Architecture
 
@@ -53,8 +54,9 @@ VT03 camera -> wireless link -> VT13 -> USB Bulk IN 0x81
 | `vt13_video/device.py` | sysfs and PyUSB discovery, endpoint validation, actionable permission errors |
 | `vt13_video/sources.py` | Read-only USB source and offline capture replay |
 | `vt13_video/recovery.py` | Backoff, jitter, healthy-read tracking, reset policy |
+| `vt13_video/control.py` | Optional DUML v1 control channel: I-frame requests, pairing poll, downlink decode |
 | `vt13_video/decoder.py` | PyAV HEVC decoding, keyframe gating, decoder reset, bounded frame queue |
-| `vt13_video/pipeline.py` | Background read/decode loop, recovery, recording, state and statistics |
+| `vt13_video/pipeline.py` | Background read/decode loop, recovery, control hooks, stall watchdog, recording, state and statistics |
 | `vt13_video/cli.py` | `devices`, `inspect`, `stream`, `replay`, `doctor`, and `config` commands |
 
 ## Further documentation
@@ -230,9 +232,14 @@ no frames are decoded.
 - VT13 does not emit a periodic IRAP in the observed stream. Start the stream,
   then disconnect and reconnect VT03 (or power-cycle the wireless link) so a
   fresh VPS/SPS/PPS + IRAP can arrive. The window fills after the first frame.
-- There is no verified receiver-side request that makes VT03 emit an IRAP.
-  A standard USB reset did not restart the stream in testing. The receiver can
-  detect readiness and wait, but it cannot itself emit or request a keyframe.
+- The official client asks the transmitter for an I-frame over the CDC control
+  port (DUML `1/1 -> 14/0`, frame
+  `55 17 04 38 aa 0e 00 00 40 01 01 00 00 00 00 00 24 00 00 00 24 8f 06`).
+  This pipeline can send the same request with `control.enabled=true`, retries
+  it while waiting for a keyframe, and sends it after a discontinuity. The
+  request is protocol-verified against the official client, but its effect on
+  the transmitter is not yet verified on hardware. A USB reset alone still does
+  not restart the stream or create an IRAP.
 - If the current data epoch continues for 10 s without a decodable start, the
   pipeline logs a warning with the current parameter-set and IRAP state. The
   hint asks for fresh VPS/SPS/PPS + IRAP when parameter sets are missing, or
@@ -348,8 +355,9 @@ recording timestamps, YAML validation, sysfs discovery, and CLI smoke paths.
   pipeline reports the actual frame dimensions instead of enforcing one size.
 - The camera does not emit a periodic IRAP in the observed stream. A standard
   USB device reset did not restart the video stream or create a new IRAP in
-  testing. No verified receiver command requests one; reconnect or power-cycle
-  VT03 after link loss before expecting a new decodable start.
+  testing. The DUML I-frame request (`control.enabled=true`) is the candidate
+  recovery primitive but its live effect is unverified; power-cycle or relink
+  VT03 if the request is not honored.
 - Replugging the VT13 USB cable only re-enumerates the receiver. It does not
   reset the VT03 encoder, which may resume mid-GOP without an IRAP. If the link
   remains in `waiting_keyframe` after reconnection, power-cycle VT03.
@@ -358,6 +366,12 @@ recording timestamps, YAML validation, sysfs discovery, and CLI smoke paths.
 - Reads of 4 KiB and larger were associated with frequent EIO. The 2 KiB default
   mitigates this transport behavior, but its root cause is still unknown.
 - `status_drain` remains experimental; no test has shown it is necessary.
+- `decoder.stall_restart_s` (default 0, disabled) resets the decoder when VCL
+  access units keep arriving but no frames are produced for N seconds. It is
+  meant for a silent `0xf` session death, where the ffmpeg process stays alive
+  but stops yielding pictures; pair it with `control.enabled=true` so the reset
+  is followed by an I-frame request. The ffplay window stays open across these
+  resets; only the picture freezes for the watchdog interval. Experimental.
 - A preview window can remain blank until VT03 is relinked and a fresh IRAP is
   received; use `--headless` plus `--save-first` to verify capture independently.
 - Sustained streaming has been verified in two sessions (145.968 s and 130.6 s),

@@ -44,11 +44,26 @@ class RecoveryConfig:
     clear_halt_on_error: bool = True
     gap_threshold_s: float = 0.5
     reset_on_gap: bool = False
+    kernel_abort_watch: bool = False
+
+
+@dataclass
+class ControlConfig:
+    enabled: bool = False
+    port: str | None = None
+    iframe_on_connect: bool = True
+    iframe_on_recovery: bool = True
+    iframe_retry_s: float = 2.0
+    min_iframe_interval_s: float = 0.5
+    pairing_poll_s: float = 1.0
 
 
 @dataclass
 class DecoderConfig:
     codec: str = "hevc"
+    backend: str = "pyav"
+    ffmpeg_path: str | None = None
+    ffmpeg_codec: str = "hevc_v4l2m2m"
     require_keyframe: bool = True
     allow_corrupt_frames: bool = True
     emit_corrupt_frames: bool = False
@@ -58,6 +73,12 @@ class DecoderConfig:
     queue_size: int = 8
     drop_oldest: bool = True
     output_format: str = "bgr24"
+    convert_bgr: bool = True
+    display: str = "none"
+    display_width: int = 1024
+    display_height: int = 576
+    ffplay_path: str | None = None
+    stall_restart_s: float = 0.0
 
 
 @dataclass
@@ -81,17 +102,19 @@ class AppConfig:
     device: DeviceConfig = field(default_factory=DeviceConfig)
     read: ReadConfig = field(default_factory=ReadConfig)
     recovery: RecoveryConfig = field(default_factory=RecoveryConfig)
+    control: ControlConfig = field(default_factory=ControlConfig)
     decoder: DecoderConfig = field(default_factory=DecoderConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
     config_path: Path | None = None
 
 
-_TOP_LEVEL_KEYS = {"device", "read", "recovery", "decoder", "output", "runtime"}
+_TOP_LEVEL_KEYS = {"device", "read", "recovery", "control", "decoder", "output", "runtime"}
 _SECTION_KEYS = {
     "device": {f.name for f in fields(DeviceConfig)},
     "read": {f.name for f in fields(ReadConfig)},
     "recovery": {f.name for f in fields(RecoveryConfig)},
+    "control": {f.name for f in fields(ControlConfig)},
     "decoder": {f.name for f in fields(DecoderConfig)},
     "output": {f.name for f in fields(OutputConfig)},
     "runtime": {f.name for f in fields(RuntimeConfig)},
@@ -229,7 +252,7 @@ def _recovery_from(data: Mapping[str, Any]) -> RecoveryConfig:
     ):
         if key in section:
             setattr(cfg, key, _as_float(section[key], f"recovery.{key}"))
-    for key in ("enabled", "clear_halt_on_error", "reset_on_gap"):
+    for key in ("enabled", "clear_halt_on_error", "reset_on_gap", "kernel_abort_watch"):
         if key in section:
             setattr(cfg, key, _as_bool(section[key], f"recovery.{key}"))
     for key in ("healthy_reads", "reset_after_failures"):
@@ -238,11 +261,33 @@ def _recovery_from(data: Mapping[str, Any]) -> RecoveryConfig:
     return cfg
 
 
+def _control_from(data: Mapping[str, Any]) -> ControlConfig:
+    section = _section(data, "control")
+    cfg = ControlConfig()
+    if "enabled" in section:
+        cfg.enabled = _as_bool(section["enabled"], "control.enabled")
+    if "port" in section:
+        cfg.port = _as_optional_str(section["port"], "control.port")
+    for key in ("iframe_on_connect", "iframe_on_recovery"):
+        if key in section:
+            setattr(cfg, key, _as_bool(section[key], f"control.{key}"))
+    for key in ("iframe_retry_s", "min_iframe_interval_s", "pairing_poll_s"):
+        if key in section:
+            setattr(cfg, key, _as_float(section[key], f"control.{key}"))
+    return cfg
+
+
 def _decoder_from(data: Mapping[str, Any], base_dir: Path) -> DecoderConfig:
     section = _section(data, "decoder")
     cfg = DecoderConfig()
     if "codec" in section:
         cfg.codec = _as_str(section["codec"], "decoder.codec")
+    if "backend" in section:
+        cfg.backend = _as_str(section["backend"], "decoder.backend")
+    if "ffmpeg_path" in section:
+        cfg.ffmpeg_path = _as_optional_str(section["ffmpeg_path"], "decoder.ffmpeg_path")
+    if "ffmpeg_codec" in section:
+        cfg.ffmpeg_codec = _as_str(section["ffmpeg_codec"], "decoder.ffmpeg_codec")
     if "require_keyframe" in section:
         cfg.require_keyframe = _as_bool(section["require_keyframe"], "decoder.require_keyframe")
     if "allow_corrupt_frames" in section:
@@ -271,6 +316,18 @@ def _decoder_from(data: Mapping[str, Any], base_dir: Path) -> DecoderConfig:
         cfg.drop_oldest = _as_bool(section["drop_oldest"], "decoder.drop_oldest")
     if "output_format" in section:
         cfg.output_format = _as_str(section["output_format"], "decoder.output_format")
+    if "convert_bgr" in section:
+        cfg.convert_bgr = _as_bool(section["convert_bgr"], "decoder.convert_bgr")
+    if "display" in section:
+        cfg.display = _as_str(section["display"], "decoder.display")
+    if "display_width" in section:
+        cfg.display_width = _as_int(section["display_width"], "decoder.display_width")
+    if "display_height" in section:
+        cfg.display_height = _as_int(section["display_height"], "decoder.display_height")
+    if "ffplay_path" in section:
+        cfg.ffplay_path = _as_optional_str(section["ffplay_path"], "decoder.ffplay_path")
+    if "stall_restart_s" in section:
+        cfg.stall_restart_s = _as_float(section["stall_restart_s"], "decoder.stall_restart_s")
     return cfg
 
 
@@ -320,6 +377,7 @@ def from_dict(data: Mapping[str, Any] | None, base_dir: Path | None = None) -> A
         device=_device_from(data),
         read=_read_from(data),
         recovery=_recovery_from(data),
+        control=_control_from(data),
         decoder=_decoder_from(data, base),
         output=_output_from(data, base),
         runtime=_runtime_from(data),
@@ -382,8 +440,21 @@ def validate_config(cfg: AppConfig) -> None:
     if cfg.recovery.gap_threshold_s < 0:
         raise ConfigError("recovery.gap_threshold_s must be zero or positive")
 
-    if cfg.decoder.codec.lower() not in {"hevc", "h265"}:
-        raise ConfigError("decoder.codec currently supports only 'hevc'")
+    if cfg.control.port is not None and not cfg.control.port.strip():
+        raise ConfigError("control.port must be non-empty when set")
+    if cfg.control.iframe_retry_s < 0:
+        raise ConfigError("control.iframe_retry_s must be zero or positive")
+    if cfg.control.min_iframe_interval_s < 0:
+        raise ConfigError("control.min_iframe_interval_s must be zero or positive")
+    if cfg.control.pairing_poll_s < 0:
+        raise ConfigError("control.pairing_poll_s must be zero or positive")
+
+    if cfg.decoder.backend not in {"pyav", "ffmpeg-pipe"}:
+        raise ConfigError("decoder.backend must be 'pyav' or 'ffmpeg-pipe'")
+    if cfg.decoder.backend == "pyav" and cfg.decoder.codec.lower() not in {"hevc", "h265", "hevc_v4l2m2m"}:
+        raise ConfigError("decoder.codec supports 'hevc', 'h265', or 'hevc_v4l2m2m'")
+    if not cfg.decoder.ffmpeg_codec.strip():
+        raise ConfigError("decoder.ffmpeg_codec must be non-empty")
     if cfg.decoder.emit_corrupt_frames and not cfg.decoder.allow_corrupt_frames:
         raise ConfigError(
             "decoder.emit_corrupt_frames requires decoder.allow_corrupt_frames=true"
@@ -394,6 +465,12 @@ def validate_config(cfg: AppConfig) -> None:
         raise ConfigError("decoder.queue_size must be at least 1")
     if cfg.decoder.output_format not in {"bgr24", "rgb24", "gray"}:
         raise ConfigError("decoder.output_format must be bgr24, rgb24, or gray")
+    if cfg.decoder.display not in {"none", "ffplay"}:
+        raise ConfigError("decoder.display must be 'none' or 'ffplay'")
+    if cfg.decoder.display_width < 16 or cfg.decoder.display_height < 16:
+        raise ConfigError("decoder.display_width/display_height must be at least 16")
+    if cfg.decoder.stall_restart_s < 0:
+        raise ConfigError("decoder.stall_restart_s must be zero or positive")
     if cfg.decoder.parameter_sets_file is not None and not cfg.decoder.parameter_sets_file.is_file():
         raise ConfigError(
             f"decoder.parameter_sets_file does not exist: {cfg.decoder.parameter_sets_file}"
