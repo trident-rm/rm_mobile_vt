@@ -91,6 +91,122 @@ overwrite golden data, and record the command, RC, and evidence. Starting a
 real-time USB receiver/HDMI display, stopping unrelated services, or reloading a
 kernel module still follows the R2/R3 rules in `AGENTS.md`.
 
+## Current device snapshot (2026-11-10 11:12 HKT, B0 read-only)
+
+- Identity: `armbian`, `aarch64`, `6.18.59-ophub`, 4 cores, 1.7 GiB RAM,
+  101 GB free on `/dev/sda2`, uptime 3 d 19 h 49 m, load 0.16,
+  boot_id `779b73da-3760-4b6b-9c6f-f76fc0525322`.
+- Kernel cmdline: `video=HDMI-A-1:1920x1080@60e console=ttyAML0,115200n8
+  console=tty0 consoleblank=0`. HDMI-A-1 connected + enabled + dpms On;
+  Composite-1 disabled; fb0 `mesondrmfb` `virtual_size=1920,2160`.
+- **No Xorg, LightDM `inactive`, default `multi-user.target`, DRM master free.**
+  This supersedes the 2026-11-09 note that Xorg `:0` held the master.
+- `/dev/video0` = `meson-video-decoder`, no opener, `meson_vdec` refcnt 0;
+  CAPTURE only `NM12`; `ENUM_FRAMESIZES` returns nothing; `G_PARM` EINVAL.
+- Build: `gcc`/`make`/`pkg-config`, `/usr/include/drm/{drm.h,drm_mode.h}` and
+  `/usr/include/linux/videodev2.h` present; **no libdrm-dev / pkg-config libdrm**;
+  `modetest` missing. Raw-ioctl C builds work; no libdrm link needed.
+- USB: `2ca3:1020` on Bus 001 Port 001 (If0/If1 vendor no-driver, If2-5 cdc_acm);
+  SG Flash rootfs on Port 002 → same xhci.
+- Remote tree is **not** a Git repository. Deployed hashes now:
+  `config.py` `25004fb8...`, `ffmpeg_pipe.py` `67a40898...`,
+  `pipeline.py` `4f129217...`, `control.py` `cc0cbcdc...`,
+  `decoder.py` `0a63d896...` (experimental). `tools/kms_render.c` is absent
+  remotely; the only copy is `.codex_tmp/kiosk_20261110/kms_render.c`
+  (`7d26005b...`, identical to local `tools/kms_render.c`), binary
+  `fbb208d7...`. FFmpeg: `/usr/bin/ffmpeg` `dbb8cc21...`, release
+  `1ed2b711...`, debug `2a204518...`, shared `622cd084...`.
+- Local mirror of the five deployed sources + renderer binary:
+  `.codex_tmp/b0_inventory_20261110/remote/` (SHA256 verified). No remote tar
+  snapshot was taken (write operation, not yet approved).
+- D3-0 probe (`tools/d3_probe.c`, `7d4eaab4...`) **ran on the board** (R2 approved):
+  `build/d3/d3_probe` `1c196647...`. T1 1832x1032 (20 capture buffers) and T2
+  1920x1080 (`--cap-bufs 17`, IRAP-cut sample) both decoded one frame, held the
+  overlay 10 s, and exited RC=0. Hardware dumps are **byte-identical** to software
+  decode (`00221868...` and `35b75b16...`). Post-run: overlay `crtc=0 fb=0`,
+  primary `crtc=45 fb=47`, `video0` free, `refcnt=0`, no master holder; the two
+  passing runs logged no `0xf` and no abort. HDMI visual confirmation pending.
+  Evidence `~/.codex_tmp/d3_0_20261110_112758/`, report `.codex_tmp/docs_backup_20261110_d3/D3-0_report.md`.
+- **D3a (file) passed** with `tools/d3_probe.c` `5ba4af69...` (board
+  `126acd1c...`): decode-only 240 frames / 0.884 s = **271.6 fps**; present mode
+  with `--hide-primary` 240 frames / 3.992 s = **60.12 fps** (vblank-limited at
+  60 Hz), 0 corrupt, 0 `0xf`, 0 abort. Note `status=0x8` appears ~0.95/frame
+  (`over=0`, non-fatal); only frame 0 was checked bit-exact against software.
+  Feeding must be **AU-level** (NAL-level stalls after 2 frames), and 17 capture
+  buffers (DPB 16 + 1) are sufficient; 20 can fail under CMA fragmentation.
+  Report `.codex_tmp/docs_backup_20261110_d3/D3a_report.md`.
+- **Kiosk display fix (2026-11-10 13:45)**: `kms_render` now accepts
+  `--hide-primary` (source `fbd8c439...`, binary `a071cfed...`; old binary
+  `fbb208d7...` backed up under `~/.codex_tmp/backup_kms_hideprimary_20261110_1200/`).
+  `vt13_video/ffmpeg_pipe.py` passes it for `display=kms`
+  (`67a40898...` -> `0936da17...`, backup in the same directory, `py_compile`
+  RC=0). Verified with lavfi 90 frames and software-decoded real content
+  120/240 frames (24 fps), clean exit, console restored. Note: a preceding
+  stuck ffmpeg (`-frames:v 600` > ~430-frame file, EOF drain) held
+  `/dev/video0`, so the renderer received 0 frames and showed a green
+  uninitialized dumb buffer; `-f rawvideo` pipes are also unreliable. Live
+  verification still pending.
+  **Live verified 2026-11-10 13:45** (run `d3_live_20261110_134503`): 45 s,
+  `display=kms` + `--hide-primary`, 570 frames = 12.7 fps, 10 `kernel_0xf`
+  resets, 144 GOP-shed drops, 5 display drops, async backlog 3.1-3.7 MiB
+  (~3 s). User confirms the live VT picture is visible, but lagging and
+  flashing (resets + single dumb-buffer tearing). Python/nut path is still
+  12-17 fps vs the 60 fps source; D3b C worker is the real fix.
+- **D3b stage 1 passed (2026-11-10 13:57)**: `tools/d3_replay.py` (AU server,
+  SOCK_SEQPACKET, 24-byte header, 60 AU/s) -> `d3_probe --socket` C worker
+  (reuses the D3a V4L2/KMS path). 300 AU / 5.001 s = 60.00 AU/s, 0 sender
+  drops; worker decoded 299 frames at 60.2-60.6 fps steady, 0 corrupt, 0 `0xf`,
+  0 abort; clean exit. Build: source `c5db1467...`, board binary `5a23fa8b...`,
+  replay `dfbbe424...`. Report `.codex_tmp/docs_backup_20261110_d3/D3b_report.md`. Next: opt-in pipeline
+  integration and live test.
+- **D3b pipeline integration (live, 2026-11-10 14:06)**: opt-in
+  `decoder.backend=worker` deployed (`worker_client.py` `7929f009...`,
+  `config.py` `1a6160d1...`, `pipeline.py` `75071b00...`, launcher
+  `e5f73157...`; backup `~/.codex_tmp/backup_worker_backend_20261110_1400/`).
+  With async USB it reads 2287 AU / 40 s ~ 57 AU/s and each worker session
+  decodes at 60.3-60.5 fps, but the live input produced 30 `0xf`, 17 aborts,
+  64 missing-ref in 40 s, killing each session after ~1 s. Clean exit, no
+  leftover worker. Remaining limiter is upstream input damage
+  (~0.75 `0xf`/s); next is in-worker recovery (D3c) plus link/RF checks.
+- **D3c-lite in-worker recovery (2026-11-10 14:13)**: the worker now rebuilds its
+  V4L2 session in-process on `POLLERR`/EIO (keeps socket and DRM; waits for the
+  next IRAP; source `756b3e02...`, board `9ad1fb16...`, client `93a7087a...`).
+  Live 45 s: 34 sessions, **2018 frames = 44.78 fps**, 0 corrupt, 0 oversize,
+  `STREAM_EXIT_RC=0`, clean exit. Freeze per event dropped from ~1 s to
+  ~0.1-0.2 s. Remaining limiter is still upstream damage (~0.75 `0xf`/s).
+- **Key A/B (2026-11-10 14:21)**: capture-only 60 s is clean — 79.34 MB / 10.6 Mbps,
+  max gap 0.01 s, 0 gaps >=100 ms, 3616 AU = 60.3 AU/s, 452 IRAPs all carrying
+  VPS/SPS/PPS, no oversized PS. Decode without display: 2288 frames / 40 s =
+  57.06 fps, 8 sessions, 12 `0xf`; decode with KMS display: 44.78 fps, 34
+  sessions, 34 `0xf`. So the `0xf` damage is **host-induced** (KMS scanout adds
+  the largest share; VDEC/USB coexistence adds the rest), not RF/upstream.
+- **Decisive A/B (2026-11-10 14:28)**: same worker+display config with
+  `VT13_ASYNC_USB=1 -> 0` gave **2330 frames / 40.1 s = 58.06 fps**, only
+  5 sessions, 0 corrupt, and 6 `0xf` / 4 aborts (vs 44.8 fps / 34 sessions /
+  34 `0xf` with async). The Python async reader thread (GIL/scheduling) is the
+  dominant damage source; single-threaded read->parse->send is clean. Recommended
+  live config: `DJI_BACKEND=worker`, async OFF (default), control on.
+- **Best live run (2026-11-10 14:36)**: worker + async OFF + control on, 45 s:
+  **2671 frames / 45.106 s = 59.22 fps**, **sessions=1**, 0 corrupt, 0 errors,
+  0 resets, **0 `0xf` / 0 aborts**, clean exit. The worker now keeps the
+  last scanned-out fb alive across a rebuild (`held`) so the screen does not
+  flash. Build `c4203cb6...` -> board `87da0d9e...`. Note run-to-run variance
+  (0-78 `0xf`) remains.
+- **User accepted the current live baseline (2026-11-10 14:39)**: 60 s run =
+  3487 frames / 60.066 s = 58.05 fps, 6 sessions, 0 corrupt; 10 `0xf`/5 aborts.
+  Recommended config: `DJI_BACKEND=worker`, `VT13_ASYNC_USB=0`, control on,
+  kernel watch on, `DJI_STALL_RESTART_S=0`. Deferred optimizations: rebuild
+  flash, ~0.1-0.2 s rebuild pause, faster reinit, IRAP wait, residual `0xf`
+  jitter, 10-min soak.
+- **10-minute soak passed (2026-11-10 14:54)**: worker backend, async OFF,
+  control on, no recording. 35226 frames / 600.112 s = 58.70 fps, 45 sessions,
+  0 corrupt, 0 errors, 0 dropped AUs, `PIPELINE_RC=0`; dmesg 20 `0xf` /
+  10 aborts; memory 376 -> 365 MiB (no growth); temperature 59 -> 66 C;
+  clean exit. Evidence `captures/manual_live/soak_20261110_144438/`.
+  Note: CMA free is only ~106-115 MB; requesting 20 x 1080p buffers can yield 12
+  and `STREAMON` EINVAL — use `--cap-bufs 17`. Backup
+  `~/.codex_tmp/backup_d3_20261110_112758/deployed.tar` (`0ed6e107...`).
+
 ## Current device snapshot (2026-11-09 22:40 HKT, read-only)
 
 - Identity: `armbian`, `aarch64`, kernel `6.18.59-ophub`, 4 cores, 1.7 GiB RAM,

@@ -63,6 +63,8 @@ class DecoderConfig:
     codec: str = "hevc"
     backend: str = "pyav"
     ffmpeg_path: str | None = None
+    worker_path: str | None = None
+    worker_socket: str | None = None
     ffmpeg_codec: str = "hevc_v4l2m2m"
     require_keyframe: bool = True
     allow_corrupt_frames: bool = True
@@ -286,6 +288,10 @@ def _decoder_from(data: Mapping[str, Any], base_dir: Path) -> DecoderConfig:
         cfg.backend = _as_str(section["backend"], "decoder.backend")
     if "ffmpeg_path" in section:
         cfg.ffmpeg_path = _as_optional_str(section["ffmpeg_path"], "decoder.ffmpeg_path")
+    if "worker_path" in section:
+        cfg.worker_path = _as_optional_str(section["worker_path"], "decoder.worker_path")
+    if "worker_socket" in section:
+        cfg.worker_socket = _as_optional_str(section["worker_socket"], "decoder.worker_socket")
     if "ffmpeg_codec" in section:
         cfg.ffmpeg_codec = _as_str(section["ffmpeg_codec"], "decoder.ffmpeg_codec")
     if "require_keyframe" in section:
@@ -449,8 +455,8 @@ def validate_config(cfg: AppConfig) -> None:
     if cfg.control.pairing_poll_s < 0:
         raise ConfigError("control.pairing_poll_s must be zero or positive")
 
-    if cfg.decoder.backend not in {"pyav", "ffmpeg-pipe"}:
-        raise ConfigError("decoder.backend must be 'pyav' or 'ffmpeg-pipe'")
+    if cfg.decoder.backend not in {"pyav", "ffmpeg-pipe", "worker"}:
+        raise ConfigError("decoder.backend must be 'pyav', 'ffmpeg-pipe' or 'worker'")
     if cfg.decoder.backend == "pyav" and cfg.decoder.codec.lower() not in {"hevc", "h265", "hevc_v4l2m2m"}:
         raise ConfigError("decoder.codec supports 'hevc', 'h265', or 'hevc_v4l2m2m'")
     if not cfg.decoder.ffmpeg_codec.strip():

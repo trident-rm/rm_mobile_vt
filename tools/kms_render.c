@@ -6,6 +6,7 @@
  * - drops DRM master and disables the plane on exit
  *
  * Usage: kms_render [--dry-run] [--seconds N] [--video WxH]
+ *                   [--stdin] [--dumb] [--hide-primary]
  */
 #include <errno.h>
 #include <fcntl.h>
@@ -39,6 +40,9 @@ struct ctx {
     int video_fd;
     int master;
     uint32_t plane_id;
+    uint32_t primary_id;
+    uint32_t primary_crtc_id;
+    uint32_t primary_fb_id;
     uint32_t crtc_id;
     uint32_t fb_id;
     uint32_t handles[2];
@@ -126,6 +130,9 @@ static void fill_pattern(struct ctx *c, int tick) {
 }
 
 static int drm_setup(struct ctx *c, int dry_run) {
+    struct drm_set_client_cap cap = { .capability = DRM_CLIENT_CAP_UNIVERSAL_PLANES, .value = 1 };
+    ioctl(c->card_fd, DRM_IOCTL_SET_CLIENT_CAP, &cap);
+
     struct drm_mode_get_plane_res pr;
     memset(&pr, 0, sizeof(pr));
     if (ioctl(c->card_fd, DRM_IOCTL_MODE_GETPLANERESOURCES, &pr) < 0) { perror("GETPLANERESOURCES"); return -1; }
@@ -142,13 +149,19 @@ static int drm_setup(struct ctx *c, int dry_run) {
         uint32_t count = p.count_format_types;
         uint32_t *fmts = calloc(count ? count : 1, sizeof(uint32_t));
         p.format_type_ptr = (uint64_t)(uintptr_t)fmts;
+        int has_nv12 = 0;
         if (ioctl(c->card_fd, DRM_IOCTL_MODE_GETPLANE, &p) == 0) {
             for (uint32_t k = 0; k < count; k++) {
-                if (fmts[k] == FOURCC('N', 'V', '1', '2')) picked = (int)planes[i];
+                if (fmts[k] == FOURCC('N', 'V', '1', '2')) has_nv12 = 1;
             }
         }
         free(fmts);
-        if (picked >= 0) break;
+        if (has_nv12 && picked < 0) picked = (int)planes[i];
+        if (!has_nv12 && p.fb_id && p.crtc_id && !c->primary_id) {
+            c->primary_id = planes[i];
+            c->primary_crtc_id = p.crtc_id;
+            c->primary_fb_id = p.fb_id;
+        }
     }
     free(planes);
     if (picked < 0) { fprintf(stderr, "no NV12 plane\n"); return -1; }
@@ -210,8 +223,9 @@ static int drm_setup(struct ctx *c, int dry_run) {
         c->disp_w = chosen.hdisplay; c->disp_h = chosen.vdisplay;
         printf("no CRTC mode; preferred: %ux%u (not set in dry-run)\n", c->disp_w, c->disp_h);
     }
-    printf("connector=%u crtc=%u plane=%u display=%ux%u video=%ux%u\n",
-           conn_id, c->crtc_id, c->plane_id, c->disp_w, c->disp_h, c->video_w, c->video_h);
+    printf("connector=%u crtc=%u plane=%u primary=%u display=%ux%u video=%ux%u\n",
+           conn_id, c->crtc_id, c->plane_id, c->primary_id,
+           c->disp_w, c->disp_h, c->video_w, c->video_h);
     if (dry_run) return 0;
 
     if (!crtc.mode_valid) {
@@ -253,7 +267,10 @@ static void cleanup(struct ctx *c) {
         if (!c->dumb_handle && c->bufs[p].addr) munmap(c->bufs[p].addr, c->bufs[p].len);
         if (c->dmabufs[p] >= 0) close(c->dmabufs[p]);
     }
-    if (c->card_fd >= 0 && c->master) ioctl(c->card_fd, DRM_IOCTL_DROP_MASTER, 0);
+    if (c->card_fd >= 0 && c->master) {
+        if (c->primary_id) printf("restoring console via DROP_MASTER\n");
+        ioctl(c->card_fd, DRM_IOCTL_DROP_MASTER, 0);
+    }
     if (c->video_fd >= 0) close(c->video_fd);
     if (c->card_fd >= 0) close(c->card_fd);
 }
@@ -264,12 +281,13 @@ int main(int argc, char **argv) {
     c.card_fd = c.video_fd = -1;
     c.dmabufs[0] = c.dmabufs[1] = -1;
     c.video_w = 1920; c.video_h = 1080;
-    int dry_run = 0, seconds = 30, stdin_frames = 0, use_dumb = 0;
+    int dry_run = 0, seconds = 30, stdin_frames = 0, use_dumb = 0, hide_primary = 0;
 
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--dry-run")) dry_run = 1;
         else if (!strcmp(argv[i], "--stdin")) stdin_frames = 1;
         else if (!strcmp(argv[i], "--dumb")) use_dumb = 1;
+        else if (!strcmp(argv[i], "--hide-primary")) hide_primary = 1;
         else if (!strcmp(argv[i], "--seconds") && i + 1 < argc) seconds = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--video") && i + 1 < argc) sscanf(argv[++i], "%ux%u", &c.video_w, &c.video_h);
     }
@@ -307,7 +325,7 @@ int main(int argc, char **argv) {
         fb.handles[0] = cd.handle; fb.handles[1] = cd.handle;
         fb.pitches[0] = fb.pitches[1] = c.video_w;
         fb.offsets[0] = 0; fb.offsets[1] = (uint32_t)c.video_w * c.video_h;
-        printf("DUMB handle=%u size=%zu\n", cd.handle, cd.size);
+        printf("DUMB handle=%u size=%llu\n", cd.handle, (unsigned long long)cd.size);
     } else {
         c.video_fd = open("/dev/video0", O_RDWR | O_NONBLOCK);
         if (c.video_fd < 0) { perror("open video0"); cleanup(&c); return 4; }
@@ -325,6 +343,17 @@ int main(int argc, char **argv) {
     c.fb_id = fb.fb_id;
 
     signal(SIGINT, on_signal); signal(SIGTERM, on_signal);
+    if (hide_primary && c.primary_id && c.primary_fb_id) {
+        struct drm_mode_set_plane hp;
+        memset(&hp, 0, sizeof(hp));
+        hp.plane_id = c.primary_id;
+        hp.crtc_id = c.primary_crtc_id;
+        hp.fb_id = 0;
+        if (ioctl(c.card_fd, DRM_IOCTL_MODE_SETPLANE, &hp) == 0)
+            printf("primary plane %u disabled (restored on master drop)\n", c.primary_id);
+        else
+            perror("SETPLANE primary off");
+    }
     struct drm_mode_set_plane sp;
     memset(&sp, 0, sizeof(sp));
     sp.plane_id = c.plane_id; sp.crtc_id = c.crtc_id; sp.fb_id = c.fb_id;

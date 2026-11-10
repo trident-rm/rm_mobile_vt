@@ -43,6 +43,209 @@ deployed hashes, P0 root cause: upstream stream damage → firmware 0xf session
 death → IRAP starvation; evidence index, backups, next tracks A/B/C/D).
 Nothing committed (user instruction).
 
+### 2026-11-10 14:44–14:54 HKT — 10 分钟 soak：PASS
+
+- 配置：`DJI_BACKEND=worker`、async OFF、control on、kernel watch on、stall 0、
+  无录制、显示由 worker 接管。
+- 结果：**35226 帧 / 600.112 s = 58.70 fps**、45 个会话、`corrupt=0`、
+  `oversize=0`、`errors=0`、`dropped_aus=0`、`PIPELINE_RC=0`。
+- dmesg：**20 `0xf` / 10 abort / 4 缺参考**（约每 30 s 一次损伤，重建后恢复）。
+- 内存 376→365 MiB（无增长）；温度 59→66 °C；退出无残留。
+- 待优化：重建闪烁/0.1–0.2 s 停顿、剩余 0xf 抖动、30 min soak/服务化。
+- 证据 `captures/manual_live/soak_20261110_144438/`。未 reboot。未 commit。
+
+### 2026-11-10 14:39 HKT — 用户验收：live 基线可接受，闪烁/停顿后续优化
+
+- 60 s 复跑：**3487 帧 / 60.066 s = 58.05 fps**、6 会话、corrupt=0、errors=0；
+  dmesg 10 `0xf`/5 abort；退出干净。
+- 用户确认画面质量可接受；重建闪烁与 ~0.1–0.2 s 停顿列为后续优化。
+- 推荐配置：`DJI_BACKEND=worker`、async OFF、control on、kernel watch on、stall 0。
+- 待优化：held fb 释放时机/双缓冲；0xf 后 STREAMOFF→STREAMON 免 close/reopen；
+  缩短等 IRAP；剩余 0xf 抖动（IRQ/CPU 亲和或 rmrx）；10 min soak + 服务化。
+- 证据 `captures/manual_live/d3c_show2_20261110_143809/`。未 reboot。未 commit。
+
+### 2026-11-10 14:35–14:36 HKT — 最佳 live：59.22 fps，单会话、0 0xf
+
+- 修复重建闪屏：`session_close` 把正在 scanout 的 buffer 移入 `held`，新会话第一帧
+  上屏后才释放，重建期间屏幕保持最后一帧。
+- live 45 s（worker、async OFF、control on）：**2671 帧 / 45.106 s = 59.22 fps**、
+  **sessions=1**、corrupt=0、errors=0、resets=0；dmesg **0 `0xf`/0 abort**；退出干净。
+- 同配置各轮 0xf 波动大（6–78），本轮是完全干净样本；`held` 修复未在本轮触发。
+- 构建 `d3_probe.c c4203cb6` → 板端 `87da0d9e`。
+- 证据 `captures/manual_live/d3c_noflash_20261110_143507/`。未 reboot。未 commit。
+
+### 2026-11-10 14:27–14:28 HKT — 决定性 A/B：async 读取线程是损伤主因，关闭后 58 fps
+
+- 同一 worker+显示配置，仅 `VT13_ASYNC_USB=1→0`：
+  **2330 帧 / 40.129 s = 58.06 fps**、5 个会话、corrupt=0；
+  dmesg **6 `0xf` / 4 abort / 12 缺参考**。
+- 对比 async ON：44.8 fps/34 会话/34 `0xf`（45 s）、38.9 fps/46 会话/78 `0xf`（shm）。
+- 结论：Python async 读线程与解析/发送线程的 GIL/调度竞争延迟 USB 读取 →
+  接收器 FIFO 溢出 → `0xf`；单线程读→解析→发送反而干净。
+  修正此前“显示占大头”的判断：async 是更大因素，显示有次要影响。
+- 推荐 live 配置：`DJI_BACKEND=worker`、async OFF（默认）、control on。
+- 证据 `captures/manual_live/d3c_noasync_20261110_142750/`。未 reboot。未 commit。
+
+### 2026-11-10 14:16–14:21 HKT — 关键 A/B：原始流干净，0xf 是主机侧自激
+
+- 只抓取不解码 60 s：**79.34 MB / 10.6 Mbps**、max gap 0.01 s、0 个 ≥100 ms 间隔、
+  **3616 AU = 60.3 AU/s**、452 IRAP 全部带 VPS/SPS/PPS、无异常参数集
+  → 射频/上游完全干净（推翻上一轮“输入损伤”结论）。
+- 解码不显示（`VT13_WORKER_NO_DISPLAY=1`）40 s：**2288 帧 = 57.06 fps**、8 会话、
+  0 corrupt；dmesg 12 `0xf`/7 abort/3 缺参考。
+- 解码 + KMS 显示 45 s：44.78 fps、34 会话；dmesg 34 `0xf`/18 abort/82 缺参考。
+- 结论：`0xf` 由主机侧负载诱导，KMS 扫描输出占大头；去掉显示后 0xf 约 1/3、fps 57。
+  剩余指向 VDEC/KMS DMA 与 xHCI 共享 DRAM/中断延迟，或 Python 读线程调度。
+- 证据 `captures/manual_live/caponly_20261110_141622/`、`d3c_nodisp_20261110_141920/`。
+  未 reboot。未 commit。
+
+### 2026-11-10 14:12–14:13 HKT — D3c-lite：worker 内重建，44.8 fps
+
+- worker 遇 `POLLERR`/EIO 不再退出：关闭 V4L2 会话、保留 socket/DRM、丢弃非 IRAP AU、
+  等下一个 IRAP 后原地重开；Python `reset()` 对存活 worker 改为 no-op，
+  并把 `bootstrap` 参数集前缀到 IRAP AU。
+- live 45 s：**34 个会话、2018 帧 = 44.78 fps**、corrupt=0、oversize=0；
+  pipeline `resets=31`、`errors=0`、`dropped_aus=0`；`STREAM_EXIT_RC=0`，退出无残留。
+- 对比进程级重启：每次冻结从 ~1 s 降到 ~0.1–0.2 s，画面基本连续。
+- 剩余限速：上游损伤 ~0.75 `0xf`/s（位置未变，VT 重启后仍存在）。
+- 构建：`d3_probe.c 756b3e02` → 板端 `9ad1fb16`；`worker_client.py 93a7087a`。
+- 证据 `captures/manual_live/d3c_recover_20261110_141200/`。未 reboot。未 commit。
+
+### 2026-11-10 14:00–14:06 HKT — D3b 管线集成 live：链路 OK，输入损伤是唯一限速项
+
+- 新增 `vt13_video/worker_client.py`（opt-in `decoder.backend=worker`）；部署
+  `config.py 25004fb8→1a6160d1`、`pipeline.py 4f129217→75071b00`、
+  `worker_client.py 7929f009`、launcher `e5f73157`（`DJI_BACKEND`），
+  备份 `~/.codex_tmp/backup_worker_backend_20261110_1400/`。
+- live 40 s（async 2000）：USB **2287 AU/40 s ≈ 57 AU/s**；worker 每会话
+  **60.3–60.5 fps**；但 dmesg **30 `0xf` / 17 abort / 64 缺参考**，每个会话约 1 s
+  被 EIO 终止并重启（2 次）。退出无残留。
+- `frames_decoded` 现为 AU 计数（合成 Frame），真实解码数以 worker `DECODED` 为准。
+- 结论：worker/显示路径正常；剩余问题是上游输入损伤 ~0.75 `0xf`/s。
+  下一步 D3c 进程内恢复 + RF/链路排查。未 reboot。未 commit。
+
+### 2026-11-10 13:54–13:57 HKT — D3b 阶段 1：离线 AU socket 回放 PASS
+
+- 新增 `tools/d3_replay.py`（AU 服务端：Annex-B→AU，`SOCK_SEQPACKET`，24 B 头 +
+  一个 AU，60 AU/s，背压丢非 IRAP）与 `d3_probe --socket` C worker（复用 D3a 路径）。
+- 结果：300 AU / 5.001 s = **60.00 AU/s，发送端 0 丢弃**；worker 解码 **299 帧**，
+  稳态 **60.2–60.6 fps**，corrupt=0、oversize=0；dmesg **0 `0xf`/0 abort/0 缺参考**；
+  收尾干净。
+- 构建：`tools/d3_probe.c` `c5db1467…` → 板端 `5a23fa8b…`；`d3_replay.py` `dfbbe424…`。
+- 报告 `.codex_tmp/docs_backup_20261110_d3/D3b_report.md`。未完成：管线 opt-in 集成、live、EOS/动态分辨率/
+  `0xf` 状态机。未 reboot；本轮无无线图传。未 commit。
+
+### 2026-11-10 13:45–13:46 HKT — kiosk live 验证：画面可见（lag + flash 仍在）
+
+- 用户开启 VT；`live_capture_run5.sh`，`display=kms`、`--hide-primary`、
+  async 2000 + 50% GOP shed + 限帧 25 + no-copy + control off，45 s。
+- 结果：**570 帧 / 45 s = 12.7 fps**；`resets=10`（全为 `kernel_0xf`）、
+  `dropped_frames=144`、`display_dropped=5`、`keyframe_starts=11`、`IRAP=279`。
+- USB async **backlog 3.1–3.7 MiB（queue 2000/2000，约 3 s 流）** → lag ≈3 s。
+- dmesg 窗口：0xf=20、abort=10、0x8=108、POLLERR=0。
+- 用户目视：**live VT 画面可见**，但卡顿与闪烁。闪烁来自 10 次 0xf 复位
+  （每次冻结到下一 IRAP）+ dumb 单缓冲与 scanout 同时读写的撕裂。
+- 根因仍是 Python/nut 路径 12–17 fps < 60 fps 源；D3a 已证 C 解码 271 fps，
+  **D3b（C worker）是正解**。
+- 证据 `captures/manual_live/d3_live_20261110_134503/`。未 reboot、未开无线图传。未 commit。
+
+### 2026-11-10 12:15–13:45 HKT — kiosk 显示修复：overlay 被控制台覆盖（--hide-primary）
+
+- 根因：overlay zpos=0、primary（控制台）zpos=1；部署的 `kms_render --stdin --dumb`
+  从不关 primary，所以 SETPLANE 成功但屏幕一直是控制台。用户已目视确认关掉 primary
+  后彩条可见。
+- `tools/kms_render.c` 新增 `--hide-primary`：识别 primary plane → `SETPLANE(fb=0)`；
+  退出 `DROP_MASTER` 由 fbdev 恢复控制台。源码 `fbd8c439…`，板端 binary `a071cfed…`；
+  旧 binary `fbb208d7…` 备份于 `~/.codex_tmp/backup_kms_hideprimary_20261110_1200/`。
+- 部署 `vt13_video/ffmpeg_pipe.py` 加 `--hide-primary`：`67a40898→0936da17`，
+  同目录备份，`py_compile` RC=0。
+- 渲染器验证：lavfi 90 帧（12.86 fps）、软件解码真实内容 120 帧/240 帧（24 fps）
+  均正常消费、干净退出、控制台恢复。
+- **绿幕原因**：上一轮 ffmpeg 用 `-frames:v 600` 超过文件实际 ~430 帧，卡在已知 EOF
+  drain 并占用 `/dev/video0`；渲染器收到 0 帧，dumb buffer 全零 NV12 → 绿色。
+  不是格式/plane 错误。`-f rawvideo` 管道本身也不稳定（与 raw transport 旧记录一致），
+  kiosk 仍走 nut。
+- 待办：live 验证（需要 VT/USB）。未 reboot、未开无线图传。未 commit。
+
+### 2026-11-10 12:06–12:12 HKT — D3a（文件）PASS：dec 271.6 fps / present 60.12 fps
+
+- 构建 `tools/d3_probe.c` `5ba4af69…` → 板端 `126acd1c…`；输入 `segB_irp1080.h265`（431 AU）。
+- **D3a-dec**：240 帧 / 0.884 s = **271.60 fps**，0 corrupt，RC=0（Gate ≥75 / 目标 90）。
+- **D3a-present**：`--hide-primary`，240 帧 / 3.992 s = **60.12 fps**，0 corrupt，RC=0
+  （阻塞 SETPLANE 每帧一次 vblank，60 Hz 是面板上限；解码余量约 4.5×）。
+- dmesg 时间窗：**0 `0xf`、0 abort、0 缺参考、0 POLLERR**；`status=0x8` 约 0.95/帧
+  （over=0，非致命）。仅第 0 帧做过 SW/HW 逐字节对照，未做 240 帧全量 MD5。
+- 工程结论：AU 级喂流必需（单 NAL 会在 2 帧后停住）；17 buffer = DPB16+1 足够；
+  显示必须 `--hide-primary`。
+- 收尾：overlay 释放、控制台恢复、`refcnt=0`。报告 `.codex_tmp/docs_backup_20261110_d3/D3a_report.md`。
+- 未测时间戳节拍/动态分辨率/EOF/live USB；未 reboot、未改部署文件、未开无线图传。未 commit。
+
+### 2026-11-10 11:38–11:50 HKT — D3-0 实机执行：真实 VDEC DMA-BUF → KMS PASS
+
+- 用户批准 R2；探针 `tools/d3_probe.c` `7d4eaab4…`，板端 binary `1c196647…`。
+- **T1 1832×1032**（`clean_1832x1032.h265`）：34 NAL chunks、20 CAPTURE buffers 全部
+  `EXPBUF`→`PRIME`→`ADDFB2`（fb 49–68）、1 帧、HOLD 10 s、RC=0；硬件 dump MD5
+  `00221868…` 与软件解码**逐字节一致**；画面为标准彩条（颜色顺序/UV/无错行均正常）。
+- **T2 1920×1080**：`segB_clean.h265` 首帧是 TRAIL_R POC34（缺 POC33，软件解码同样报
+  `Could not find ref with POC 33`）→ 绿屏，属输入起点问题。从流内唯一 IRAP（NAL index 8）
+  连同 VPS/SPS/PPS 重切 `segB_irp1080.h265`（`c7f5da00…`），用 `--cap-bufs 17` 后
+  1 帧 POC0 起解，dump `35b75b16…` 与软件解码**逐字节一致**；画面为真实 DJI 室内场景。
+- **CMA 约束**：`CmaTotal=256 MB`，空闲约 106–115 MB；请求 20 个 1080p buffer 时驱动只分配
+  12 个但 `num_dst_bufs` 仍记 20 → `STREAMON` EINVAL。新增 `--cap-bufs`，17=DPB+1 通过。
+- **执行中修复**：首轮把文件切成 2 个大 chunk 一次喂入，解码器跑在用户态之前、DPB(16) 耗尽
+  → `can't match offset` / `No dst buffer available` / `Aborting decoding session`（332164）。
+  改为按 Annex-B NAL 分块 + 主循环回收 OUTPUT 后消除。
+- **收尾已核**：overlay `crtc=0 fb=0`、primary `crtc=45 fb=47`、`video0 free`、
+  无 master holder、`refcnt=0`；通过的两轮 dmesg **0 次 `0xf`、0 次 abort**
+  （本 boot 唯一 abort 是修复前首轮）。
+- **用户已目视确认**（11:50）：两次 10 s 保持期间 HDMI 分别显示彩条与 DJI 画面。
+  → D3-0 全项 PASS。未测连续轮转（D3-0b）、动态分辨率、EOF、live USB。
+- 证据：`~/.codex_tmp/d3_0_20261110_112758/`（`run_1832.log`、`run_1080_irp.log`、
+  `dump1832/`、`dump1080/`、`segB_irp1080.h265`）；报告 `.codex_tmp/docs_backup_20261110_d3/D3-0_report.md`。
+- **12:05 关键发现**：overlay zpos=0、primary（控制台）zpos=1；两者同时活跃时控制台
+  覆盖视频。`SETPLANE(overlay)` 成功且 DRM 状态正确，但屏幕仍是控制台。必须
+  `--hide-primary` 关掉 plane 39 才能看到画面（用户 120 s 目视确认彩条）。
+  → 部署的 `kms_render --stdin --dumb` 从不关 primary，此前“KMS 10.8 fps 可看基线”
+  并未被目视证实，需要回写 kiosk/D3b 设计。退出 `DROP_MASTER` 后控制台恢复已复验。
+- 未 reboot、未改部署文件、未开无线图传。未 commit。
+
+### 2026-11-10 11:10–11:50 HKT — B0 环境盘点 + D3-0 源码审计/设计（只读）
+
+- 只读访问 CM311（askpass）。`armbian` / aarch64 / `6.18.59-ophub`；4 核 1.7 GiB；
+  `/dev/sda2` 101 G 可用；boot_id `779b73da-…`；cmdline `video=HDMI-A-1:1920x1080@60e`。
+- **显示占用状态变化**：无 Xorg、LightDM inactive、`multi-user.target`、DRM master
+  无人持有；HDMI-A-1 connected+enabled+dpms On；fb0 `mesondrmfb` 1920×2160。
+  → P2-2 记录的 “Xorg 持有 master” 阻塞在当前状态不存在。
+- `/dev/video0` = `meson-video-decoder`，无 opener，`meson_vdec` refcnt=0；CAPTURE 仅
+  `NM12`；`ENUM_FRAMESIZES` 无返回；`G_PARM` EINVAL；板端有 `/usr/include/drm/*.h`
+  但无 libdrm-dev，`modetest` 缺失 → 探针用裸 ioctl、不链接 libdrm。
+- **版本一致性偏差（重大）**：远端 `~/mobile_vt` 非 Git；`config.py 25004fb8`、
+  `ffmpeg_pipe.py 67a40898`、`pipeline.py 4f129217`、`decoder.py 0a63d896` 与本地 HEAD
+  `3e3e1a6`（`f47c7d9b/871af9b2/33ab8e85/4d1205c9`）**均不同**；kiosk KMS 路径只在远端。
+  已镜像 5 个文件 + `kms_render` 二进制到 `.codex_tmp/b0_inventory_20261110/remote/`，
+  SHA256 与远端逐项相符；**远端 tar 快照未做**。
+- **`tools/kms_render.c` 审计**：默认模式做 S_FMT/REQBUFS(1)/EXPBUF/PRIME/ADDFB2 后写
+  测试图案，**从不 STREAMON/QBUF/DQBUF**；部署实际是 `--stdin --dumb`（CPU 拷贝进
+  dumb buffer、SETPLANE 只调用一次、持续覆写正在 scanout 的内存，无 page flip）。
+  因此“EXPBUF/PRIME/ADDFB2 成功”只是组件级证据，**真实解码帧 → KMS 尚未验证**。
+- 交付：`.codex_tmp/docs_backup_20261110_d3/B0_environment_inventory.md`、`.codex_tmp/docs_backup_20261110_d3/baseline_manifest.json`、
+  `.codex_tmp/docs_backup_20261110_d3/B0_go_nogo.md`、`.codex_tmp/docs_backup_20261110_d3/D3-0_design.md`；D3 计划原文入库
+  `plans/CM311_D3_Native_V4L2_KMS_Execution_Plan.md`（`ea243a23…`）。
+- 新增 `tools/d3_probe.c`（`7d4eaab4…`）：file→stateful V4L2→真实 NV12M CAPTURE→
+  EXPBUF/PRIME/ADDFB2→overlay，阻塞 SETPLANE + 只回队“上一个”buffer；PC 编译 RC=0。
+- **D3-0 准备完成（11:28–11:35）**：远端快照 `~/.codex_tmp/backup_d3_20261110_112758/`
+  （`deployed.tar` `0ed6e107…`）；暂存源码 `7d4eaab4…`；板端构建 RC=0（binary
+  `86641a49…`，aarch64，仅 libc；后续修复版 `1c196647…`）；只读 `--inventory` RC=0（未取 master、未 stream）。
+  自检修复：`GETRESOURCES` 未清 `count_encoders/count_fbs` → EFAULT；未设
+  `UNIVERSAL_PLANES` 只看到 overlay。运行时平面：primary 39（crtc 45、fb 47）、
+  overlay 42（NV12）。运行目录 `~/.codex_tmp/d3_0_20261110_112758/` 内含
+  `READINESS.txt`、`commands.sh`（`9f7f3231…`）、`inventory.txt`、`prestate.txt`。
+  **显示测试（T1/T2）未执行，等待 R2 批准。**
+- B0 Gate = **CONDITIONAL PASS**：设计可继续；D3-0 实机测试需 R2 批准，并建议先补
+  远端快照。未接管 DRM master、未启动 V4L2 流、未改远端文件、未重启、未开无线图传。
+- 证据：`.codex_tmp/b0_inventory_20261110/{cm311_readonly.txt,cm311_drm_v4l2.txt,cm311_samples.txt,remote/}`。
+- 未 commit。
+
 ### 2026-11-10 01:15–01:30 HKT — Kiosk K1/K2：KMS 直显验证（无 Xorg）
 
 - **K1 渲染器**（`tools/kms_render.c`，远端 `.codex_tmp/kiosk_20261110/kms_render`，
