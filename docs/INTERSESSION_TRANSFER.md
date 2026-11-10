@@ -43,6 +43,18 @@ deployed hashes, P0 root cause: upstream stream damage → firmware 0xf session
 death → IRAP starvation; evidence index, backups, next tracks A/B/C/D).
 Nothing committed (user instruction).
 
+### 2026-11-10 16:39–17:13 HKT — D3d 3×60 s + K3 30 分钟 soak
+
+- D3d 三轮（`config/vt13_video.kiosk.yaml`，无录制）：**57.80 / 58.02 / 58.49 fps**、
+  0 corrupt、RC=0；每轮 5–7 会话；每轮 8–12 `0xf` → 计划“0 `0xf`”Gate 未达。
+- K3 soak 1800 s：**105856 帧 = 58.81 fps**、128 会话（每 ~14 s 一次）、0 corrupt、
+  0 oversize、RC=0；内存 358→359 MiB、温度 61→67 °C、退出无残留。
+  soak 的 dmesg 差分因 ring 回绕低估；以会话数计重建。
+- K3 草案：`config/vt13_video.kiosk.yaml`、`deploy/vt13-kiosk.service`（draft，不启用），
+  commit `f43d463`。
+- 结论：长时稳定性 PASS；残余 `0xf` 是 D3d 唯一未达 Gate。
+- 证据 `captures/manual_live/d3d_k3_20261110_163945/`。未 reboot。未 commit。
+
 ### 2026-11-10 16:34 HKT — 无录制 A/B：录制不是剩余抖动主因
 
 - async OFF、60 s、无 `--record`：**3492 帧 / 60.065 s = 58.14 fps**、6 会话、

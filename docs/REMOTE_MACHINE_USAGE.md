@@ -229,6 +229,12 @@ kernel module still follows the R2/R3 rules in `AGENTS.md`.
   remaining jitter source; residual `0xf` ~0.17/s (~260 ms freeze each, ~4%
   downtime) is VDEC/KMS vs xHCI/DRAM contention. Further gains need IRQ/CPU
   affinity (root), rmrx, or driver changes.
+- **D3d + K3 soak (2026-11-10 17:13)**: three 60 s runs at 57.80 / 58.02 / 58.49 fps
+  (0 corrupt, 5-7 sessions, 8-12 `0xf` each -> the "0 `0xf`" D3d gate is not met);
+  30-min soak: 105856 frames / 1800.087 s = 58.81 fps, 128 sessions (~14 s each),
+  0 corrupt, 0 oversize, RC=0, memory 358 -> 359 MiB, 61 -> 67 C, clean exit.
+  dmesg delta undercounts due to ring wrap; use session count. K3 draft committed
+  in `f43d463` (`config/vt13_video.kiosk.yaml`, `deploy/vt13-kiosk.service`, not enabled).
   Note: CMA free is only ~106-115 MB; requesting 20 x 1080p buffers can yield 12
   and `STREAMON` EINVAL — use `--cap-bufs 17`. Backup
   `~/.codex_tmp/backup_d3_20261110_112758/deployed.tar` (`0ed6e107...`).
