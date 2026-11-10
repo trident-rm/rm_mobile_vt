@@ -30,6 +30,96 @@ _KEYFRAME_HINT_AFTER_S = 10.0
 _ERROR_LOG_INTERVAL_S = 5.0
 
 
+class _DgBitReader:
+    def __init__(self, data: bytes) -> None:
+        self.data = data
+        self.pos = 0
+
+    def u(self, n: int) -> int:
+        value = 0
+        for _ in range(n):
+            value = (value << 1) | ((self.data[self.pos >> 3] >> (7 - (self.pos & 7))) & 1)
+            self.pos += 1
+        return value
+
+    def ue(self) -> int:
+        zeros = 0
+        while self.u(1) == 0:
+            zeros += 1
+            if zeros > 31:
+                raise ValueError("bad ue")
+        return (1 << zeros) - 1 + (self.u(zeros) if zeros else 0)
+
+
+def _dg_unescape(payload: bytes) -> bytes:
+    out = bytearray()
+    i = 0
+    while i < len(payload):
+        if i + 2 < len(payload) and payload[i] == 0 and payload[i + 1] == 0 and payload[i + 2] == 3:
+            out += b"\x00\x00"
+            i += 3
+        else:
+            out.append(payload[i])
+            i += 1
+    return bytes(out)
+
+
+def _dg_parse_sps_log2(payload: bytes):
+    r = _DgBitReader(_dg_unescape(payload))
+    r.u(4)
+    max_sub = r.u(3)
+    r.u(1)
+    r.u(2); r.u(1); r.u(5); r.u(32)
+    r.u(1); r.u(1); r.u(1); r.u(1)
+    r.u(44); r.u(8)
+    prof = []
+    for _ in range(max_sub):
+        prof.append((r.u(1), r.u(1), r.u(1)))
+    if max_sub > 0:
+        for _ in range(max_sub, 8):
+            r.u(2)
+    for present, _lvl, _ in prof:
+        if present:
+            r.u(88)
+    r.ue()
+    chroma = r.ue()
+    if chroma == 3:
+        r.u(1)
+    r.ue(); r.ue()
+    if r.u(1):
+        for _ in range(4):
+            r.ue()
+    r.ue(); r.ue()
+    return r.ue() + 4
+
+
+def _dg_parse_pps(payload: bytes):
+    r = _DgBitReader(_dg_unescape(payload))
+    r.ue(); r.ue()
+    r.u(1)
+    output_flag = r.u(1)
+    extra = r.u(3)
+    return output_flag, extra
+
+
+def _dg_parse_poc(payload: bytes, nal_type: int, log2: int, pps):
+    output_flag, extra = pps
+    r = _DgBitReader(_dg_unescape(payload[:64]))
+    if not r.u(1):
+        return None
+    if 16 <= nal_type <= 23:
+        r.u(1)
+    r.ue()
+    for _ in range(extra):
+        r.u(1)
+    r.ue()
+    if output_flag:
+        r.u(1)
+    if nal_type not in (19, 20):
+        return r.u(log2)
+    return 0
+
+
 class RecordingError(RuntimeError):
     """Raised when a requested recording output cannot be created."""
 
@@ -59,6 +149,13 @@ class VT13Stream:
         self.parser = AnnexBParser()
         self.assembler = AccessUnitAssembler()
         self.params = ParameterSetCache()
+        import os as _dg_os
+        self._dg_enabled = _dg_os.environ.get("VT13_DAMAGE_GATE", "0") == "1"
+        self._dg_log2 = None
+        self._dg_pps = None
+        self._dg_expected = None
+        self._dg_skip = False
+        self._dg_gaps = 0
         if config.decoder.parameter_sets_file is not None:
             try:
                 self.params.load_file(config.decoder.parameter_sets_file)
@@ -312,6 +409,16 @@ class VT13Stream:
 
     def _open_source(self, now: float) -> bool:
         try:
+            # BEGIN VT13_ASYNC_USB_EXPERIMENT
+            import os
+            if os.environ.get("VT13_ASYNC_USB", "0") == "1":
+                from .async_usb import AsyncBufferedSource
+                if not isinstance(self.source, AsyncBufferedSource):
+                    self.source = AsyncBufferedSource(
+                        self.source,
+                        max_chunks=int(os.environ.get("VT13_ASYNC_CHUNKS", "16384")),
+                    )
+            # END VT13_ASYNC_USB_EXPERIMENT
             self.source.open()
         except Exception as exc:
             message = f"cannot open USB source: {exc}"
@@ -764,8 +871,111 @@ class VT13Stream:
         self._event("output_stall", f"{stalled:.3f}s")
         self._mark_discontinuity("output_stall")
 
+
+    def _dg_should_skip(self, au: AccessUnit) -> bool:
+        if not self._dg_enabled:
+            return False
+        for nal in au.nals:
+            if nal.nal_type == 33:
+                try:
+                    self._dg_log2 = _dg_parse_sps_log2(nal.payload)
+                except Exception:
+                    self._dg_log2 = None
+            elif nal.nal_type == 34:
+                try:
+                    self._dg_pps = _dg_parse_pps(nal.payload)
+                except Exception:
+                    self._dg_pps = None
+        if self._dg_log2 is None or self._dg_pps is None:
+            return False
+        vcl = next((n for n in au.nals if n.is_vcl), None)
+        if vcl is None:
+            return False
+        try:
+            if au.has_irap:
+                self._dg_skip = False
+                self._dg_expected = _dg_parse_poc(vcl.payload, vcl.nal_type, self._dg_log2, self._dg_pps)
+                return False
+            if self._dg_skip:
+                return True
+            poc = _dg_parse_poc(vcl.payload, vcl.nal_type, self._dg_log2, self._dg_pps)
+            if poc is None:
+                return False
+            if self._dg_expected is not None:
+                mask = (1 << self._dg_log2) - 1
+                if ((poc - self._dg_expected) & mask) != 1:
+                    self._dg_skip = True
+                    self._dg_gaps += 1
+                    if self._dg_gaps <= 20 or self._dg_gaps % 50 == 0:
+                        self.logger.warning(
+                            "damage gate: POC %s -> %s discontinuity; skipping GOP until next IRAP (gap #%d)",
+                            self._dg_expected, poc, self._dg_gaps,
+                        )
+                    return True
+            self._dg_expected = poc
+            return False
+        except Exception:
+            return False
+
     def _handle_au(self, au: AccessUnit, now: float) -> None:
         self.stats.record_au(au)
+        # BEGIN VT13_DAMAGE_GATE
+        if self._dg_should_skip(au):
+            self.stats.record_skipped_au()
+            return
+        # END VT13_DAMAGE_GATE
+        # BEGIN VT13_SHED_TO_IRAP
+        # Opt-in load shedding: keep/skip whole GOPs so the decode path can
+        # keep up with a higher source rate without touching USB reads.
+        import os as _vt13_shed_os
+        if _vt13_shed_os.environ.get("VT13_SHED_TO_IRAP", "0") == "1":
+            if au.has_irap:
+                _keep_n = max(1, int(_vt13_shed_os.environ.get("VT13_SHED_KEEP", "1")))
+                _skip_n = max(0, int(_vt13_shed_os.environ.get("VT13_SHED_SKIP", "1")))
+                _idx = getattr(self, "_vt13_shed_gop", -1) + 1
+                self._vt13_shed_gop = _idx
+                _cycle = _keep_n + _skip_n
+                self._vt13_shed_keep = (_idx % _cycle) < _keep_n
+            if not getattr(self, "_vt13_shed_keep", True):
+                self.stats.record_skipped_au()
+                return
+        # END VT13_SHED_TO_IRAP
+        # BEGIN VT13_LOW_LATENCY_CATCHUP_V2
+        # Preserve raw USB/NAL parsing, but do not waste CPU decoding stale AUs.
+        # Skipped HEVC AUs require a fresh IRAP before decoding can resume.
+        import os as _vt13_ll_os
+        _vt13_ll_ms = float(_vt13_ll_os.environ.get("VT13_LOW_LATENCY_MS", "0"))
+        if _vt13_ll_ms > 0:
+            _vt13_ll_age = max(0.0, time.monotonic() - au.received_at)
+            _vt13_ll_limit = _vt13_ll_ms / 1000.0
+            _vt13_ll_active = getattr(self, "_vt13_ll_catching_up", False)
+            if _vt13_ll_age > _vt13_ll_limit or (
+                _vt13_ll_active and _vt13_ll_age > _vt13_ll_limit * 0.5
+            ):
+                if not _vt13_ll_active:
+                    self._vt13_ll_catching_up = True
+                    self.decoder.reset()
+                    self._keyframe_started_since_reset = False
+                    self._irap_seen_since_reset = False
+                    self._waiting_logged = False
+                    self.logger.warning(
+                        "LOW LATENCY catch-up: AU age %.2fs exceeds %.2fs; "
+                        "skipping decode of stale AUs (not USB bytes), then "
+                        "waiting for a FRESH IRAP",
+                        _vt13_ll_age, _vt13_ll_limit,
+                    )
+                    self.stats.set_state("catching_up", "discarding stale decode work")
+                self.stats.record_skipped_au()
+                return
+            if _vt13_ll_active:
+                self._vt13_ll_catching_up = False
+                self.logger.warning(
+                    "LOW LATENCY caught up: AU age %.2fs; "
+                    "decode will resume on next IRAP (relink VT03 if none arrives)",
+                    _vt13_ll_age,
+                )
+                self.stats.set_state("waiting_keyframe", "low-latency resync")
+        # END VT13_LOW_LATENCY_CATCHUP_V2
         if not au.has_vcl:
             return
         self._last_vcl_au_at = now

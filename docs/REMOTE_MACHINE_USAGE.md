@@ -203,6 +203,12 @@ kernel module still follows the R2/R3 rules in `AGENTS.md`.
   0 corrupt, 0 errors, 0 dropped AUs, `PIPELINE_RC=0`; dmesg 20 `0xf` /
   10 aborts; memory 376 -> 365 MiB (no growth); temperature 59 -> 66 C;
   clean exit. Evidence `captures/manual_live/soak_20261110_144438/`.
+- **Deployed baseline synced back to the local repo (2026-11-10 15:05)**:
+  `config.py 1a6160d1`, `pipeline.py 75071b00`, `ffmpeg_pipe.py 0936da17`,
+  `async_usb.py d5b52faa`, launcher `e5f73157`, `control.py cc0cbcdc`;
+  `decoder.py` = deployed `0a63d896` + local codec identity logging
+  (`5c7460f0`). Tests 43 passed / 38 skipped. From now on the local repo is
+  the source of truth; deployment edits must be flowed back and committed.
   Note: CMA free is only ~106-115 MB; requesting 20 x 1080p buffers can yield 12
   and `STREAMON` EINVAL — use `--cap-bufs 17`. Backup
   `~/.codex_tmp/backup_d3_20261110_112758/deployed.tar` (`0ed6e107...`).

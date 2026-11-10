@@ -108,6 +108,17 @@ class HevcDecoder:
 
     def _new_context(self):
         ctx = self.av.CodecContext.create(self.config.codec, "r")
+        # BEGIN VT13_AV_THREADS_EXPERIMENT
+        import os as _vt13_os
+        _vt13_n = int(_vt13_os.environ.get("VT13_AV_THREADS", "0"))
+        if _vt13_n > 0:
+            _vt13_thread_type = _vt13_os.environ.get("VT13_AV_THREAD_TYPE", "AUTO").upper()
+            if _vt13_thread_type not in {"AUTO", "FRAME", "SLICE"}:
+                raise ValueError("VT13_AV_THREAD_TYPE must be AUTO, FRAME, or SLICE")
+            ctx.thread_type = _vt13_thread_type
+            ctx.thread_count = _vt13_n
+            self.logger.info("experimental PyAV threads: %d", _vt13_n)
+        # END VT13_AV_THREADS_EXPERIMENT
         if self.config.allow_corrupt_frames:
             flag = getattr(self.av.codec.context.Flags, "output_corrupt", 1 << 3)
             ctx.flags |= int(flag)

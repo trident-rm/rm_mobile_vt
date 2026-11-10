@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import queue
 import shutil
 import subprocess
@@ -47,6 +48,18 @@ class FfmpegPipeDecoder(HevcDecoder):
         self._display_green_dropped = 0
         self._display_grey_dropped = 0
         self._display_partial_green_dropped = 0
+        try:
+            _display_fps = float(os.environ.get("VT13_DISPLAY_FPS", "0") or 0)
+        except ValueError:
+            _display_fps = 0.0
+        self._display_min_interval = (1.0 / _display_fps) if _display_fps > 0 else 0.0
+        self._display_last_at = 0.0
+        self._timing = os.environ.get("VT13_PIPE_TIMING", "0") == "1"
+        self._t_wait = []
+        self._t_disp = []
+        self._t_bgr = []
+        self._t_build = []
+        self._t_log_at = 0.0
         super().__init__(config, logger)
 
     def _fps_mode_args(self, binary: str) -> list[str]:
@@ -75,12 +88,19 @@ class FfmpegPipeDecoder(HevcDecoder):
         self._frame_q = queue.Queue(maxsize=256)
         self._reader_error = None
         self._terminated = False
+        self._raw_mode = os.environ.get("VT13_PIPE_TRANSPORT", "nut") == "raw"
+        self._raw_dims = None
+        self._raw_dims_ready = threading.Event()
+        if self._raw_mode:
+            _log_level = "info"
+            _out_args = ["-pix_fmt", "nv12", "-c:v", "rawvideo", "-f", "rawvideo", "pipe:1"]
+        else:
+            _log_level = "warning"
+            _out_args = ["-pix_fmt", "nv12", "-c:v", "rawvideo", "-flush_packets", "1", "-f", "nut", "pipe:1"]
         cmd = [
-            binary, "-hide_banner", "-nostdin", "-loglevel", "warning",
+            binary, "-hide_banner", "-nostdin", "-loglevel", _log_level,
             "-c:v", self.config.ffmpeg_codec, "-f", "hevc", "-i", "pipe:0",
-            "-map", "0:v:0", *self._fps_mode_args(binary),
-            "-pix_fmt", "nv12", "-c:v", "rawvideo", "-flush_packets", "1",
-            "-f", "nut", "pipe:1",
+            "-map", "0:v:0", *self._fps_mode_args(binary), *_out_args,
         ]
         self.logger.info(
             "ffmpeg-pipe backend: binary=%s codec=%s", binary, self.config.ffmpeg_codec
@@ -102,20 +122,35 @@ class FfmpegPipeDecoder(HevcDecoder):
         try:
             for line in iter(proc.stderr.readline, b""):
                 text = line.decode("utf-8", "replace").strip()
+                if getattr(self, "_raw_mode", False) and "rawvideo" in text:
+                    import re as _re
+                    _m = _re.search(r"(\d{2,5})x(\d{2,5})", text)
+                    if _m:
+                        self._raw_dims = (int(_m.group(1)), int(_m.group(2)))
+                        self._raw_dims_ready.set()
                 if text:
                     self.logger.warning("ffmpeg: %s", text)
         except Exception:
             pass
 
     def _read_frames(self, proc: subprocess.Popen) -> None:
+        if getattr(self, "_raw_mode", False):
+            self._read_frames_raw(proc)
+            return
         import av
         import cv2
         import numpy as np
         try:
             with av.open(proc.stdout, format="nut") as container:
+                _prev_end = None
                 for frame in container.decode(video=0):
+                    _t0 = time.monotonic()
+                    if self._timing and _prev_end is not None:
+                        self._t_wait.append(_t0 - _prev_end)
                     self._write_display(frame, np)
+                    _t1 = time.monotonic()
                     image = self._frame_to_bgr(frame, cv2, np) if self.config.convert_bgr else None
+                    _t2 = time.monotonic()
                     now = time.monotonic()
                     au = self._au_context
                     received_at = au.received_at if au is not None else now
@@ -142,6 +177,138 @@ class FfmpegPipeDecoder(HevcDecoder):
                             pass
                         self._pipe_dropped += 1
                         self._frame_q.put_nowait(item)
+                    _prev_end = time.monotonic()
+                    if self._timing:
+                        self._t_disp.append(_t1 - _t0)
+                        self._t_bgr.append(_t2 - _t1)
+                        self._t_build.append(_prev_end - _t2)
+                        self._maybe_log_timing()
+        except Exception as exc:
+            if not self._terminated:
+                self._reader_error = repr(exc)
+        finally:
+            try:
+                proc.stdout.close()
+            except Exception:
+                pass
+
+
+    def _maybe_log_timing(self) -> None:
+        now = time.monotonic()
+        if now - self._t_log_at < 5.0:
+            return
+        self._t_log_at = now
+
+        def q(values, p):
+            if not values:
+                return 0.0
+            ordered = sorted(values)
+            idx = max(0, min(len(ordered) - 1, int(round(p * (len(ordered) - 1)))))
+            return ordered[idx] * 1000.0
+
+        for name, values in (
+            ("wait", self._t_wait),
+            ("display", self._t_disp),
+            ("bgr", self._t_bgr),
+            ("build", self._t_build),
+        ):
+            if values:
+                self.logger.warning(
+                    "pipe timing %s n=%d p50=%.1fms p95=%.1fms max=%.1fms",
+                    name, len(values), q(values, 0.50), q(values, 0.95), q(values, 1.0),
+                )
+        for values in (self._t_wait, self._t_disp, self._t_bgr, self._t_build):
+            values.clear()
+
+
+    def _read_exact(self, stream: Any, size: int) -> bytes:
+        chunks = []
+        remaining = size
+        while remaining > 0 and not self._terminated:
+            data = stream.read(remaining)
+            if not data:
+                break
+            chunks.append(data)
+            remaining -= len(data)
+        return b"".join(chunks)
+
+    def _write_display_raw(self, arr: Any) -> None:
+        if self.config.display != "ffplay" or self._display_disabled:
+            return
+        if self._display_min_interval > 0:
+            now = time.monotonic()
+            if now - self._display_last_at < self._display_min_interval:
+                return
+            self._display_last_at = now
+        green = self._looks_like_green_curtain(arr)
+        partial_green = (not green) and self._looks_like_partial_green(arr)
+        if green or partial_green:
+            if partial_green:
+                self._display_partial_green_dropped += 1
+            self._display_green_dropped += 1
+            return
+        if self._looks_like_grey_frame(arr):
+            self._display_grey_dropped += 1
+            return
+        self._ensure_display(int(arr.shape[1]), int(arr.shape[0] * 2 // 3))
+        q = self._display_q
+        if q is None:
+            return
+        try:
+            q.put_nowait(arr)
+        except queue.Full:
+            self._display_dropped += 1
+            try:
+                q.get_nowait()
+            except queue.Empty:
+                pass
+            try:
+                q.put_nowait(arr)
+            except queue.Full:
+                pass
+
+    def _read_frames_raw(self, proc: subprocess.Popen) -> None:
+        import cv2
+        import numpy as np
+        try:
+            if not self._raw_dims_ready.wait(20.0):
+                raise RuntimeError("raw transport: no frame size from ffmpeg stderr")
+            w, h = self._raw_dims
+            size = w * h * 3 // 2
+            stream = proc.stdout
+            while not self._terminated:
+                data = self._read_exact(stream, size)
+                if len(data) != size:
+                    break
+                arr = np.frombuffer(data, dtype=np.uint8).reshape(h + h // 2, w)
+                self._write_display_raw(arr)
+                image = cv2.cvtColor(arr, cv2.COLOR_YUV2BGR_NV12) if self.config.convert_bgr else None
+                now = time.monotonic()
+                au = self._au_context
+                received_at = au.received_at if au is not None else now
+                self.sequence += 1
+                item = Frame(
+                    image=image,
+                    sequence=self.sequence,
+                    width=w,
+                    height=h,
+                    received_at=received_at,
+                    decoded_at=now,
+                    pts=None,
+                    keyframe=bool(au.has_irap) if au is not None else False,
+                    au_index=self._au_index,
+                    latency_s=max(0.0, now - received_at),
+                    corrupt=False,
+                )
+                try:
+                    self._frame_q.put_nowait(item)
+                except queue.Full:
+                    try:
+                        self._frame_q.get_nowait()
+                    except queue.Empty:
+                        pass
+                    self._pipe_dropped += 1
+                    self._frame_q.put_nowait(item)
         except Exception as exc:
             if not self._terminated:
                 self._reader_error = repr(exc)
@@ -249,27 +416,36 @@ class FfmpegPipeDecoder(HevcDecoder):
         )
 
     def _ensure_display(self, w: int, h: int) -> None:
-        if self.config.display != "ffplay" or self._display_disabled:
+        if self.config.display not in ("ffplay", "kms") or self._display_disabled:
             return
         if self._display_proc is not None:
             if self._display_dims == (w, h):
                 if self._display_proc.poll() is None:
                     return
             self._close_display()
-        binary = self.config.ffplay_path or shutil.which("ffplay")
-        if not binary:
-            self.logger.warning("ffplay display requested but no ffplay binary; display disabled")
-            self._display_disabled = True
-            return
+        if self.config.display == "kms":
+            binary = os.environ.get("VT13_KMS_RENDER") or os.path.expanduser(
+                "~/mobile_vt/.codex_tmp/kiosk_20261110/kms_render")
+            if not os.path.exists(binary):
+                self.logger.warning("kms display requested but %s missing; display disabled", binary)
+                self._display_disabled = True
+                return
+            cmd = [binary, "--stdin", "--dumb", "--hide-primary", "--video", f"{w}x{h}"]
+        else:
+            binary = self.config.ffplay_path or shutil.which("ffplay")
+            if not binary:
+                self.logger.warning("ffplay display requested but no ffplay binary; display disabled")
+                self._display_disabled = True
+                return
+            cmd = [binary, "-hide_banner", "-loglevel", "warning", "-autoexit",
+                   "-fflags", "nobuffer", "-flags", "low_delay", "-framedrop",
+                   "-probesize", "32", "-analyzeduration", "0", "-an", "-sn",
+                   "-f", "rawvideo", "-pixel_format", "nv12", "-video_size", f"{w}x{h}",
+                   "-framerate", "60", "-x", str(self.config.display_width),
+                   "-y", str(self.config.display_height), "-window_title", "VT13-Video",
+                   "-i", "pipe:0"]
         self._display_proc = subprocess.Popen(
-            [binary, "-hide_banner", "-loglevel", "warning", "-autoexit",
-             "-fflags", "nobuffer", "-flags", "low_delay", "-framedrop",
-             "-probesize", "32", "-analyzeduration", "0", "-an", "-sn",
-             "-f", "rawvideo", "-pixel_format", "nv12", "-video_size", f"{w}x{h}",
-             "-framerate", "60", "-x", str(self.config.display_width),
-             "-y", str(self.config.display_height), "-window_title", "VT13-Video",
-             "-i", "pipe:0"],
-            stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         self._display_dims = (w, h)
         self._display_q = queue.Queue(maxsize=1)
@@ -278,17 +454,21 @@ class FfmpegPipeDecoder(HevcDecoder):
             target=self._display_loop, args=(self._display_proc,), daemon=True
         )
         self._display_writer.start()
-        self.logger.info("ffplay display started: %dx%d window %dx%d", w, h,
-                         self.config.display_width, self.config.display_height)
+        self.logger.info("%s display started: %dx%d", self.config.display, w, h)
 
     def _write_display(self, frame: Any, np: Any) -> None:
-        if self.config.display != "ffplay" or self._display_disabled:
+        if self.config.display not in ("ffplay", "kms") or self._display_disabled:
             return
         if frame.format.name != "nv12":
             return
         if bool(getattr(frame, "is_corrupt", False)):
             self._display_corrupt_dropped += 1
             return
+        if self._display_min_interval > 0:
+            _now = time.monotonic()
+            if _now - self._display_last_at < self._display_min_interval:
+                return
+            self._display_last_at = _now
         packed = self._pack_nv12(frame, np)
         green = self._looks_like_green_curtain(packed)
         partial_green = (not green) and self._looks_like_partial_green(packed)

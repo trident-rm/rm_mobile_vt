@@ -1,0 +1,70 @@
+# VT13 USB video receiver configuration.
+# Relative paths are resolved against this file's directory.
+
+device:
+  vid: 0x2ca3
+  pid: 0x1020
+  interface: 0
+  endpoint: 0x81
+  serial: null
+  detach_kernel_driver: false
+  # Experimental read-only drain of the structured-message endpoint. It may
+  # reduce structured-channel backpressure, but testing has not shown it is
+  # required for video stability. No vendor commands are sent.
+  status_interface: 1
+  status_endpoint: 0x82
+  status_drain: true
+
+read:
+  # 4 KiB+ bulk reads trigger frequent EIO on the VT13 endpoint; 2 KiB keeps
+  # the stream stable while limiting syscall overhead.
+  read_size: 2048
+  timeout_ms: 250
+  stall_timeout_s: 3.0
+  # Read up to N chunks immediately after open and feed them to the parser.
+  # Do not discard them: the first chunks after re-enumeration can contain the
+  # fresh VPS/SPS/PPS or IRAP needed to restart decoding.
+  drain_reads: 2
+
+recovery:
+  enabled: true
+  initial_backoff_s: 0.25
+  max_backoff_s: 5.0
+  multiplier: 2.0
+  jitter_fraction: 0.1
+  healthy_reads: 50
+  healthy_seconds: 5.0
+  reset_after_failures: 0
+  clear_halt_on_error: true
+  gap_threshold_s: 0.5
+  reset_on_gap: false
+
+decoder:
+  codec: hevc
+  require_keyframe: true
+  # Emit frames even when USB loss has damaged HEVC references. Without this,
+  # PyAV can silently suppress most frames after a recoverable EIO.
+  allow_corrupt_frames: true
+  # Keep corrupt frames out of the frame queue by default. Set true only for
+  # diagnostics; corrupt frames are usually gray and unusable.
+  emit_corrupt_frames: false
+  parameter_sets_file: null
+  # When set, save the latest complete VPS/SPS/PPS set here as Annex-B.
+  # The file can later be passed back with --parameter-sets-file.
+  save_parameter_sets: null
+  max_consecutive_errors: 3
+  queue_size: 2
+  drop_oldest: true
+  output_format: gray
+
+output:
+  preview: false
+  preview_width: 1000
+  window_title: "VT13 USB HEVC"
+  record: null
+  save_first: null
+  stats_interval_s: 1.0
+  log_level: INFO
+
+runtime:
+  max_seconds: 0

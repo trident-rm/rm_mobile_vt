@@ -471,8 +471,8 @@ def validate_config(cfg: AppConfig) -> None:
         raise ConfigError("decoder.queue_size must be at least 1")
     if cfg.decoder.output_format not in {"bgr24", "rgb24", "gray"}:
         raise ConfigError("decoder.output_format must be bgr24, rgb24, or gray")
-    if cfg.decoder.display not in {"none", "ffplay"}:
-        raise ConfigError("decoder.display must be 'none' or 'ffplay'")
+    if cfg.decoder.display not in {"none", "ffplay", "kms"}:
+        raise ConfigError("decoder.display must be 'none', 'ffplay' or 'kms'")
     if cfg.decoder.display_width < 16 or cfg.decoder.display_height < 16:
         raise ConfigError("decoder.display_width/display_height must be at least 16")
     if cfg.decoder.stall_restart_s < 0:

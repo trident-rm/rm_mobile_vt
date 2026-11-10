@@ -43,6 +43,17 @@ deployed hashes, P0 root cause: upstream stream damage → firmware 0xf session
 death → IRAP starvation; evidence index, backups, next tracks A/B/C/D).
 Nothing committed (user instruction).
 
+### 2026-11-10 15:05 HKT — 部署基线回流：本地与 CM311 一致
+
+- 远端非 Git，kiosk/async/shed/damage/ffmpeg_pipe 改动此前仅在现场。本次以部署为准：
+  `config.py 1a6160d1`、`pipeline.py 75071b00`、`ffmpeg_pipe.py 0936da17`、
+  `async_usb.py d5b52faa`、launcher `e5f73157`、`control.py cc0cbcdc`；
+  `decoder.py` = 部署 `0a63d896` + 本地 codec 身份日志 = `5c7460f0`。
+- 新增 `config/vt13_video.no_status.yaml`、`config/vt13_video.yuvtest.yaml`。
+- 本地测试 43 passed / 38 skipped / RC=0；备份
+  `.codex_tmp/sync_20261110/local_backup.tar`（`8410cc9d…`）。
+- 政策：本地仓库为唯一代码来源；部署改动必须回流并提交。
+
 ### 2026-11-10 14:44–14:54 HKT — 10 分钟 soak：PASS
 
 - 配置：`DJI_BACKEND=worker`、async OFF、control on、kernel watch on、stall 0、
