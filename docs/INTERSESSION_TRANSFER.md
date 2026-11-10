@@ -1,5 +1,34 @@
 # Intersession Transfer: VT13 / CM311
 
+## Current status (2026-11-10 17:20 HKT) — D3 live kiosk working
+
+**Working configuration** (`config/vt13_video.kiosk.yaml`): `decoder.backend=worker`
+(C V4L2/KMS worker), `VT13_ASYNC_USB=0` (must stay off), control on, kernel abort
+watch on, `stall_restart_s=0`, no recording, `--hide-primary`.
+
+**Measured**: live 57.8–58.8 fps, 0 corrupt; one rebuild per ~14 s (TTFV ~260 ms),
+last frame held on screen during the rebuild (no black flash).
+- D3d 3×60 s: 57.80 / 58.02 / 58.49 fps; 8–12 `0xf` per run → strict "0 `0xf`" gate not met.
+- K3 30-min soak: 105856 frames / 1800.087 s = 58.81 fps, 128 sessions, 0 corrupt,
+  0 oversize; memory 358→359 MiB; 61→67 °C; clean exit.
+
+**Root causes learned**: the raw USB stream is clean (capture-only 10.6 Mbps,
+60.3 AU/s, no gaps); the Python async USB reader thread (GIL/scheduling) was the
+main `0xf` source and is off; KMS scanout is a secondary contributor. Soft
+recovery (STREAMOFF without REQBUFS) does not work — meson-vdec needs a full
+reconfigure; taskset affinity has no effect. Residual `0xf` ~0.1–0.2/s is
+host-side VDEC/KMS vs xHCI/DRAM contention.
+
+**Plan status**: B0/D3-0/D3a/D3b PASS; D3c PARTIAL (TTFV 260 ms vs target 200,
+dynamic resolution untested); D3d PARTIAL (fps PASS, 0 `0xf` FAIL); K3 PASS
+(30-min soak; `deploy/vt13-kiosk.service` is a draft, NOT enabled).
+
+**Repo**: synced with the deployed CM311 tree (decoder.py keeps the local codec
+identity logging); tests 43 passed / 38 skipped. Docs are exactly three files:
+`AGENTS.md`, `docs/INTERSESSION_TRANSFER.md`, `docs/REMOTE_MACHINE_USAGE.md`.
+D3 reports are archived under `.codex_tmp/docs_backup_20261110_d3/`.
+
+
 Status: 2026-11-10 02:55 HKT — **root cause corrected**. Moving the receiver
 (USB2 extension, re-enumeration 005→006) did NOT change the failure (3×60 s:
 31/32/34 aborts, 243/278/182 frames). A capture-only run with the same receiver

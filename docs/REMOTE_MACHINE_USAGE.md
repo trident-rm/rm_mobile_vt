@@ -1,5 +1,15 @@
 # Remote Machine Usage Reference
 
+## Current live baseline (2026-11-10 17:20 HKT)
+
+`decoder.backend=worker` + `VT13_ASYNC_USB=0` + control on + kernel abort watch +
+`stall_restart_s=0` + no recording + `--hide-primary`: 57.8–58.8 fps, 0 corrupt,
+one in-process V4L2 rebuild per ~14 s (TTFV ~260 ms, last frame held).
+30-min soak: 105856 frames / 1800 s = 58.81 fps, 128 sessions, memory flat.
+Residual `0xf` ~0.1–0.2/s is host-side; async reader is the main cause and must
+stay off. K3 unit is a draft (`deploy/vt13-kiosk.service`), not enabled.
+
+
 Status: 2026-11-10 02:55 HKT (**root cause corrected**: moving the receiver to a
 USB2 extension re-enumerated it 005→006 but did NOT change the failure — 3×60 s
 gave 31/32/34 aborts and 243/278/182 frames, same as before. A capture-only run
