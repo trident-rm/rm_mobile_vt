@@ -233,7 +233,7 @@ lsusb -d 2ca3:1020
 ## 8. 工程化实现状态（2026-10-31）
 
 开发流程、问题处理、调试手册、调参建议与延迟分析见
-[`docs/DEVELOPMENT_FLOW_AND_LATENCY.md`](docs/DEVELOPMENT_FLOW_AND_LATENCY.md)。
+[`archive/DEVELOPMENT_FLOW_AND_LATENCY.md`](archive/DEVELOPMENT_FLOW_AND_LATENCY.md)。
 
 已在工作目录新增模块化接收程序 `vt13_video/`，覆盖：
 

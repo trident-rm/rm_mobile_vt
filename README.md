@@ -61,7 +61,7 @@ VT03 camera -> wireless link -> VT13 -> USB Bulk IN 0x81
 
 ## Further documentation
 
-- [Development flow, debugging, tuning, and latency](docs/DEVELOPMENT_FLOW_AND_LATENCY.md)
+- [Development flow, debugging, tuning, and latency](archive/DEVELOPMENT_FLOW_AND_LATENCY.md)
   explains how the receiver was built, the failure modes and fixes, the debug
   playbook, tuning defaults, measured receiver-side latency, and when a
   C++/Rust rewrite is or is not justified.

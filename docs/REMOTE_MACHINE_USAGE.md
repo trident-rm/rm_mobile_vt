@@ -1,7 +1,39 @@
 # Remote Machine Usage Reference
 
-Status: 2026-11-09 22:05 HKT (duplicate ffplay window on resolution change
-fixed: run 17 started 1832 then 1080 without closing the old window; run 18
+Status: 2026-11-10 02:55 HKT (**root cause corrected**: moving the receiver to a
+USB2 extension re-enumerated it 005→006 but did NOT change the failure — 3×60 s
+gave 31/32/34 aborts and 243/278/182 frames, same as before. A capture-only run
+with the same receiver/USB path but no decoding delivered a clean stream:
+76.2 MB/60 s = 10.2 Mbps, 60.3 AU/s, max gap 0.17 s, only 2/451 GOPs with POC
+gaps. The pipeline's clean 1080p replay tops out at 38.5 fps < 60 fps source, so
+it sustains a backlog (async queue 15k/16k), the receiver overflows, the stream
+is damaged and `0xf` follows. Best live result: async + control disabled =
+778 frames/61 s (12.7 fps), 10 aborts, 0 green drops. Opt-in blocks are deployed and default-off: `VT13_SHED_TO_IRAP` in
+`pipeline.py` `9d0013c2` and `VT13_DISPLAY_FPS` in `ffmpeg_pipe.py` `edb960c2`
+(backups `~/.codex_tmp/backup_shed_20261109/`, `backup_dispcap_20261109/`).
+Best tested combo: small async queue (2000 chunks ≈2.5 s) + 50% GOP shed +
+display cap 25 + no-copy + control off = 552/529 frames per 60 s (9.2/8.7 fps),
+15/17 aborts, ~3 MiB backlog. Note: the
+pipeline's recorded raw is only the bytes delivered to the parser; with an async
+backlog it is not the full USB stream. User visual check: the default config
+still updates every few seconds (~5 s lag), while async ON barely updates because
+the ~25 MiB (~20 s) backlog makes decoded frames stale — async is a diagnostic
+only, not a viewing path. Next: raise pipeline throughput above
+60 fps or close the shed-to-IRAP loop; RF is no longer the priority.)
+Earlier: P1-1 clean startup 0.26–0.32 s for one frame; reopen right after an
+injected `0xf` takes 0.277–0.305 s; 300-frame rawvideo Copy-Out 38.7 fps vs
+no-copy 89.9 fps. P0-3: B1 raw capture damaged at byte level (18 oversized fake
+parameter-set NALs, 74/295 GOPs with POC gaps) — that attribution is now
+superseded by the capture-only result above. P0-1 A/B/A: ON 31/32 aborts and
+267/216 frames vs OFF 33 aborts and 225 frames, all 60 s → requested IDR is not
+the `0xf` trigger. P0-0 snapshot: CM311 idle, `/dev/video0` free, `meson_vdec`
+refcnt 0, receiver `2ca3:1020` enumerated, Xorg `:0` reachable. Deployed: config
+`f47c7d9b...`, pipeline `9d0013c2...`, ffmpeg_pipe `b6672def...` (pipeline `9ada66df` with opt-in
+`VT13_DAMAGE_GATE`, default off), launcher
+`c0e35756...`, release FFmpeg `1ed2b711...`. Details in
+`docs/INTERSESSION_TRANSFER.md` 23:02 entry. Earlier: duplicate ffplay window on
+resolution change fixed: run 17 started 1832 then 1080 without closing the old
+window; run 18
 after the fix has one start/one close and no residual process. ffmpeg_pipe
 `871af9b2...`. Earlier: no-request control run 17: 1 request, 30 aborts,
 31 IRAPs, 273 frames/60 s — the requested IDRs are NOT the trigger; the
@@ -58,6 +90,77 @@ bounded `timeout`, write to a step-specific or run-specific directory, do not
 overwrite golden data, and record the command, RC, and evidence. Starting a
 real-time USB receiver/HDMI display, stopping unrelated services, or reloading a
 kernel module still follows the R2/R3 rules in `AGENTS.md`.
+
+## Current device snapshot (2026-11-09 22:40 HKT, read-only)
+
+- Identity: `armbian`, `aarch64`, kernel `6.18.59-ophub`, 4 cores, 1.7 GiB RAM,
+  103 GB free on `/`, uptime 3 d 7 h, load 0.22.
+- Video/decoder: `/dev/video0` has no opener; `meson_vdec` loaded, refcnt 0;
+  `/dev/dri/{card0,card1,renderD128}` present; Xorg `:0`/tty7 reachable
+  (`xdpyinfo` RC=0).
+- USB: `2ca3:1020 DJI C5` enumerated on bus 1; `/dev/ttyACM0` (control) and
+  `/dev/ttyACM1` exist. The VT link was already on during this snapshot.
+- No `vt13_video`/`ffmpeg`/`ffplay` process was running.
+- Remote working tree is **not** a Git repository; deployed-file hashes are the
+  only consistency evidence. Current hashes: `config.py` `f47c7d9b...`,
+  `pipeline.py` `c700b8cd...`, `ffmpeg_pipe.py` `871af9b2...`,
+  `control.py` `cc0cbcdc...`, `decoder.py` `0a63d896...` (experimental),
+  `.codex_runs/live_capture_run5.sh` `c0e35756...`,
+  `~/ffmpeg-6.1.1-release/ffmpeg` `1ed2b711...`,
+  `~/ffmpeg-6.1.1-v4l2/ffmpeg` `2a204518...`; venv PyAV 11.0.0.
+- Live launcher config used by runs 15/17/18: `kernel_abort_watch=true`,
+  `iframe_on_connect=true`, `stall_restart_s` 0 or 2, release Copy-Out FFmpeg,
+  `convert_bgr=false`, `display=ffplay`, 1024×576 window, 1920×1080 source.
+
+## USB rootfs topology (2026-11-10 00:06 HKT, U0 read-only)
+
+- `/dev/sda2` (ext4) is the root filesystem on a **USB SG Flash**; `/dev/sda1`
+  (vfat) is `/boot`. `TRAN=usb`, udev path
+  `platform-xhci-hcd.2.auto-usb-0:2:1.0-scsi-0:0:0:0`.
+- The DJI receiver `2ca3:1020` and the SG Flash are both on Bus 001,
+  `xhci-hcd/2p` 480M (Port 001 and Port 002) → **same USB 2.0 host controller**.
+- Swap is `zram0` (1 GB, RAM-backed); `/tmp` and `/dev/shm` are tmpfs
+  (`/dev/shm` 894 MB). Root mount options: `noatime,nodiratime,commit=600,data=writeback`.
+- No USB/UAS/reset/I-O/ext4 errors in the current boot journal; idle `wa=0`.
+- Evidence: `.codex_tmp/u0_usb_rootfs_20261110/readonly.txt`. For future live
+  tests, put recordings under `/dev/shm` to remove rootfs write-back from the
+  shared-controller path (no system change needed).
+
+## Kiosk state (2026-11-10 01:30 HKT)
+
+- `lightdm` stopped; enable symlink removed (unit static); default target
+  `multi-user.target`. HDMI shows the text console when no renderer runs; SSH
+  is unaffected.
+- Restore desktop: `sudo systemctl start lightdm` (and `chvt 7` if needed).
+- KMS renderer: `tools/kms_render.c` (binary
+  `~/.codex_tmp/kiosk_20261110/kms_render`, SHA256 `d3dc2d6e...`), invoked by
+  the pipeline with `decoder.display: kms` (config `25004fb8`,
+  ffmpeg_pipe `67a40898`).
+- Live KMS result: 659 frames/60.9 s = 10.8 fps, 15 `0xf`, AU 48.5/s with
+  display cap 25 + 50% GOP shed; regression KMS3: 625 frames/10.4 fps/14.
+  ffplay same config: 529 frames/8.7 fps/17.
+
+## Audit deliverables (archived 2026-11-10; backup under `.codex_tmp/docs_backup_20261110/`)
+
+- U4-lite: recording to `/dev/shm` vs rootfs gave 541/14 vs 529/17 — no
+  storage-interference evidence; U4 A/B not needed.
+- `.codex_tmp/docs_backup_20261110/pipeline_bottleneck_analysis.md` — full-chain capacity/loss analysis
+  (reset cycle dominant; consumer 50.7 vs 60.3 AU/s; 41% fed-AU→frame).
+- `.codex_tmp/docs_backup_20261110/plan_review_20261110.md` — review of both plans against the
+  2026-11-09/10 evidence (stage status, corrections, revised order).
+- `.codex_tmp/docs_backup_20261110/dma_optimization_plan.md` — K2c: copy inventory + D1/D3 plan
+  (ffmpeg->kms direct; custom V4L2 dmabuf->KMS zero-copy).
+- `.codex_tmp/docs_backup_20261110/p2_2_display_feasibility.md` — P2-2: NV12 KMS overlay + hardware
+  scaling feasibility, EXPBUF/DRM-master open issues, PoC plan. EXPBUF,
+  PRIME_FD_TO_HANDLE and ADDFB2 runtime-verified (NV12 fb created); only the
+  plane commit still needs DRM master (Xorg holds it).
+- `.codex_tmp/docs_backup_20261110/0xf_layer_matrix.md` — U3: `0xf` layer classification and actionable
+  fix layers (input damage first; padding is diagnostic only).
+- `.codex_tmp/docs_backup_20261110/ffmpeg_lifecycle_comparison.md` — U2: FFmpeg V4L2 M2M lifecycle,
+  refcount symmetry and Copy-Out comparison (audit only).
+- `.codex_tmp/docs_backup_20261110/upstream_patch_matrix.md` — U1: upstream meson-vdec v7 19-patch
+  status matrix against the local 6.18.59-ophub tree (audit only; no candidate
+  approved for deployment).
 
 ## Connection details
 

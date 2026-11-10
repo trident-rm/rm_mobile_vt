@@ -1,6 +1,34 @@
 # Intersession Transfer: VT13 / CM311
 
-Status: 2026-11-09 21:04 HKT — run 11 added kernel-abort fast recovery
+Status: 2026-11-10 02:55 HKT — **root cause corrected**. Moving the receiver
+(USB2 extension, re-enumeration 005→006) did NOT change the failure (3×60 s:
+31/32/34 aborts, 243/278/182 frames). A capture-only run with the same receiver
+and USB path but NO decoding delivered a clean stream: 76.2 MB/60 s (10.2 Mbps),
+60.3 AU/s, max gap 0.17 s, only 2/451 GOPs with POC gaps. The pipeline's clean
+1080p replay tops out at **38.5 fps**, below the 60 fps source, so it sustains a
+backlog (async queue 15k/16k), the receiver overflows, the stream is damaged and
+`0xf` follows. So the damage is pipeline-throughput-induced, not RF/upstream.
+Best live result today: async + control disabled = **778 frames/61 s (12.7 fps),
+10 aborts, 0 green drops**. An opt-in `VT13_SHED_TO_IRAP` whole-GOP shed block was
+tested and then **reverted**; the remote pipeline is back to `c700b8cd...`
+(patch script kept in `.codex_tmp/p1_2_shed_20261109/`). Next: raise pipeline
+throughput above 60 fps or close the loop on shed-to-IRAP. Both the shed block
+(`pipeline.py` `9d0013c2`) and the display cap (`ffmpeg_pipe.py` `edb960c2`) are
+opt-in and default-off; the default path is unchanged. S0/S1: per-frame cost is all in ffmpeg/nut/PyAV wait (p50 17.1 ms no-copy); raw
+transport lifts clean replay to 65.3 fps but live is unchanged. Display-off + 50%
+GOP shed remains best (1530 frames, 2 aborts); ffplay/X11 software rendering is
+the biggest reducible load. Best watchable combo: small async queue (2000) +
+50% GOP shed + display cap 25 + no-copy + control off = 552/529 frames/60 s
+(9.2/8.7 fps), 15/17 aborts, ~3 MiB backlog. Deployed: pipeline `9d0013c2`,
+ffmpeg_pipe `b6672def` (all opt-in, default nut/off). **User visual check
+(23:30): the default config still updates every few seconds (~5 s lag), while
+async ON barely updates — async buffers ~25 MiB (~20 s) of stream, so decoded
+frames are stale; async is a diagnostic only, not a viewing path.**
+Earlier: P1-1 offline
+profiling (clean startup 0.26–0.32 s; post-`0xf` reopen 0.277–0.305 s; 300-frame
+rawvideo Copy-Out 38.7 fps vs no-copy 89.9 fps). Earlier: P0-1 A/B/A (ON 31/32
+aborts, 267/216 frames; OFF 33 aborts, 225 frames) → requested IDR is not the
+`0xf` trigger. Earlier: P0-0 snapshot and baseline metric definitions.
 (`journalctl -k -f` → reset + I-frame request). Median recovery is **116 ms**
 (60–303 ms) with 0 watchdog waits, but the abort rate rose to **33/min** and
 only 166 frames/60 s were produced; each requested IDR dies after a few frames.
@@ -10,10 +38,459 @@ factor. Hardware clean-sample throughput measured 38.7 fps for 1080p raw output
 open and suppress green/grey. Next: a no-request control run to measure natural
 abort rate, RF/link mitigation, and POC/missing-AU analysis. Earlier: software
 decode ruled out on CM311; runs 5–10; consolidated
-progress snapshot in `docs/PROGRESS_20261109.md` (verified capabilities,
+progress snapshot in `.codex_tmp/docs_backup_20261110/PROGRESS_20261109.md` (verified capabilities,
 deployed hashes, P0 root cause: upstream stream damage → firmware 0xf session
 death → IRAP starvation; evidence index, backups, next tracks A/B/C/D).
 Nothing committed (user instruction).
+
+### 2026-11-10 01:15–01:30 HKT — Kiosk K1/K2：KMS 直显验证（无 Xorg）
+
+- **K1 渲染器**（`tools/kms_render.c`，远端 `.codex_tmp/kiosk_20261110/kms_render`，
+  SHA256 `d3dc2d6e...`）：取 DRM master、自适应读取当前 CRTC mode、枚举 connector/
+  plane、NV12 overlay、信号退出时清 plane + drop master。
+  - 第一次运行（lightdm 已停）：读到 **当前模式 1920×1080**，测试图 45 s
+    `PLANE_ON fb=48`，干净退出 RC=0。
+- **K2a 真实码流**：ffmpeg（no-copy）→ rawvideo → `kms_render --stdin --dumb`：
+  干净 498 帧 **6.0 s = 83 fps**，`STDIN_DONE frames=498`。
+- **K2b 管线集成**：`decoder.display: kms`（`config.py` `f47c7d9b→25004fb8`；
+  `ffmpeg_pipe.py` `b6672def→67a40898`；备份
+  `~/.codex_tmp/backup_kms_20261110_ffmpeg_pipe.py`）；渲染器用 **dumb buffer**
+  （`ADDFB2 NV12` 已验证），不占用 `/dev/video0`。
+  - KMS1（不丢 GOP、不限帧）：610 帧/61 s=10.0 fps、27 次 0xf、AU 42/s。
+  - KMS2（限帧 25 + 丢 50%）：**659 帧/60.9 s=10.8 fps、15 次 0xf、AU 48.5/s、
+    read gap 0、绿/半绿 3/3**；同条件 ffplay 对照 ASMALL2：529 帧/8.7 fps/17 次。
+    → KMS 直显比 X11+ffplay **约 +25% 帧、略少 abort**，但仍受解码/管道拷贝限制。
+- **系统状态**：lightdm 已 stop、enable 链接已移除（unit 为 static），
+  default=`multi-user.target`；HDMI 无渲染器时为文字终端；SSH 正常。
+  恢复桌面：`sudo systemctl start lightdm`（需 sudo），必要时 `chvt 7`。
+- 回滚：恢复 `ffmpeg_pipe.py` 备份/`config.py` 哈希，`systemctl set-default
+  graphical.target && systemctl start lightdm`。
+- 未 commit；未装包；未改内核/模块。
+- 下一步：K3 systemd 服务 + K2c DMA 零拷贝；方案交付
+  `.codex_tmp/docs_backup_20261110/dma_optimization_plan.md`（D1 kms-direct 旁路 Python → D3 自定义 V4L2
+  客户端 dmabuf→KMS 零拷贝；实测 renderer 拷贝 ~1 ms/帧，Python/nut ~3–6 ms/帧；
+  live 仍受输入损伤/reset 限制）。
+
+### 2026-11-10 00:40–00:42 HKT — U4-lite：录制放 /dev/shm vs USB rootfs
+
+- 目的：U0 发现 rootfs 与 DJI 共用 xhci 控制器；验证“录制写 rootfs”是否影响
+  live。配置与 ASMALL2 完全相同（async 2000 + 丢 50% + 限帧 25 + no-copy +
+  关控制 + iframe on connect/recovery），仅把 `DJI_RUN_DIR` 放到 `/dev/shm`。
+- 结果：**541 帧、14 次 0xf、AU 45.8/s、输入 7.3 Mbps、read gap 4 次**；
+  对照 ASMALL2（rootfs 录制）：529 帧、17 次、AU 47.6/s、backlog ~3 MiB。
+  → **无显著差异；rootfs 写回不是当前 live 的限制因素。**
+- 结论：U4 受控 A/B **不需要启动**（没有存储干扰证据）；保留“未来 live 可把
+  录制放 /dev/shm”作为无成本卫生措施。测试数据已从 /dev/shm 清理。
+- 未改系统配置/未重启/未装包。
+
+### 2026-11-10 00:38–00:40 HKT — P2-2 显示路径只读探测
+
+- 交付：`.codex_tmp/docs_backup_20261110/p2_2_display_feasibility.md`；证据
+  `.codex_tmp/p2_2_display_probe_20261110/probe.txt`。
+- V4L2：`meson-vdec` m2m multiplanar；CAPTURE 仅 `NM12`（NV12M）；
+  两队列 `io_modes = VB2_MMAP | VB2_DMABUF`；CAPTURE 为 `vb2_dma_contig`。
+- DRM：`meson-drm`（GXL VPU）；**overlay 平面支持 `DRM_FORMAT_NV12`**
+  （`meson_overlay.c:580`）与 YUV420；平面代码支持 src/dst 缩放（文档 5×，
+  1080p→1024×576 为缩小，需运行时验证）；primary 平面仅 RGB。
+- **EXPBUF 运行时验证（R1，C 探针）**：`/dev/video0` S_FMT HEVC→NM12
+  1920×1080，REQBUFS 4（MMAP，caps=0x15），4 个缓冲 × 2 平面
+  **VIDIOC_EXPBUF 全部成功**（fd 导出，len 2,088,960 / 1,044,480，stride 1920）
+  → 解码 CAPTURE dmabuf 导出可行。探针源码/二进制
+  `.codex_tmp/p2_2_expbuf_20261110/`（远端同名目录）。
+- **DRM 运行时验证（R1，裸 ioctl，无 libdrm）**：
+  - `GETPLANERESOURCES`：card0 仅 **1 个 plane**，formats 含
+    `NV12/NV21/YU12/YUYV/...` → overlay NV12 运行时确认；
+  - `PRIME_FD_TO_HANDLE`（Y/UV 两 fd）+ `ADDFB2`（NV12 1920×1080）
+    **成功创建 fb_id=49** → dmabuf→DRM framebuffer 端到端可用。
+  - 探针：`.codex_tmp/p2_2_expbuf_20261110/{expbuf_probe.c,planes_probe.c,prime_probe.c}`。
+- **PoC 阻塞项**：① `libdrm` 只有运行库、**无头文件**（不擅自 apt install）；
+  ② Xorg 在 tty7 持有 DRM master，第二进程不能设置 overlay 平面，需要
+  `chvt` 切到空闲 VT 并接管 master（会影响 HDMI/X，属 R3 级操作，需单次批准）；
+  ③ 备选：安装 libdrm-dev（需批准）或写裸 ioctl（struct 定义多、风险高）。
+- `modetest` 未安装（不擅自 apt install）。
+- 可行性：NV12 overlay + 硬件缩放架构上可行；`VIDIOC_EXPBUF` 尚未运行时验证；
+  DRM master 被 Xorg(tty7) 占用，是 PoC 的主要架构障碍。
+- PoC 计划：① R1 运行 EXPBUF 探测（REQBUFS+EXPBUF，不 streaming）；② R2 DRM
+  overlay 测试；③ 先做“pipe NV12 → dumb buffer → overlay（硬件缩放）”，再做
+  “dmabuf → DRM PRIME”零拷贝。Gate：显示开启 live ≥25 fps、0–3 次 0xf、无绿屏/
+  撕裂，ffplay 保留为回退。
+- 风险：改 KMS/模式可能影响 HDMI/X11；DRM master 需要 VT 切换或接管；均需 R2，
+  不做 R3。
+- 未 streaming/未改显示/未装包。
+
+### 2026-11-10 00:34–00:38 HKT — damage-aware GOP gate（opt-in）实现与离线验证
+
+- 远端 `pipeline.py` 新增 `VT13_DAMAGE_GATE=1`（默认关）：解析 SPS/PPS/slice POC，
+  非 IRAP AU 的 POC 不等于 prev+1（模 LSB）时，跳过该 GOP 直到下一个 IRAP；
+  解析失败自动回退正常喂流。`pipeline.py` `9d0013c2 → 9ada66df`；备份
+  `~/.codex_tmp/backup_damagegate_20261110/`。
+- 性能修正：初版对每个 slice 全量 unescape（~20 KB/帧）导致干净 replay 从
+  58.5 掉到 18.8 fps；改为只解析头部 64 B 后恢复 **58.27 fps**（开销可忽略）。
+- 离线验证：
+  - 干净 498 帧：497 帧、0 误报、`skipped_access_units=1`、58.27 fps。
+  - B1（管线录制的损坏流）：检出 21+ 次 POC 断链，490 AU 被跳过，**0 帧**、
+    RC=1。原因：B1 几乎每个 GOP 的首个 P 帧就断链，gate 只能整段跳过；IDR
+    单独不足以让 v4l2m2m 输出帧。**这是“输入已严重损坏”的必然结果，不是 gate
+    逻辑错误。**
+- 结论：gate 适合作“偶发损坏”场景的精准丢弃；当前 live 流的损伤频率太高，
+  必须先解决输入/吞吐（显示负载、积压），gate 才能体现价值。
+- 远端现状：`VT13_DAMAGE_GATE` 默认关，默认路径不变；`pipeline.py 9ada66df`、
+  `ffmpeg_pipe.py b6672def`。未 reboot/重载模块；未新 live。
+
+### 2026-11-10 00:33–00:35 HKT — U3 `0xf`/padding 分层表
+
+- 交付：`.codex_tmp/docs_backup_20261110/0xf_layer_matrix.md`（L1 USB/VT13 → L2 AU → L3 esparser/边界 →
+  L4 firmware/driver → L5 FFmpeg；`0xf` 类型 A/B/C）。
+- 关键判定：
+  - **L1 输入损伤是主因**：只抓取 60 s 干净（60.3 AU/s、2/451 GOP 缺口）；
+    管线录制流 25% GOP 有 POC 缺口。损伤由主机侧读取滞后/背压诱导。
+  - L3 边界敏感：pad≥512 B 使 `0xf→0x8`，但 36/38 帧不完全一致，属诊断
+    workaround，不是正确性修复。
+  - L4 firmware 只在参考链不完整/损坏样本上中止；clean 1832/1080p 样本无
+    `0xf`；v7 上游系列的 FIFO-full 死锁是另一类问题。
+  - L5 FFmpeg Copy-Out 不能阻止 `0xf`；新 open 0.28–0.30 s。
+- 类型：A 缺参考 GOP（POC21/POC50/live POC5/7/24/269）；B 边界/padding
+  敏感（Packet81 sweep）；C 1080p 高码率节奏（管线欠载导致更频繁损伤）。
+- 下一步可执行项：**damage-aware GOP gating**——检测 POC 不连续后跳过该
+  GOP 到下一个 IRAP（比当前固定 50% 丢弃更精准）；其次把录制放 `/dev/shm`。
+- 未改设备/未 live。未 commit。
+
+### 2026-11-10 00:32–00:34 HKT — U2 FFmpeg V4L2 生命周期与 Copy-Out 对照
+
+- 交付：`.codex_tmp/docs_backup_20261110/ffmpeg_lifecycle_comparison.md`；本地 diff
+  `.codex_tmp/u2_ffmpeg_audit_20261110/local_ffmpeg.diff`。
+- 本地树：FFmpeg n6.1.1 HEAD `e38092ef`，修改 3 文件（`v4l2_buffers.c` +26/−4、
+  `v4l2_m2m.c` +47、`v4l2_m2m_dec.c` +60）；上游 `v4l2_context.c` 已有
+  SOURCE_CHANGE、LAST/drain、EPIPE 处理。
+- 三个修改：① Copy-Out（dequeue→alloc→copy→props→unref→move_ref，无池化）；
+  ② 全局 refcount 从“每 plane +1”改为“每 buffer group +1”，与
+  `v4l2_free_buffer()` 的“每 group −1”对称——机制上解释了原 Source Change
+  等待挂起，但仍是未上游评审的本地实验；③ 诊断日志（CAPTRACE/REFSCAN）。
+- 三问题分离：Source Change（Copy-Out 解决）、fatal 0xf/EIO（Copy-Out 不能
+  解决，需新进程/新 open，实测 0.28–0.30 s）、Copy-Out 成本（管线 wait
+  21.8–25.8 ms vs no-copy 17.1 ms；非 live 主限速）。
+- 路线 A（no-copy+重建）吞吐 89.9 fps，但 0xf 后 POLLERR 无法同进程恢复；
+  路线 B（Copy-Out 降本，如池化）可能小幅提升，但不解决显示瓶颈。
+- Gate U2：对照交付 PASS；**不建议部署任何 FFmpeg 修改**（refcount 需回归、
+  Copy-Out 池化收益有限）。
+- 下一步：U3 `0xf`/padding 分层表（使用 POC50/POC21/pad512 既有样本）。
+
+### 2026-11-10 00:27–00:32 HKT — U1 上游 meson-vdec 19 补丁审计（PC + CM311 只读）
+
+- 交付：`.codex_tmp/docs_backup_20261110/upstream_patch_matrix.md`（19 行状态矩阵 + 候选项 + Gate）。
+- 来源核验：v7 `[PATCH 00/19]`，Anand Moon，2026-07-13；cover letter 统计
+  7 个文件、+388/-106；作者自述“硬件 VIFIFO 满时 workqueue 死锁仍未解决”。
+  v8/v9/合入状态在本次检索中**未找到**（记为 unverified，不是不存在）。
+- 本地上游树：HEAD `0e80ef956`（2026-11-04），`codec_hevc.c`/`vdec_platform.c`
+  有本地实验修改；目录 git 历史为浅历史，无法靠 log 判断 backport。
+- 逐项结构核对（grep/函数位置）结果：present 4（P01/P13 等）、partial 3
+  （P03/P06/P11）、absent 4（P05 `synchronize_irq`、P16 `dma_set_mask*`、
+  P19 `dma_set_max_seg_size`、P18 未见 32 MiB 常量）、unknown 8。
+- 候选（未批准部署）：P05 IRQ 同步、P16/P19 DMA mask/segment、P18 VIFIFO 32 MiB
+  （需先定位当前 FIFO 大小；1.7 GiB 板上 32 MiB 有内存风险）。
+- Gate U1：审计交付 PASS；**“可直接部署补丁”FAIL**——尚无候选同时具备
+  可复现失效样本 + 观测指标；禁止整套 cherry-pick。
+- 下一步：U2 FFmpeg V4L2 生命周期对照（`ffmpeg_lifecycle_comparison.md`），
+  再做 U3 `0xf`/padding 分层表。
+
+### 2026-11-10 00:06–00:15 HKT — 新专项 U0：USB 根盘与 DJI 共用同一个 xhci 控制器
+
+- 依据 `plans/CM311_VDEC_Upstream_Audit_USB_RootFS_Plan.md` U0，只读盘点（R0）：
+  证据 `.codex_tmp/u0_usb_rootfs_20261110/readonly.txt`。
+- **rootfs 在 USB 盘上**：`/dev/sda2` ext4，`TRAN=usb`，`ID_BUS=usb`，
+  `ID_MODEL=SG_Flash`，udev path
+  `platform-xhci-hcd.2.auto-usb-0:2:1.0-scsi-0:0:0:0`；`/dev/sda1` vfat 挂 `/boot`。
+- **共享 host controller：是**。`lsusb -t`：Bus 001 root hub `xhci-hcd/2p 480M`；
+  Port 001 = DJI `2ca3:1020`（480M）；Port 002 = `23a9:ef18 USB SG Flash`（480M）。
+  两者同在一个 USB 2.0 控制器上。
+- Swap = `zram0` 1 GB（RAM 后端，201.7 MB 已用），**不是** USB 盘 swap。
+- `/tmp`、`/dev/shm` 均为 tmpfs；`/dev/shm` 894 MB，可用于临时录制。
+- 根挂载：`rw,noatime,nodiratime,errors=remount-ro,commit=600,data=writeback`。
+- 当前 boot 的 `journalctl -k` 过滤 usb/uas/reset/I/O error/ext4 等：**无匹配**；
+  空闲 `vmstat`：`wa=0`，CPU 96% idle。
+- 影响判断：Bandwidth 不是问题（视频 10.2 Mbps + 录制 ~10 Mbps « 480 Mbps），
+  但共享控制器上的 `usb-storage` 调度/周期性 writeback 可能给视频端点增加延迟。
+  既有证据：只抓取 60 s（同时向 rootfs 写 76 MB）仍得到干净流 → **单纯磁盘写不足以
+  损坏流**；`stream` 不录制也只有 ~30 AU/s → 根盘 I/O 也不是主要限速项。
+  结论：共享总线是**风险项，不是已证明的根因**；后续 live 测试建议把录制改到
+  `/dev/shm`（894 MB）以移除该变量，无需改系统。
+- 未修改 CM311 任何配置；未重启/重载模块；未开始新 live。
+
+### 2026-11-10 23:58–00:06 HKT — S0 计时 + S1 raw 传输：传输不是 live 主因，显示/X11 才是
+
+- S0（离线 replay，`VT13_PIPE_TIMING=1`，干净 498 帧 1080p）：
+  - no-copy：**wait p50=17.1 ms / p95=30.0 ms**，display=0（关）、bgr=0、build=0.2 ms；
+    497 帧、58.52 fps。
+  - copy：wait p50=21.8–25.8 ms / p95≈55 ms；491 帧、37.84 fps。
+  - → 每帧成本几乎全部在“等 ffmpeg/nut/PyAV”，Python 侧只有 0.2 ms。
+- S1（新增 opt-in `VT13_PIPE_TRANSPORT=raw`：ffmpeg 输出定长 rawvideo NV12，
+  reader 不经 nut/PyAV）：干净 replay **497 帧、0 错误、65.33 fps**（nut 58.52）。
+  首次达到 >60 fps，但余量很小。
+- S2 live（3 段，均关控制、no-copy、1920×1080）：
+  - `raw + 同步读 + 限帧 25`：171 帧（2.7 fps）、35 次 0xf（与默认同量级）。
+  - `raw + 小队列 async(2000) + 丢 50% + 限帧 25`：260 帧、收尾 RC=1（raw reader
+    在停止时置错，属实验路径缺陷）。
+  - `raw + 小队列 async + 关显示 + 不丢 GOP`：**725 帧（12.1 fps）、20 次 0xf**。
+  - 对照 `nut + 小队列 async + 关显示 + 丢 50%`：**1530 帧、2 次 0xf**（仍最佳）。
+- 结论（修正）：**raw 传输只把离线上限从 58.5 提到 65.3 fps，对 live 帮助有限；
+  真正的负载来自“解码 + X11/ffplay 显示 + 录制”，其中 ffplay 的软件渲染/缩放是
+  最大可减项。整 GOP 丢弃仍是压制 0xf 最有效的手段。**
+- 部署：远端 `ffmpeg_pipe.py` `edb960c2→b6672def`（新增显示限帧、计时、raw 传输，
+  全部 opt-in 默认关/默认 nut）；`pipeline.py` 保持 `9d0013c2`（shed 默认关）。
+  备份 `~/.codex_tmp/backup_timing_20261109/`、`backup_rawtransport_20261109/`。
+- 未验证/风险：raw 路径停止时 RC=1；`-vf fps` 与 CFR 方案此前已失败并回滚；
+  raw 仅作实验，默认仍 nut。
+- 下一步（最高优先级）：**P2-2 轻量显示**——评估 DRM/KMS overlay 或至少避免
+  ffplay 对 1080p 的软件缩放（例如解码侧输出 1024×576，或单独的轻量显示进程），
+  目标：显示开启时 live ≥25 fps、0–3 次 0xf。其次是继续用 shed 闭环控制在
+  无显示/低显示负载下的长时稳定性。
+
+### 2026-11-09 23:02–23:25 HKT — P0-2/P1-2 关键转折：损伤是管线吞吐不足造成的，不是 RF
+
+**修正前一条 P0-3 的归因**：P0-3 说“损伤来自 USB 上游（无线/接收器）”，当时依据是
+管线 capture 的 raw 已损坏且 USB 无错误。本轮用**同一接收器、同一 USB 路径、只抓取
+不解码**复测，raw 基本干净 → 损伤不是接收器输出固有，而是**解码负载导致管线读不动
+（或设备 FIFO 溢出）**。P0-3 的“上游强关联”结论作废，保留为方法论教训。
+
+- 实验顺序与主机：CM311 实时 USB（VT 链路全程开启）。23:02 用户把接收器移到
+  USB2 延长线并重新枚举（bus1 dev 005→006，ttyACM0/1 重建）。
+- **P0-2 物理隔离（3×60 s，同配置 ON）**：31/32/34 次 0xf（30.5/31.6/33.5 每
+  60 s），243/278/182 帧，AU 38.8–41.7/s，输入 6.3–6.8 Mbps。
+  与移动前 A1/A2（31/32 次、267/216 帧）**无差异** → 换位置/USB2 延长线不改变
+  故障，RF 布置不是主因。
+- **只抓取不解码（60 s，`capture_pyusb.py`）**：76,218,090 B（**10.2 Mbps**）、
+  39,649 次读、最大间隙 **0.17 s**、无 ≥0.5 s 间隙；AU **3620 个 = 60.3 AU/s**，
+  450 个 IDR，GOP p50=8，451 个 GOP 中**仅 2 个** POC 缺口，超大伪参数集仅 2 个
+  （PPS 24,492 B 一处；AUD 最大 7 B 正常）。→ **接收器输出在主机持续读取时基本干净。**
+- **管线吞吐上限（离线 replay，干净 498 帧 1080p60 样本）**：
+  ffmpeg-pipe + Copy-Out 498 AU → 497 帧、0 错误、**38.54 fps**。
+  → 源是 60 fps，管线上限 38.5 fps，**结构性欠 21 fps**。
+- **async 预取（`VT13_ASYNC_USB=1`）**：读侧间隙降为 **0**，读取 64.9 MiB（满速
+  10.2 Mbps），但 60 s 只交付 36.7 MiB（5.6 Mbps）；队列涨到 15,191/16,384，
+  527 帧（8.7 fps）、18 次 0xf。→ 读侧不再停，但**解析/解码仍跟不上**，积压到
+  队列满后接收器照样溢出。
+- **async + no-copy**：627 帧、16 次 0xf、交付 30.3 MiB；队列触顶 16,384 →
+  仍无改善（说明瓶颈不在 Copy-Out，而在 nut 管道/PyAV 的每帧 3.1 MB 搬运与
+  Python 每 AU 开销）。
+- **async + 整 GOP 丢弃（新增 opt-in `VT13_SHED_TO_IRAP`，KEEP=1/SKIP=1）**：
+  505 帧、14 次 0xf、AU 43.8/s、积压稳定 10–14 MiB（队列 7.5k/16k）→ 丢弃生效、
+  积压受控，但输出仍只有 8.2 fps，且交付 raw 仍有 28 个超大伪参数集。
+- **async + 关闭控制面（`DJI_CONTROL_ENABLED=false`）**：**778 帧（12.7 fps）、
+  10 次 0xf、绿/半绿过滤均为 0**，为今日最佳 live 结果；但交付仅 30.4 MB/61 s
+  （4.0 Mbps），说明解析/解码仍在追赶，结束时队列仍有积压。
+- 重要口径：管线录制的 `raw_ep81.bin` 是**已交付给解析器的字节**；async 队列在
+  运行结束时仍有积压时，录制文件**不是完整的 USB 流**，不能用它计算绝对丢包率。
+- **用户目视反馈（23:30）**：默认配置（async 关闭）画面仍会“过几秒更新一次”，
+  约有 5 s 滞后；打开 async 后画面基本不更新。解释：async 把 10.2 Mbps 的流
+  缓冲进有界队列（60 s 时积压 ~25 MiB ≈ 20 s 的流），解析/解码虽然更快，但处理
+  的是**很旧的帧**；ffplay 的 drop-oldest 队列进一步丢弃新帧，观感就是“不更新”。
+  默认模式虽然设备端丢字节、损坏更多，但管线始终贴着实时头，所以还能断续显示。
+  → **async 预取只能作为诊断/吞吐测量工具，不能作为观看路径**；低延迟要求下必须
+  丢弃积压本身（或在读取侧跳字节到下一个 IRAP），而不是缓冲。
+- 结论（强关联，未最终证明）：**根因链 = 1080p60@10.2 Mbps 源 → 管线
+  (nut+PyAV+Copy-Out) 上限 ~38.5 fps → 持续欠载 → USB 接收器 FIFO 溢出/丢字节
+  → 图像损坏 → `0xf` 中止 → reset 循环**。RF/接收器本身在“读得动”时是干净的。
+- 实验性改动已回滚：远端 `pipeline.py` 曾加入默认关闭的 `VT13_SHED_TO_IRAP` 块
+  （`c700b8cd→9d0013c2`，REG1 默认回归 36 次 0xf/172 帧正常），验证完成后已从
+  `~/.codex_tmp/backup_shed_20261109/pipeline.py.before_shed` 恢复为
+  **`c700b8cd...`**，import 验证通过；patch 脚本保留在
+  `.codex_tmp/p1_2_shed_20261109/` 供后续闭环实验复用。默认工作路径与改动前一致。
+- 未 reboot/重载模块/装包；未改其他远端文件；VT 链路保持开启。
+- 后续实验（23:26–23:45，均为 opt-in 组合，默认配置不变）：
+  - `async + no-copy + 关控制`：571 帧/19 次 0xf，交付 5.3 Mbps，积压 27 MiB。
+  - `async + no-copy + 关控制 + 关显示 + 50% GOP 丢弃`：**1530 帧（25.3 fps）、仅 2 次
+    0xf**；显示路径是主要残余负载，但队列仍满（解析 ~27 AU/s）。
+  - 新增 opt-in `VT13_DISPLAY_FPS`（在 pack/拷贝前跳过）：`async+no-copy+关控制+
+    25 fps` → 800 帧（13.1 fps）、10 次 0xf、绿/半绿 0；积压仍满。
+  - 同步 + 限帧 + no-copy + 关控制：352 帧（5.8 fps）、32 次 0xf（低延迟、低产出）。
+  - 同步 + 限帧 + no-copy + 50% GOP 丢弃：507 帧（8.4 fps）、17 次 0xf、绿帧 3。
+  - **小队列 async（`VT13_ASYNC_CHUNKS=2000`，≈2.5 s）+ 50% GOP 丢弃 + 限帧 +
+    no-copy + 关控制**：两次 60 s 分别为 **552/529 帧（9.2/8.7 fps）、15/17 次
+    0xf**，积压稳定 ~3 MiB，read gap 1–2 次 → **目前吞吐/延迟/稳定性最好的组合**。
+  - `-vf fps=30` 失败（最小构建无 fps 滤镜）；输出 `-r 30 -fps_mode cfr` 导致 0 帧/
+    EIO，均已回滚。
+- 最终远端状态：`pipeline.py` `9d0013c2`（shed 块，默认关）、`ffmpeg_pipe.py`
+  `edb960c2`（显示限帧，默认关）；两者均 opt-in，默认工作路径与改动前一致。
+  备份 `~/.codex_tmp/backup_shed_20261109/`、`backup_dispcap_20261109/`、
+  `backup_pipefps_20261109/`。
+- 下一步（优先级）：
+  0. 可直接体验的最佳组合：
+     `DJI_CONTROL_ENABLED=false DJI_DISPLAY_FPS=25 FFMPEG_V4L2_NO_COPY=1
+     VT13_SHED_TO_IRAP=1 VT13_ASYNC_USB=1 VT13_ASYNC_CHUNKS=2000`（≈9 fps、~2.5 s 延迟）；
+  1. **提高管线吞吐到 >60 fps**：去掉 nut/PyAV 每帧 3.1 MB 往返（例如 ffmpeg
+     子进程直接输出固定大小 NV12 帧、Python 直接读；或缩小解码输出），目标
+     offline ≥90 fps、live 交付 ≥60 AU/s；
+  2. 若短期无法提速：把“整 GOP 丢弃”改成**基于 async 积压的闭环控制**（积压升高
+     就跳过下一 GOP，降低就恢复），目标稳定 30 fps、0 次 0xf、无冻结；
+  3. 完成后再评估 Copy-Out/no-copy 与显示路径；RF 不再是优先项。
+
+### 2026-11-09 22:52–23:00 HKT — P1-1 离线剖析：Copy-Out 不是 live 瓶颈，0xf 后设备重建也不慢
+
+- 主机：CM311 离线（`/dev/video0` 空闲），release Copy-Out 二进制
+  `1ed2b711...`，输入 `run2_segB_bootstrapped.h265`（9,226,274 B，
+  SHA256 `e12bbf92...`，1080p），脚本
+  `.codex_tmp/p1_1_profile_20261109/{profile_matrix.sh,profile_b.sh}`。
+- 启动成本（干净样本、设备空闲、`-frames:v 1 -f null -`）：
+  - copy：5 次 0.275–0.322 s（中位 ~0.29 s）；no-copy：0.256–0.264 s。
+  - 说明 ffmpeg 进程 + V4L2 初始化约 **0.26 s**，Copy-Out 对单帧仅加 ~0.03 s。
+- 0xf 后立即重开（用 `no_sei.h265` 注入 abort，rc=134，每次 ~0.85 s；
+  随后立刻解 1 帧干净样本）：5 次分别为 **0.302/0.281/0.277/0.305/0.297 s**，
+  与空闲基线相同 → **设备 teardown/session 清理不是 live 启动慢的原因**。
+- 300 帧 rawvideo 输出（`-f rawvideo -pix_fmt nv12 /dev/null`）：
+  - Copy-Out：7.752 s → **38.7 fps**；
+  - `FFMPEG_V4L2_NO_COPY=1`：3.336 s → **89.9 fps**。
+  - 两者都远高于 live 的 3.6–4.4 fps；Copy-Out 的 18–25 ms/帧差距真实存在，
+    但当前 live 输入只有 ~41 AU/s，解码吞吐不是限制项。
+- live 会话结构（A1/B1/A2）：每次 spawn 到下一次 spawn 之间，
+  **中位仅 1–6 帧**，每段有 4–5 个会话产 0 帧，偶尔出现 20–85 帧的会话；
+  `spawn→首个 CAPTRACE HANDOFF` 中位约 970 ms，但其中很多会话根本没有输出。
+  结合 P0-3（raw 流已损坏）与本节（空闲/abort 后启动仅 0.28 s），
+  **live 启动慢来自“首个可解画面迟迟不到”，而不是进程/设备初始化**。
+- P1-1 Gate 判定：可以解释 live 产出低的主因（损坏输入 + 0xf 重启循环），
+  Copy-Out 逐阶段（alloc/copy/DQBUF）分解尚未做；由于它当前不是限制项，
+  按计划优先级暂缓，先做 P0-2 RF 隔离。
+- 未 reboot/重载模块/装包/改远端工作树；设备在测试后空闲。
+
+### 2026-11-09 22:50–23:00 HKT — P0-3 输入完整性：raw 流本身已字节级损坏；重启成本是主要产出瓶颈
+
+- 分析对象：B1（`iframe_on_recovery=false`，60 s，1920×1080，raw 50,031,223 B，
+  SHA256 `b18bd14b...`）。本地 `.codex_tmp/p0_1_abba_20261109/abba_20261109_224500_B1/`。
+- 方法：`times.tsv` 按 chunk 回放 `raw_ep81.bin` → 项目 `AnnexBParser` +
+  `AccessUnitAssembler`（`.codex_tmp/p0_3_au_analysis/au_analyze.py`）；
+  另用最小 SPS/PPS/slice 头解析器取 `slice_pic_order_cnt_lsb`
+  （`poc_analyze.py`）；对照 `/usr/bin/ffmpeg` 软件解码与 dmesg。
+- 结果：
+  1. AU 结构：2460 个 VCL AU / 60 s ≈ **41 AU/s**；IDR（NAL 20）294 个，
+     GOP 长度 p50 = **8 个 AU**（IDR ≈ 每 0.2 s 一个）；参数集 310 组。
+     → 当前流 IRAP 充裕，恢复不是 IRAP 饥饿。
+  2. 完整性：出现 **18 个超大“参数集” NAL**（PPS 最大 16,594 B、AUD 最大
+     16,327 B；正常 PPS 12 B/AUD ~6 B），说明多处 start code 丢失后解析器
+     误同步；`discarded_prefix_bytes=4080`。
+  3. POC：295 个 GOP 中 **74 个（25%）存在 POC 不连续**；软件解码日志出现
+     `Could not find ref with POC N`、`Duplicate POC in a sequence`、
+     `Truncating likely oversized PPS`、`cu_qp_delta outside range`。
+     **结论：raw 字节流本身已损坏，不是解码器“看到完好流却报错”。**
+  4. 归因：`times.tsv` 长度和 = 文件大小（记录无丢字节）；B1 的 USB 层
+     `errors=0`、无 `usb_error`/`clear_halt`，仅有 12 次 read gap（p50 0.89 s）。
+     同一采集链路在 run2（1.5 m+遮挡）曾交付 497/498 干净帧。因此损伤最可能
+     来自 USB 之前的上游（无线/接收器输出），而非 Python/USB 记录层；
+     这是**强关联，不是已证明**，需 P0-2 物理变量隔离。
+  5. 视觉产出瓶颈：每次会话 `abort → 下一次 ffmpeg spawn` p50 约 150 ms，
+     但 **`spawn → 第一帧 CAPTRACE HANDOFF` p50 ≈ 970 ms、p95 ≈ 2.4 s**；
+     每会话平均只解 8.6 帧（267/31）。即 60 s 内约 30 个会话，每会话约
+     1.0–1.2 s 花在 ffmpeg/V4L2 初始化上。**45 fps Copy-Out 解码能力不是
+     当前 live 产出瓶颈，进程/设备初始化与 0xf 循环才是。**
+- 待验证：`spawn→首帧`在设备空闲（无 0xf 残留）时的基线需离线测量（P1-1 正在做）；
+  POC 解析在损坏流上可能与真实 POC 有偏差，仅用于“存在不连续”的存在性证据。
+- 补充（23:40）：POC 跳变与 read gap 的相关性
+  （`.codex_tmp/p0_3_au_analysis/gap_poc.py`，B1）：
+  - 2458 个 AU、12 次 read gap（合计 10.78 s，占 18% 时间）；
+  - POC delta 直方图：delta=1 共 1743 次（71%）；delta 2–6 共 62 次（前向跳帧）；
+    delta 250–255 共 57 次（POC 回退，疑为切片头解析错误/POC 重置）；
+  - read gap 内异常 23 次，read gap 外 108 次 → **大多数 POC 不连续发生在
+    数据持续流动期间**，不是“长停顿导致整段丢失”。损伤更像持续性的包/比特损坏。
+  - 软件解码（`-err_detect ignore_err`）输出 2438/2458 帧（99.2%，含错误隐藏），
+    统计：`Could not find ref` 136、`Duplicate POC` 22、超大参数集 38、
+    `cu_qp_delta` 34、NAL 解析错误 24。→ 流可被软件“带隐藏地”解出，但参考链
+    与像素正确性不能保证；硬件解码器（严格）在首个损伤 GOP 即中止。
+  - 该补充支持“上游持续损伤”而非“USB 记录层丢字节”；P0-2 物理隔离仍是判定
+    无线链路责任的关键实验。
+- 未 reboot/重载模块/装包/改远端工作树；离线分析仅读 raw。
+
+### 2026-11-09 22:43–22:48 HKT — P0-1 A/B/A：requested I-frame 与 0xf 无因果关系
+
+- 主机：CM311（实时 USB + HDMI/ffplay），PC 发起与分析。R2 由用户在本轮会话
+  预先授权；VT 链路当时已开启，接收器已枚举，因此未要求人工再次打开图传。
+- 唯一变量：`control.iframe_on_recovery`（ON/OFF/ON）。其余固定：
+  `iframe_on_connect=true`、`stall_restart_s=0`、`kernel_abort_watch=true`、
+  release Copy-Out FFmpeg `1ed2b711...`、`convert_bgr=false`、
+  `display=ffplay` 1024×576、60 s、1920×1080 源。
+- 运行目录（远端与本地同名）：
+  - A1 `abba_20261109_224334_A1`（ON）
+  - B1 `abba_20261109_224500_B1`（OFF）
+  - A2 `abba_20261109_224618_A2`（ON）
+  本地副本 `.codex_tmp/p0_1_abba_20261109/<run_id>/`（capture.log、events、
+  times、smoke.yaml、cmd.txt、dmesg_before/after）。三次 `LAUNCHER_RC=0`。
+- 结果（同一 `live_metrics.py` 口径）：
+
+  | 段 | 请求 | unique abort | abort/60s | 间隔 p50 | frames | fps | AU/s | keyframe starts | 绿/半绿丢弃 |
+  |---|---|---|---|---|---|---|---|---|---|
+  | A1 ON | 18 | 31 | 30.8 | 1501 ms | 267 | 4.43 | 39.2 | 32 | 27/20 |
+  | B1 OFF | 0 | 33 | 32.8 | 1502 ms | 225 | 3.73 | 40.2 | 34 | 36/24 |
+  | A2 ON | 18 | 32 | 31.8 | 1520 ms | 216 | 3.58 | 37.9 | 33 | 16/11 |
+
+- 请求→IRAP 延迟（capture.log 时间戳）：A1 p50 100 ms / p95 188 ms / 18–231 ms；
+  A2 p50 79 ms / p95 118 ms / 18–172 ms。与 run5 的 37–162 ms 同量级。
+- 判定（按计划 P0-1 Gate）：OFF 相对 ON 的 abort 率差为 +4.8%（32.8 vs 31.3），
+  远小于 20% → **requested IDR 不是 0xf 的触发因素或放大因素**；ON 的帧数略高
+  （241.5 vs 225，+7%），属噪声范围。恢复请求仍然是有用的快速启动/恢复手段。
+- 附带确认：OFF 段（零请求）仍有 34 次 `IRAP received`/60 s（≈1.8 s 一个），
+  证明当前发射端/链路本身周期性发送 IRAP；0xf 间隔 p50≈1.5 s 与该节奏一致。
+  这修正了“IRAP 仅建链发送、恢复必然饥饿”的旧结论（旧结论可能只适用于当时
+  的链路/模式）。
+- 未验证：恢复 TTFV（从 abort 到下一张通过过滤并进入显示队列的帧）当前无逐帧
+  时间戳，需在 P2-1 增加单调时钟埋点；本次只报告 abort 率与帧数。
+- 未 reboot/重载模块/装包；未改远端工作树；三次运行后设备空闲。
+
+### 2026-11-09 22:40–22:58 HKT — P0-0 环境快照、基线指标口径（只读）
+
+- 主机：Ubuntu PC 工作目录 `/home/billieguo/billie_guo/src/rm/mobile_vt`；CM311
+  `billieguo@10.42.0.11`。SSH 使用 `docs/REMOTE_MACHINE_USAGE.md` 记录的 askpass
+  模式（密码运行时从文档读取到环境变量，未回显；helper 位于
+  `.codex_tmp/p0_0_snapshot_20261109/ssh-askpass.sh`，包装器
+  `.codex_tmp/p0_0_snapshot_20261109/cm311.sh`）。未安装 SSH key。
+- CM311 身份：`armbian`/`aarch64`/`6.18.59-ophub`，4 核，1.7 GiB RAM，根分区
+  103 GB 可用，uptime 3 天 7 小时；负载 0.22。
+- 设备与占用：`/dev/video0` 无 opener；`meson_vdec` 已加载且 refcnt=0；
+  `/dev/ttyACM0`、`/dev/ttyACM1` 存在；USB `2ca3:1020 DJI C5` 已枚举（接收器在线）；
+  `/dev/dri/{card0,card1,renderD128}` 存在；Xorg `:0`/tty7，`xdpyinfo` RC=0。
+- 进程：无 `vt13_video`/`ffmpeg`/`ffplay` 残留；仅有 htop/Xorg/xfce 桌面进程。
+- 部署哈希（远端）：`vt13_video/config.py` `f47c7d9b...`、`pipeline.py`
+  `c700b8cd...`、`ffmpeg_pipe.py` `871af9b2...`、`control.py` `cc0cbcdc...`、
+  `decoder.py` `0a63d896...`（实验版）、`.codex_runs/live_capture_run5.sh`
+  `c0e35756...`；release FFmpeg `~/ffmpeg-6.1.1-release/ffmpeg` `1ed2b711...`；
+  custom FFmpeg `~/ffmpeg-6.1.1-v4l2/ffmpeg` `2a204518...`；venv PyAV 11.0.0。
+  远端工作树不是 Git 仓库（`fatal: not a git repository`），一致性只能靠哈希清单。
+- 基线日志已拉取到 `.codex_tmp/baseline_20261109/`（run2 `20261109_170226`、
+  run4 `20261109_184856`、run15 `20261109_214849`、run17 `20261109_220040`、
+  run18 `20261109_220409`）。run2/run4 的 launcher/params 文件不存在，属历史格式，
+  仅作趋势参考，不能与当前版本逐项等同。
+- 指标脚本：`.codex_tmp/p0_1_abba_20261109/live_metrics.py`；基线结果
+  `.codex_tmp/baseline_20261109/metrics.json`。口径：`unique_kernel_aborts` 取
+  `events.tsv` 的 `kernel_abort` 行；`frames` 取 `decode.frames`；显示丢弃取
+  `decoder.display_*`；AU/IRAP 取 `stream.*`；输入 Mbps 取 `recording.bytes/duration`。
+- 基线（同一脚本）：
+
+  | run | 分辨率 | 时长 s | unique abort | abort/60s | abort 间隔 p50 ms | I-frame 请求 | AU/s | IRAP AU | keyframe starts | frames | fps | 显示丢弃 |
+  |---|---|---|---|---|---|---|---|---|---|---|---|---|
+  | 15 (ON) | 1920×1080 | 61.2 | 33 | 32.3 | 1501 | 19 | 38.9 | 280 | 34 | 195 | 3.18 | 96（绿 23/半绿 13） |
+  | 17 (OFF) | 1920×1080 | 61.1 | 30 | 29.5 | 1752 | 0 | 34.3 | 241 | 31 | 273 | 4.47 | 50（绿 35/半绿 6） |
+  | 18 (ON) | 1920×1080 | 45.3 | 23 | 30.5 | 1742 | 12 | 38.8 | 195 | 23 | 183 | 4.04 | 86（绿 13/半绿 7） |
+  | 4 | 1832×1032 | 95.7 | 0 | 0 | — | 0 | 22.4 | 2 | 2 | 110 | 1.15 | — |
+
+- 新发现（`未验证/待证实`，进入 P0-1/P0-3 复核）：
+  1. 当前参数集（`params_latest.h265`，102 B）trace_headers：1920×1080、level 5.0、
+     `vui_time_scale=60`、`num_units_in_tick=1`（名义 60 fps）；
+     `sps_max_dec_pic_buffering_minus1=1`（DPB=2）、`max_num_reorder_pics=0`
+     （低延迟、无重排）。
+  2. 实测 AU 速率仅 34.3–38.9 AU/s，明显低于名义 60 fps。要么上游实际约 35 fps，
+     要么约 40% AU 未到达；需 P0-3 用 AU 序号/POC 证明，不能直接归因 RF。
+  3. run17 关闭恢复请求后，61 s 内仍有 31 次 `IRAP received`（≈2 s 一个），说明
+     当前流内存在周期性 IRAP，并非由我们的请求触发。这与 2026-11-09 早些时候
+     “IRAP 仅建链时发送”的结论不一致，可能是发射端模式/链路状态变化；后续 A/B
+     与 P0-3 必须按实际 IRAP 时间线统计，不能沿用旧假设。
+  4. run17/18 的 `0xf` 间隔 p50 ≈ 1.74 s，与 IRAP 间隔一致，指向“每个新 GOP 解码
+     数帧后中止”，但因果仍需 P0-3 对齐 AU/POC。
+- 未启动新的实时链路（VT 已由用户开启、接收器已枚举）；未 reboot、未重载模块、
+  未安装包、未修改远端工作树。本轮只产生 `.codex_tmp/` 下证据。
+
+Docs layout (2026-11-10 03:00 HKT, user-requested cleanup): the maintained
+document set is now exactly `AGENTS.md`, `docs/INTERSESSION_TRANSFER.md` and
+`docs/REMOTE_MACHINE_USAGE.md`. The one-off analysis deliverables (U1/U2/U3,
+P2-2, DMA plan, bottleneck analysis, plan review) were removed from `docs/`
+and archived under `.codex_tmp/docs_backup_20261110/`; the two governing plan
+files were moved to `plans/`, and `DEVELOPMENT_FLOW_AND_LATENCY.md` to
+`archive/`. References below point at those archived paths.
 
 Scope of this entry: documentation, read-only inventory, source-authority
 decision, experimental-code diff audit, and offline V4L2 hardware decode,
