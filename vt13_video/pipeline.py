@@ -177,7 +177,11 @@ class VT13Stream:
         elif config.decoder.backend == "worker":
             from .worker_client import WorkerDecoder
 
-            self.decoder = WorkerDecoder(config.decoder, self.logger)
+            self.decoder = WorkerDecoder(
+                config.decoder,
+                self.logger,
+                on_recover=lambda: self._request_iframe("worker_recover"),
+            )
         else:
             self.decoder = HevcDecoder(config.decoder, self.logger)
         self.frames = FrameQueue(config.decoder.queue_size, config.decoder.drop_oldest)

@@ -289,6 +289,8 @@ CM311 真正的版本信息应通过 `uname -m`、`uname -r`、`ldd --version`�
 
 76. **2026-11-10 15:05 HKT 部署基线回流：本地仓库与 CM311 部署一致**。远端 `~/mobile_vt` 非 Git，此前的 kiosk/async/shed/damage/ffmpeg_pipe 改动只存在于现场。本次以部署为准回流：`config.py 1a6160d1`、`pipeline.py 75071b00`、`ffmpeg_pipe.py 0936da17`、`async_usb.py d5b52faa`、`launcher e5f73157`、`control.py cc0cbcdc`（其余 cli/device/nal/recovery/sources/stats 哈希相同）；`decoder.py` 以部署 `0a63d896` 为基座，重新合并本地的 codec 身份日志（`requested/actual` + `snapshot.codec`），合并后 `5c7460f0`。新增 `config/vt13_video.no_status.yaml`、`config/vt13_video.yuvtest.yaml`。本地测试 **43 passed / 38 skipped / RC=0**。备份 `.codex_tmp/sync_20261110/local_backup.tar`（`8410cc9d…`）。**今后以本地仓库为唯一代码来源，部署改动必须回流并提交**。未 reboot。commit `2a16dca`。
 
+77. **2026-11-10 15:17-15:29 HKT 恢复优化 + TTFV 埋点（D3c 部分完成）**。改动：①worker 复用同一 V4L2 fd 做 `STREAMOFF→S_FMT/REQBUFS`（不再 close/reopen；失败才回退）；②worker 检测到 `POLLERR`/`DQBUF EIO` 时通过 socket 发 `R`，Python 侧立即 `_request_iframe("worker_recover")`，把 I-frame 请求与重建重叠；③`RECOVER begin/reopened/streamon/capture_ready/first_frame` 全阶段埋点。实测（60/45 s，async OFF）：TTFV **260–265 ms**（reopen 181 ms、等 IRAP 28 ms、17 buffer 导出 35 ms、首帧 18 ms），较优化前 282 ms 略降；`reused fd config failed` 未出现，说明 181 ms 是驱动在 abort 后同一 fd 上重配的成本，不是 open。计划 D3c 的 TTFV 目标 p50≤200 ms **未达**；下一步可选 soft recovery（不 REQBUFS，仅 STREAMOFF/STREAMON）、预开备用 fd，或接受。吞吐仍 57–58 fps、0 corrupt、退出干净。构建 `d3_probe.c d6c91234…`（板端随构建）、`worker_client.py d03297a6…`、`pipeline.py 60b7d312…`。证据 `captures/manual_live/d3c_ttfv{2,3,4,5}_*`。未 reboot。未 commit。
+
 ### 3.2 已知实验性代码状态——需要审查，不应照单全收
 
 - `~/ffmpeg-6.1.1-v4l2/libavcodec/v4l2_buffers.c`：曾移动 `atomic_fetch_add_explicit(&s->refcount,1,...)`，试图修正 plane/group 引用计数不对称；**没有完成必要性与正确性验证**。

@@ -126,6 +126,8 @@ struct ctx {
     int orig_mode_valid;
     uint32_t orig_fb;
     int mode_changed;
+    int recovering;
+    double recover_start_ms;
     struct {
         int active;
         int dmabuf[2];
@@ -1062,6 +1064,17 @@ static int run_decode(struct ctx *c, int max_frames, int no_display) {
     return frames > 0 ? 0 : -1;
 }
 
+static void mark_recovering(struct ctx *c, const char *why) {
+    if (c->recovering) return;
+    c->recovering = 1;
+    c->recover_start_ms = now_ms();
+    fprintf(stderr, "RECOVER begin t=%.1f (%s)\n", c->recover_start_ms, why);
+    if (c->sock_fd >= 0) {
+        ssize_t n = send(c->sock_fd, "R", 1, MSG_DONTWAIT);
+        (void)n;
+    }
+}
+
 static int cap_present_one(struct ctx *c, int no_display, int *frames, int *corrupt) {
     struct v4l2_buffer b;
     struct v4l2_plane planes[VIDEO_MAX_PLANES];
@@ -1074,6 +1087,7 @@ static int cap_present_one(struct ctx *c, int no_display, int *frames, int *corr
     if (xioctl(c->video_fd, VIDIOC_DQBUF, &b) < 0) {
         if (errno == EAGAIN) return 0;
         perror("DQBUF CAPTURE");
+        mark_recovering(c, "DQBUF EIO");
         return -1;
     }
     unsigned int idx = b.index;
@@ -1096,14 +1110,28 @@ static int cap_present_one(struct ctx *c, int no_display, int *frames, int *corr
         if (cap_requeue(c, idx) < 0) return -1;
     }
     (*frames)++;
+    if (c->recovering) {
+        printf("RECOVER first_frame t=%.1f dt=%.1f\n", now_ms(), now_ms() - c->recover_start_ms);
+        c->recovering = 0;
+    }
     return 1;
 }
 
 static int session_open(struct ctx *c) {
-    c->video_fd = open("/dev/video0", O_RDWR | O_NONBLOCK);
-    if (c->video_fd < 0) { perror("open /dev/video0"); return -1; }
-    if (v4l2_subscribe_source_change(c) < 0) return -1;
-    if (v4l2_output_setup_socket(c) < 0) return -1;
+    if (c->video_fd < 0) {
+        c->video_fd = open("/dev/video0", O_RDWR | O_NONBLOCK);
+        if (c->video_fd < 0) { perror("open /dev/video0"); return -1; }
+        if (v4l2_subscribe_source_change(c) < 0) return -1;
+    }
+    if (v4l2_output_setup_socket(c) < 0) {
+        /* A reused fd can become unusable after an abort: rebuild from scratch. */
+        fprintf(stderr, "reused fd config failed; reopening device\n");
+        if (c->video_fd >= 0) { close(c->video_fd); c->video_fd = -1; }
+        c->video_fd = open("/dev/video0", O_RDWR | O_NONBLOCK);
+        if (c->video_fd < 0) { perror("open /dev/video0 (retry)"); return -1; }
+        if (v4l2_subscribe_source_change(c) < 0) return -1;
+        if (v4l2_output_setup_socket(c) < 0) return -1;
+    }
     return 0;
 }
 
@@ -1131,7 +1159,7 @@ static void held_release(struct ctx *c) {
     c->held.active = 0;
 }
 
-static void session_close(struct ctx *c) {
+static void session_teardown(struct ctx *c, int keep_fd) {
     if (c->video_fd >= 0) {
         uint32_t type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
         xioctl(c->video_fd, VIDIOC_STREAMOFF, &type);
@@ -1193,12 +1221,19 @@ static void session_close(struct ctx *c) {
     for (unsigned int i = 0; i < c->num_out; i++) {
         if (c->out[i].addr) { munmap(c->out[i].addr, c->out[i].len); c->out[i].addr = NULL; }
     }
-    if (c->video_fd >= 0) { close(c->video_fd); c->video_fd = -1; }
     c->num_cap = 0;
     c->num_out = 0;
     c->n_out_free = 0;
     c->last_idx = -1;
     c->last_fb = 0;
+    if (!keep_fd && c->video_fd >= 0) {
+        close(c->video_fd);
+        c->video_fd = -1;
+    }
+}
+
+static void session_close(struct ctx *c) {
+    session_teardown(c, 0);
 }
 
 /* Wait until an IRAP AU arrives; non-IRAP AUs are dropped while recovering. */
@@ -1225,6 +1260,8 @@ static int run_socket(struct ctx *c, int frames_limit) {
         if (session_open(c) < 0) { session_close(c); break; }
         sessions++;
         printf("session %d opened; waiting for IRAP AU\n", sessions);
+        if (c->recovering)
+            printf("RECOVER reopened t=%.1f dt=%.1f\n", now_ms(), now_ms() - c->recover_start_ms);
 
         int n = wait_irap_au(c, &h, msg, 120000);
         if (n < 0) { fprintf(stderr, "socket closed while waiting for IRAP\n"); session_close(c); break; }
@@ -1237,11 +1274,22 @@ static int run_socket(struct ctx *c, int frames_limit) {
         uint32_t type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
         if (xioctl(c->video_fd, VIDIOC_STREAMON, &type) < 0) {
             perror("STREAMON OUTPUT");
-            session_close(c);
+            mark_recovering(c, "STREAMON");
+            session_teardown(c, 0);
             continue;
         }
-        if (v4l2_wait_source_change(c, 10000) < 0) { session_close(c); continue; }
-        if (v4l2_capture_setup(c) < 0) { session_close(c); continue; }
+        if (v4l2_wait_source_change(c, 10000) < 0) {
+            mark_recovering(c, "SOURCE_CHANGE timeout");
+            session_teardown(c, 0); continue;
+        }
+        if (c->recovering)
+            printf("RECOVER streamon t=%.1f dt=%.1f\n", now_ms(), now_ms() - c->recover_start_ms);
+        if (v4l2_capture_setup(c) < 0) {
+            mark_recovering(c, "capture setup");
+            session_teardown(c, 0); continue;
+        }
+        if (c->recovering)
+            printf("RECOVER capture_ready t=%.1f dt=%.1f\n", now_ms(), now_ms() - c->recover_start_ms);
 
         int recovered = 0;
         while (!g_stop && (frames_limit <= 0 || frames < frames_limit)) {
@@ -1251,7 +1299,11 @@ static int run_socket(struct ctx *c, int frames_limit) {
             };
             int pr = poll(pfds, 2, 500);
             if (pr < 0) { if (errno == EINTR) continue; perror("poll"); recovered = 1; break; }
-            if (pfds[0].revents & POLLERR) { fprintf(stderr, "POLLERR: rebuilding V4L2 session\n"); recovered = 1; break; }
+            if (pfds[0].revents & POLLERR) {
+                mark_recovering(c, "POLLERR");
+                recovered = 1;
+                break;
+            }
 
             for (;;) {
                 struct v4l2_buffer ob;
@@ -1265,6 +1317,7 @@ static int run_socket(struct ctx *c, int frames_limit) {
                 if (xioctl(c->video_fd, VIDIOC_DQBUF, &ob) < 0) {
                     if (errno == EAGAIN) break;
                     perror("DQBUF OUTPUT");
+                    mark_recovering(c, "DQBUF OUTPUT");
                     recovered = 1;
                     break;
                 }
@@ -1297,7 +1350,7 @@ static int run_socket(struct ctx *c, int frames_limit) {
             }
         }
 
-        session_close(c);
+        session_teardown(c, recovered ? 1 : 0);
         if (eos) break;
         if (recovered) {
             fprintf(stderr, "session %d rebuilt after error; frames=%d\n", sessions, frames);
@@ -1358,6 +1411,7 @@ static void usage(const char *argv0) {
 
 int main(int argc, char **argv) {
     struct ctx c;
+    setvbuf(stdout, NULL, _IONBF, 0);
     ctx_init(&c);
     const char *file = NULL, *sock_path = NULL;
     size_t limit = 0, filelen = 0;

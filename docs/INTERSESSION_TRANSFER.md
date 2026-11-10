@@ -43,6 +43,16 @@ deployed hashes, P0 root cause: upstream stream damage → firmware 0xf session
 death → IRAP starvation; evidence index, backups, next tracks A/B/C/D).
 Nothing committed (user instruction).
 
+### 2026-11-10 15:17–15:29 HKT — 恢复优化与 TTFV 埋点
+
+- worker 复用同一 V4L2 fd（STREAMOFF→S_FMT/REQBUFS，失败才 reopen）；检测到
+  POLLERR/DQBUF EIO 时 socket 发 `R`，Python 立即请求 I-frame，与重建重叠。
+- TTFV 分阶段：reopen **181 ms**、等 IRAP 28 ms、17 buffer 导出 35 ms、首帧 18 ms，
+  合计 **260–265 ms**（优化前 282 ms）。`reused fd` 未回退，说明 181 ms 是驱动
+  abort 后重配成本。计划目标 p50≤200 ms 未达。
+- 吞吐 57–58 fps、0 corrupt、退出干净。证据 `captures/manual_live/d3c_ttfv*`。
+- 下一步可选：soft recovery（不 REQBUFS）/预开备用 fd/接受当前值。
+
 ### 2026-11-10 15:05 HKT — 部署基线回流：本地与 CM311 一致
 
 - 远端非 Git，kiosk/async/shed/damage/ffmpeg_pipe 改动此前仅在现场。本次以部署为准：

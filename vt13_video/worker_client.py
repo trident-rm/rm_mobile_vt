@@ -30,9 +30,11 @@ SEND_STALL_S = 0.02
 
 
 class WorkerDecoder:
-    def __init__(self, config, logger: logging.Logger | None = None) -> None:
+    def __init__(self, config, logger: logging.Logger | None = None, on_recover=None) -> None:
         self.config = config
         self.logger = logger or logging.getLogger(__name__)
+        self._on_recover = on_recover
+        self.recoveries = 0
         self.errors = 0
         self.resets = 0
         self.frames_decoded = 0
@@ -148,7 +150,28 @@ class WorkerDecoder:
                 time.sleep(0.001)
 
     # ------------------------------------------------------------- decoder API
+    def _drain_events(self) -> None:
+        if self._conn is None:
+            return
+        while True:
+            try:
+                msg = self._conn.recv(16, socket.MSG_DONTWAIT)
+            except (BlockingIOError, InterruptedError):
+                return
+            except OSError:
+                return
+            if not msg:
+                return
+            if msg == b"R":
+                self.recoveries += 1
+                if self._on_recover is not None:
+                    try:
+                        self._on_recover()
+                    except Exception:  # noqa: BLE001
+                        pass
+
     def decode(self, au: AccessUnit, bootstrap_bytes: bytes = b"") -> list[Frame]:
+        self._drain_events()
         irap = au.has_irap
         if self._dropping and not irap:
             self.dropped_aus += 1

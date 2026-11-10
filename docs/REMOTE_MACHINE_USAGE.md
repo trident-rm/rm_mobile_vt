@@ -209,6 +209,14 @@ kernel module still follows the R2/R3 rules in `AGENTS.md`.
   `decoder.py` = deployed `0a63d896` + local codec identity logging
   (`5c7460f0`). Tests 43 passed / 38 skipped. From now on the local repo is
   the source of truth; deployment edits must be flowed back and committed.
+- **Recovery optimization + TTFV (2026-11-10 15:29)**: worker reuses the same
+  V4L2 fd (STREAMOFF -> S_FMT/REQBUFS, reopen only on failure) and sends `R`
+  over the AU socket on POLLERR/EIO so the pipeline requests an I-frame
+  immediately. TTFV breakdown: reopen 181 ms, IRAP wait 28 ms, buffer export
+  35 ms, first frame 18 ms = **260-265 ms** (was 282 ms); the 200 ms target is
+  not met and the 181 ms is driver-side reconfiguration. Throughput 57-58 fps,
+  0 corrupt. Next options: soft recovery without REQBUFS, pre-opened spare fd,
+  or accept.
   Note: CMA free is only ~106-115 MB; requesting 20 x 1080p buffers can yield 12
   and `STREAMON` EINVAL — use `--cap-bufs 17`. Backup
   `~/.codex_tmp/backup_d3_20261110_112758/deployed.tar` (`0ed6e107...`).
