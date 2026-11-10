@@ -293,6 +293,8 @@ CM311 真正的版本信息应通过 `uname -m`、`uname -r`、`ldd --version`�
 
 78. **2026-11-10 16:28-16:32 HKT soft recovery 实验：失败并回滚**。尝试 0xf 后不 `REQBUFS`，仅 `STREAMOFF → 重新 QBUF → STREAMON`（保留 buffer/fb）：`STREAMON` 返回成功，但**soft 会话产不出帧**（500 ms 内无帧），说明 meson-vdec 在 abort 后必须完整重配。首版回退逻辑有 bug（soft 循环 101 次、60 s 仅 15 帧），已 `git checkout c9c76eb -- tools/d3_probe.c` 回滚；板端重建后 30 s 验证 **1697 帧/56.43 fps**、6 会话、0 corrupt、干净退出。**结论**：TTFV 的 181 ms 是驱动 abort 后完整重配的固有成本，userspace 无法通过复用队列消除；计划 D3c 的 p50≤200 ms 在当前驱动下不可达。若要继续压缩，只能减少 abort 次数（IRQ/CPU 亲和、rmrx 独立读取）或改驱动（高风险）。证据 `captures/manual_live/d3c_soft2_20261110_163006`（失败）、`d3c_revert_20261110_163210`（回滚验证）。未 reboot。未 commit（代码已回到 c9c76eb）。
 
+79. **2026-11-10 16:34 HKT 无录制 A/B：录制不是剩余抖动主因**。async OFF、60 s、直接跑管线（无 `--record`）：**3492 帧 / 60.065 s = 58.14 fps、6 会话、corrupt=0**；dmesg **10 `0xf` / 5 abort**，与带录制到 USB 根盘的 60 s 运行（10–16 次）相同 → **录制写根盘不是剩余 `0xf` 的主因**；此前 soak 的 20 次/600 s 属窗口波动。剩余 `0xf` ≈0.17 次/s，每次约 260 ms 冻结，约占 4% 时间；属 VDEC/KMS 与 xHCI/DRAM 的主机侧争用。**软件侧可做的优化到此为止**；继续需 IRQ/CPU 亲和（root）、独立读取进程（rmrx，收益不确定）或改驱动（高风险）。证据 `captures/manual_live/d3c_norec_20261110_163408`。未 reboot。未 commit。
+
 ### 3.2 已知实验性代码状态——需要审查，不应照单全收
 
 - `~/ffmpeg-6.1.1-v4l2/libavcodec/v4l2_buffers.c`：曾移动 `atomic_fetch_add_explicit(&s->refcount,1,...)`，试图修正 plane/group 引用计数不对称；**没有完成必要性与正确性验证**。

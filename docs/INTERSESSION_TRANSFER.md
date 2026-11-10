@@ -43,6 +43,14 @@ deployed hashes, P0 root cause: upstream stream damage → firmware 0xf session
 death → IRAP starvation; evidence index, backups, next tracks A/B/C/D).
 Nothing committed (user instruction).
 
+### 2026-11-10 16:34 HKT — 无录制 A/B：录制不是剩余抖动主因
+
+- async OFF、60 s、无 `--record`：**3492 帧 / 60.065 s = 58.14 fps**、6 会话、
+  corrupt=0；dmesg **10 `0xf` / 5 abort**，与带录制根盘运行（10–16 次）相同。
+- soak 的 20 次/600 s 属窗口波动；剩余 `0xf` ≈0.17/s、每次 ~260 ms，约占 4% 时间。
+- 软件侧优化到此为止；继续需 IRQ/CPU 亲和（root）、rmrx（收益不确定）或驱动修改。
+- 证据 `captures/manual_live/d3c_norec_20261110_163408`。未 reboot。未 commit。
+
 ### 2026-11-10 16:28–16:32 HKT — soft recovery 失败并回滚
 
 - 尝试 0xf 后不 REQBUFS、仅 STREAMOFF→QBUF→STREAMON：STREAMON 成功但无帧，
