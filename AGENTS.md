@@ -291,6 +291,8 @@ CM311 真正的版本信息应通过 `uname -m`、`uname -r`、`ldd --version`�
 
 77. **2026-11-10 15:17-15:29 HKT 恢复优化 + TTFV 埋点（D3c 部分完成）**。改动：①worker 复用同一 V4L2 fd 做 `STREAMOFF→S_FMT/REQBUFS`（不再 close/reopen；失败才回退）；②worker 检测到 `POLLERR`/`DQBUF EIO` 时通过 socket 发 `R`，Python 侧立即 `_request_iframe("worker_recover")`，把 I-frame 请求与重建重叠；③`RECOVER begin/reopened/streamon/capture_ready/first_frame` 全阶段埋点。实测（60/45 s，async OFF）：TTFV **260–265 ms**（reopen 181 ms、等 IRAP 28 ms、17 buffer 导出 35 ms、首帧 18 ms），较优化前 282 ms 略降；`reused fd config failed` 未出现，说明 181 ms 是驱动在 abort 后同一 fd 上重配的成本，不是 open。计划 D3c 的 TTFV 目标 p50≤200 ms **未达**；下一步可选 soft recovery（不 REQBUFS，仅 STREAMOFF/STREAMON）、预开备用 fd，或接受。吞吐仍 57–58 fps、0 corrupt、退出干净。构建 `d3_probe.c d6c91234…`（板端随构建）、`worker_client.py d03297a6…`、`pipeline.py 60b7d312…`。证据 `captures/manual_live/d3c_ttfv{2,3,4,5}_*`。未 reboot。未 commit。
 
+78. **2026-11-10 16:28-16:32 HKT soft recovery 实验：失败并回滚**。尝试 0xf 后不 `REQBUFS`，仅 `STREAMOFF → 重新 QBUF → STREAMON`（保留 buffer/fb）：`STREAMON` 返回成功，但**soft 会话产不出帧**（500 ms 内无帧），说明 meson-vdec 在 abort 后必须完整重配。首版回退逻辑有 bug（soft 循环 101 次、60 s 仅 15 帧），已 `git checkout c9c76eb -- tools/d3_probe.c` 回滚；板端重建后 30 s 验证 **1697 帧/56.43 fps**、6 会话、0 corrupt、干净退出。**结论**：TTFV 的 181 ms 是驱动 abort 后完整重配的固有成本，userspace 无法通过复用队列消除；计划 D3c 的 p50≤200 ms 在当前驱动下不可达。若要继续压缩，只能减少 abort 次数（IRQ/CPU 亲和、rmrx 独立读取）或改驱动（高风险）。证据 `captures/manual_live/d3c_soft2_20261110_163006`（失败）、`d3c_revert_20261110_163210`（回滚验证）。未 reboot。未 commit（代码已回到 c9c76eb）。
+
 ### 3.2 已知实验性代码状态——需要审查，不应照单全收
 
 - `~/ffmpeg-6.1.1-v4l2/libavcodec/v4l2_buffers.c`：曾移动 `atomic_fetch_add_explicit(&s->refcount,1,...)`，试图修正 plane/group 引用计数不对称；**没有完成必要性与正确性验证**。

@@ -43,6 +43,15 @@ deployed hashes, P0 root cause: upstream stream damage → firmware 0xf session
 death → IRAP starvation; evidence index, backups, next tracks A/B/C/D).
 Nothing committed (user instruction).
 
+### 2026-11-10 16:28–16:32 HKT — soft recovery 失败并回滚
+
+- 尝试 0xf 后不 REQBUFS、仅 STREAMOFF→QBUF→STREAMON：STREAMON 成功但无帧，
+  meson-vdec abort 后必须完整重配。
+- 首版回退逻辑 bug 导致 101 次 soft 循环（60 s 仅 15 帧）；已回滚
+  `tools/d3_probe.c` 到 c9c76eb；30 s 验证 1697 帧/56.43 fps、6 会话、干净退出。
+- 结论：TTFV 181 ms 是驱动固有成本，p50≤200 ms 在当前驱动下不可达。
+  继续压缩只能减少 abort 次数（IRQ/CPU 亲和、rmrx）或改驱动。
+
 ### 2026-11-10 15:17–15:29 HKT — 恢复优化与 TTFV 埋点
 
 - worker 复用同一 V4L2 fd（STREAMOFF→S_FMT/REQBUFS，失败才 reopen）；检测到

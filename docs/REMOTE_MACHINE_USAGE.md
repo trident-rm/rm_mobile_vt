@@ -217,6 +217,12 @@ kernel module still follows the R2/R3 rules in `AGENTS.md`.
   not met and the 181 ms is driver-side reconfiguration. Throughput 57-58 fps,
   0 corrupt. Next options: soft recovery without REQBUFS, pre-opened spare fd,
   or accept.
+- **Soft recovery failed (2026-11-10 16:32)**: skipping REQBUFS and doing only
+  STREAMOFF -> QBUF -> STREAMON makes STREAMON succeed but yields no frames;
+  meson-vdec requires a full reconfigure after an abort. Reverted
+  `tools/d3_probe.c` to `c9c76eb`; 30 s check = 1697 frames / 56.43 fps, clean.
+  The 181 ms TTFV component is driver-inherent; reducing aborts (IRQ/CPU
+  affinity, rmrx) is the remaining lever.
   Note: CMA free is only ~106-115 MB; requesting 20 x 1080p buffers can yield 12
   and `STREAMON` EINVAL — use `--cap-bufs 17`. Backup
   `~/.codex_tmp/backup_d3_20261110_112758/deployed.tar` (`0ed6e107...`).
