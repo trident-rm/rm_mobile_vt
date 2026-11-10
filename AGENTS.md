@@ -297,6 +297,8 @@ CM311 真正的版本信息应通过 `uname -m`、`uname -r`、`ldd --version`�
 
 80. **2026-11-10 16:39-17:13 HKT D3d 3×60 s + K3 30 分钟 soak**。配置 `config/vt13_video.kiosk.yaml`（worker、async OFF、control on、kernel watch、stall 0、无录制）。**D3d 三轮**（各 60 s）：**57.80 / 58.02 / 58.49 fps**、`corrupt=0`、`PIPELINE_RC=0`；每轮 5–7 个会话；dmesg 每轮 8–12 `0xf` / 4–6 abort → **计划 D3d 的“0 `0xf`”Gate 未达**，但 ≥55 fps、恢复、正确性（0 corrupt）满足。**K3 soak（1800 s）**：**105856 帧 / 1800.087 s = 58.81 fps**、**128 个会话**（约每 14 s 一次重建）、`corrupt=0`、`oversize=0`、`PIPELINE_RC=0`；内存 358→359 MiB（无增长）、温度 61→67 °C、退出无残留。注：soak 的 dmesg 前后差分显示 12 `0xf`/6 abort 明显低估（30 分钟重日志导致 ring buffer 回绕），以 128 个会话作为重建次数。**K3 草案**已提交 `f43d463`：`config/vt13_video.kiosk.yaml`、`deploy/vt13-kiosk.service`（draft，不启用）。**结论**：长时间稳定性 PASS；残余 `0xf` 仍是 D3d “0 次”Gate 的唯一缺口。证据 `captures/manual_live/d3d_k3_20261110_163945/`。未 reboot。未 commit。
 
+81. **2026-11-10 17:15 HKT taskset 亲和实验：无显著收益**。`taskset -c 2,3` 绑核跑 60 s：**3521 帧 / 60.115 s = 58.57 fps**、5 个会话、`corrupt=0`；dmesg **8 `0xf` / 4 abort**，与未绑核的 D3d（8–12 次）无显著差异 → CPU 亲和不是残余 `0xf` 的杠杆。残余抖动属 DRAM/中断级，继续需驱动/IRQ 改动（高风险）或接受。证据 `captures/manual_live/d3d_taskset_20261110_171535`。未 reboot。未 commit。
+
 ### 3.2 已知实验性代码状态——需要审查，不应照单全收
 
 - `~/ffmpeg-6.1.1-v4l2/libavcodec/v4l2_buffers.c`：曾移动 `atomic_fetch_add_explicit(&s->refcount,1,...)`，试图修正 plane/group 引用计数不对称；**没有完成必要性与正确性验证**。

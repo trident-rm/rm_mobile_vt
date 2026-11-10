@@ -43,6 +43,13 @@ deployed hashes, P0 root cause: upstream stream damage → firmware 0xf session
 death → IRAP starvation; evidence index, backups, next tracks A/B/C/D).
 Nothing committed (user instruction).
 
+### 2026-11-10 17:15 HKT — taskset 亲和实验：无显著收益
+
+- `taskset -c 2,3` 跑 60 s：**3521 帧 / 58.57 fps**、5 会话、0 corrupt；
+  dmesg **8 `0xf` / 4 abort**，与未绑核（8–12 次）无差异。
+- 结论：CPU 亲和不是残余 `0xf` 的杠杆；属 DRAM/中断级，需驱动/IRQ 改动或接受。
+- 证据 `captures/manual_live/d3d_taskset_20261110_171535`。未 reboot。未 commit。
+
 ### 2026-11-10 16:39–17:13 HKT — D3d 3×60 s + K3 30 分钟 soak
 
 - D3d 三轮（`config/vt13_video.kiosk.yaml`，无录制）：**57.80 / 58.02 / 58.49 fps**、

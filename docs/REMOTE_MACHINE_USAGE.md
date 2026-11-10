@@ -235,6 +235,9 @@ kernel module still follows the R2/R3 rules in `AGENTS.md`.
   0 corrupt, 0 oversize, RC=0, memory 358 -> 359 MiB, 61 -> 67 C, clean exit.
   dmesg delta undercounts due to ring wrap; use session count. K3 draft committed
   in `f43d463` (`config/vt13_video.kiosk.yaml`, `deploy/vt13-kiosk.service`, not enabled).
+- **taskset affinity test (2026-11-10 17:15)**: `taskset -c 2,3` for 60 s gave
+  3521 frames / 58.57 fps, 5 sessions, 8 `0xf` / 4 aborts — no significant
+  change vs unbound (8-12). CPU affinity is not the residual-jitter lever.
   Note: CMA free is only ~106-115 MB; requesting 20 x 1080p buffers can yield 12
   and `STREAMON` EINVAL — use `--cap-bufs 17`. Backup
   `~/.codex_tmp/backup_d3_20261110_112758/deployed.tar` (`0ed6e107...`).
