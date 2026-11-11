@@ -1,5 +1,12 @@
 # Intersession Transfer: VT13 / CM311
 
+## 2026-11-11 21:23 HKT — Committed 0e274eb + runtime parity verified (RUNTIME_PARITY_OK)
+
+- **Commit `0e274eb`** (main, no push): "k3: service hardening, Source Change recovery fix, cold-boot module fix" — 8 intended files (AGENTS.md, deploy/vt13-kiosk.service, deploy/vt13-kiosk-journald.conf, docs/INTERSESSION_TRANSFER.md, docs/REMOTE_MACHINE_USAGE.md, tests/test_pipeline.py, tools/d3_probe.c, vt13_video/recovery.py). Structured Summary/Verification/Conclusion. Secret scan: no new credential occurrence added; the pre-existing plaintext CM311 password in REMOTE_MACHINE_USAGE.md (already in HEAD) is untouched — **rotation/removal recommended** with a replacement credential path. `.codex_tmp`/binaries/captures/sibling repo excluded.
+- **Runtime parity (verified, not re-synced — runtime was deployed during this session)**: full-package hash matrix local-commit vs CM311 `~/mobile_vt` = **16/16 match (RUNTIME_PARITY_OK)** (15 `vt13_video/*.py` + `config/vt13_video.kiosk.yaml`). Worker: committed source `tools/d3_probe.c 4af75b7c…` → on-device binary `build/d3/d3_probe eb1dbb67…` (built from that source; remote `~/mobile_vt` has no `tools/`, tools/tests/docs stay local). Module installed `ca467983…`. Manifests `.codex_tmp/k3_source_change_20261111/parity_{local,remote}.txt`.
+- **Live state at commit**: kiosk healthy (MainPID 449, sessions=1, 60.4 fps, 0 errors/0 `0xf`, vdec IRQ firing) — serves as post-commit live evidence; no separate smoke needed.
+- **K3 ACCEPTED_WITH_LIMITATION** (see 21:13 entry). Backups: worker `backup_srcchange_20261111_201335/d3_probe.51346c85`; module `meson-vdec.ko.a6cc08ca.bak`.
+
 ## 2026-11-11 21:13 HKT — Permanent module fix VALIDATED: cold-boot auto-load ca46 → kiosk auto-start → 60.4 fps, sessions=1, 0 errors
 
 - **Permanent install (R3 approved)**: backed up wrong module to `/lib/modules/6.18.59-ophub/.../meson-vdec.ko.a6cc08ca.bak` (`a6cc08ca…`), installed source build `ca467983…` into `/lib/modules/.../meson-vdec.ko`, `depmod -a` RC=0. Installed hash verified `ca467983…`.
