@@ -74,6 +74,21 @@ static double now_ms(void) {
     return ts.tv_sec * 1000.0 + ts.tv_nsec / 1e6;
 }
 
+static uint64_t mono_ns(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
+}
+
+#define MAX_FED 32
+#define MAX_AGE_SAMPLES 512
+
+struct fed_au {
+    uint32_t seq;
+    uint64_t send_ns;
+    uint64_t recv_ns;
+};
+
 struct out_buf {
     void *addr;
     size_t len;
@@ -87,6 +102,15 @@ struct cap_buf {
     void *map[MAX_PLANES];
     size_t maplen[MAX_PLANES];
     unsigned int queued;
+};
+
+struct held_fb {
+    int active;
+    int dmabuf[2];
+    uint32_t handle[2];
+    uint32_t fb_id;
+    void *map[2];
+    size_t maplen[2];
 };
 
 struct ctx {
@@ -119,6 +143,23 @@ struct ctx {
     int last_idx;
     const char *dump_dir;
     int dump_frames;
+    const char *dump_recover_dir;
+    int rec_dumps;
+    int rec_dump_max;
+    int rec_active;
+    int held_dumped;
+    int held_release_countdown;
+    const char *dump_first_dir;
+    int first_dumps;
+    int first_dump_max;
+    int hide_primary;
+    int primary_hidden;
+    int recover_sleep_ms;
+    int recv_buf_kb;
+    int start_gate;
+    int gate_frames;
+    int gate_open;
+    unsigned gated_frames;
     int cap_bufs;
     int want_mode;
     unsigned want_w, want_h, want_hz;
@@ -128,14 +169,24 @@ struct ctx {
     int mode_changed;
     int recovering;
     double recover_start_ms;
-    struct {
-        int active;
-        int dmabuf[2];
-        uint32_t handle[2];
-        uint32_t fb_id;
-        void *map[2];
-        size_t maplen[2];
-    } held;
+    /* Latency instrumentation (opt-in --lat-csv). All clocks are
+     * CLOCK_MONOTONIC, matching the sender's ts_ns in the AU header. */
+    FILE *lat_fp;
+    int have_last_present;
+    double last_present_ms;
+    int have_recover_last_present;
+    double recover_last_present_ms;
+    struct fed_au fed[MAX_FED];
+    int fed_head, fed_tail;
+    uint32_t last_pop_seq;
+    int have_pop_seq;
+    unsigned seq_gaps;
+    double age_ms[MAX_AGE_SAMPLES];
+    int age_n;
+    int backlog_max;
+    struct held_fb held[2];
+    int held_n;
+    int prev_idx;
 };
 
 static void ctx_init(struct ctx *c) {
@@ -144,13 +195,15 @@ static void ctx_init(struct ctx *c) {
     c->card_fd = -1;
     c->sock_fd = -1;
     c->last_idx = -1;
+    c->prev_idx = -1;
     c->video_w = 1920;
     c->video_h = 1080;
     c->cap_bufs = 0;
     for (unsigned int i = 0; i < MAX_CAP_BUFS; i++) {
         c->cap[i].dmabuf[0] = c->cap[i].dmabuf[1] = -1;
     }
-    c->held.dmabuf[0] = c->held.dmabuf[1] = -1;
+    for (unsigned int i = 0; i < 2; i++)
+        c->held[i].dmabuf[0] = c->held[i].dmabuf[1] = -1;
 }
 
 /* ---------------- read-only inventory ---------------- */
@@ -460,9 +513,24 @@ static void drm_hide_primary(struct ctx *c) {
 }
 
 static void held_release(struct ctx *c);
+static int dump_planes(const char *path, const uint8_t *y, const uint8_t *uv,
+                       uint32_t w, uint32_t h, uint32_t bpl0, uint32_t bpl1);
 
 static int drm_present(struct ctx *c, int idx) {
     if (!c->cap[idx].fb_id) return -1;
+    /* Hide the console only when the first video frame is ready; hiding it at
+     * startup leaves no active plane and the CRTC shows its green background. */
+    if (c->hide_primary && !c->primary_hidden) {
+        drm_hide_primary(c);
+        c->primary_hidden = 1;
+    }
+    /* Release the previous session's held frame only after several presents
+     * have elapsed: the meson flip can take effect one or two frames later,
+     * and freeing the UV plane while it is still scanned shows a green
+     * curtain. */
+    if (c->held_n > 0 && c->held_release_countdown > 0) {
+        if (--c->held_release_countdown == 0) held_release(c);
+    }
     struct drm_mode_set_plane sp;
     memset(&sp, 0, sizeof(sp));
     sp.plane_id = c->plane_id;
@@ -478,7 +546,17 @@ static int drm_present(struct ctx *c, int idx) {
     sp.src_h = c->video_h << 16;
     /* Blocking commit: on return the previous scanout buffer is released. */
     if (xioctl(c->card_fd, DRM_IOCTL_MODE_SETPLANE, &sp) < 0) { perror("SETPLANE"); return -1; }
-    held_release(c);
+    if (c->dump_recover_dir && c->have_recover_last_present && c->held_n > 0 &&
+        !c->held_dumped && c->held[0].map[0] && c->held[0].map[1]) {
+        char path[512];
+        c->held_dumped = 1;
+        snprintf(path, sizeof(path), "%s/held_%.1f_%ux%u.yuv", c->dump_recover_dir,
+                 now_ms(), c->video_w, c->video_h);
+        dump_planes(path, c->held[0].map[0], c->held[0].map[1],
+                    c->video_w, c->video_h, c->bpl[0], c->bpl[1]);
+    }
+    if (c->held_n > 0 && c->held_release_countdown == 0)
+        c->held_release_countdown = 5;
     return 0;
 }
 
@@ -612,6 +690,22 @@ static void out_release(struct ctx *c, unsigned int idx) {
 static int out_alloc(struct ctx *c, unsigned int *idx) {
     if (c->n_out_free <= 0) return 0;
     *idx = (unsigned int)c->out_free[--c->n_out_free];
+    return 1;
+}
+
+static void fed_push(struct ctx *c, uint32_t seq, uint64_t send_ns, uint64_t recv_ns) {
+    if (c->fed_head - c->fed_tail >= MAX_FED) c->fed_tail++;
+    struct fed_au *f = &c->fed[c->fed_head % MAX_FED];
+    f->seq = seq;
+    f->send_ns = send_ns;
+    f->recv_ns = recv_ns;
+    c->fed_head++;
+}
+
+static int fed_pop(struct ctx *c, struct fed_au *out) {
+    if (c->fed_tail >= c->fed_head) return 0;
+    *out = c->fed[c->fed_tail % MAX_FED];
+    c->fed_tail++;
     return 1;
 }
 
@@ -884,7 +978,7 @@ static int v4l2_capture_setup(struct ctx *c) {
         if (xioctl(c->video_fd, VIDIOC_QUERYBUF, &b) < 0) { perror("QUERYBUF CAPTURE"); return -1; }
         for (unsigned int p = 0; p < 2; p++) {
             c->cap[i].maplen[p] = planes[p].length;
-            if (c->dump_dir) {
+            if (c->dump_dir || c->dump_recover_dir || c->dump_first_dir) {
                 c->cap[i].map[p] = mmap(NULL, planes[p].length, PROT_READ, MAP_SHARED,
                                         c->video_fd, planes[p].m.mem_offset);
                 if (c->cap[i].map[p] == MAP_FAILED) { perror("mmap CAPTURE"); c->cap[i].map[p] = NULL; return -1; }
@@ -943,22 +1037,51 @@ static int v4l2_capture_setup(struct ctx *c) {
     return 0;
 }
 
+static int dump_planes(const char *path, const uint8_t *y, const uint8_t *uv,
+                       uint32_t w, uint32_t h, uint32_t bpl0, uint32_t bpl1) {
+    FILE *fp = fopen(path, "wb");
+    if (!fp) { perror(path); return -1; }
+    for (uint32_t r = 0; r < h; r++)
+        fwrite(y + (size_t)r * bpl0, 1, w, fp);
+    for (uint32_t r = 0; r < h / 2; r++)
+        fwrite(uv + (size_t)r * bpl1, 1, w, fp);
+    fclose(fp);
+    printf("dumped %s\n", path);
+    return 0;
+}
+
 static int dump_frame(struct ctx *c, unsigned int idx, unsigned int seq) {
     if (!c->dump_dir || (int)seq >= c->dump_frames) return 0;
     char path[512];
     snprintf(path, sizeof(path), "%s/frame_%04u_%ux%u.yuv", c->dump_dir, seq,
              c->video_w, c->video_h);
-    FILE *fp = fopen(path, "wb");
-    if (!fp) { perror(path); return -1; }
-    uint8_t *y = c->cap[idx].map[0];
-    uint8_t *uv = c->cap[idx].map[1];
-    for (uint32_t r = 0; r < c->video_h; r++)
-        fwrite(y + (size_t)r * c->bpl[0], 1, c->video_w, fp);
-    for (uint32_t r = 0; r < c->video_h / 2; r++)
-        fwrite(uv + (size_t)r * c->bpl[1], 1, c->video_w, fp);
-    fclose(fp);
-    printf("dumped %s\n", path);
-    return 0;
+    return dump_planes(path, c->cap[idx].map[0], c->cap[idx].map[1],
+                       c->video_w, c->video_h, c->bpl[0], c->bpl[1]);
+}
+
+/* First frames after a rebuild (and the last held frame) for flash analysis. */
+static int dump_first_frame(struct ctx *c, unsigned int idx) {
+    if (!c->dump_first_dir || c->first_dumps >= c->first_dump_max) return 0;
+    if (!c->cap[idx].map[0] || !c->cap[idx].map[1]) return 0;
+    char path[512];
+    snprintf(path, sizeof(path), "%s/first_%04d_%ux%u.yuv", c->dump_first_dir,
+             c->first_dumps, c->video_w, c->video_h);
+    c->first_dumps++;
+    return dump_planes(path, c->cap[idx].map[0], c->cap[idx].map[1],
+                       c->video_w, c->video_h, c->bpl[0], c->bpl[1]);
+}
+
+static int dump_recover_frame(struct ctx *c, unsigned int idx) {
+    if (!c->dump_recover_dir || !c->rec_active || c->rec_dumps >= c->rec_dump_max)
+        return 0;
+    if (!c->cap[idx].map[0] || !c->cap[idx].map[1]) return 0;
+    char path[512];
+    snprintf(path, sizeof(path), "%s/rec_%.1f_%d_%ux%u.yuv", c->dump_recover_dir,
+             now_ms(), c->rec_dumps, c->video_w, c->video_h);
+    c->rec_dumps++;
+    if (c->rec_dumps >= c->rec_dump_max) c->rec_active = 0;
+    return dump_planes(path, c->cap[idx].map[0], c->cap[idx].map[1],
+                       c->video_w, c->video_h, c->bpl[0], c->bpl[1]);
 }
 
 static int cap_requeue(struct ctx *c, unsigned int idx) {
@@ -1064,18 +1187,38 @@ static int run_decode(struct ctx *c, int max_frames, int no_display) {
     return frames > 0 ? 0 : -1;
 }
 
+static uint32_t plane_fb_id(struct ctx *c, uint32_t plane_id) {
+    if (c->card_fd < 0 || !plane_id) return 0xffffffffu;
+    struct drm_mode_get_plane p;
+    memset(&p, 0, sizeof(p));
+    p.plane_id = plane_id;
+    if (xioctl(c->card_fd, DRM_IOCTL_MODE_GETPLANE, &p) < 0) return 0xffffffffu;
+    return p.fb_id;
+}
+
 static void mark_recovering(struct ctx *c, const char *why) {
     if (c->recovering) return;
     c->recovering = 1;
     c->recover_start_ms = now_ms();
-    fprintf(stderr, "RECOVER begin t=%.1f (%s)\n", c->recover_start_ms, why);
+    c->have_recover_last_present = c->have_last_present;
+    c->recover_last_present_ms = c->last_present_ms;
+    c->rec_dumps = 0;
+    c->rec_active = 1;
+    c->held_dumped = 0;
+    if (!c->gate_open) c->gate_frames = 0;
+    fprintf(stderr, "RECOVER begin t=%.1f (%s) since_last_present_ms=%.1f primary_fb=%u\n",
+            c->recover_start_ms, why,
+            c->have_last_present ? c->recover_start_ms - c->last_present_ms : -1.0,
+            plane_fb_id(c, c->primary_id));
     if (c->sock_fd >= 0) {
         ssize_t n = send(c->sock_fd, "R", 1, MSG_DONTWAIT);
         (void)n;
     }
 }
 
-static int cap_present_one(struct ctx *c, int no_display, int *frames, int *corrupt) {
+static int cap_present_one(struct ctx *c, int no_display, int *frames, int *corrupt,
+                           int backlog, int session) {
+    (void)backlog;
     struct v4l2_buffer b;
     struct v4l2_plane planes[VIDEO_MAX_PLANES];
     memset(&b, 0, sizeof(b));
@@ -1090,28 +1233,116 @@ static int cap_present_one(struct ctx *c, int no_display, int *frames, int *corr
         mark_recovering(c, "DQBUF EIO");
         return -1;
     }
+    uint64_t dq_ns = mono_ns();
     unsigned int idx = b.index;
     c->cap[idx].queued = 0;
     if (b.flags & V4L2_BUF_FLAG_ERROR) {
         (*corrupt)++;
         fprintf(stderr, "capture buffer flagged ERROR (idx=%u corrupt=%d)\n", idx, *corrupt);
-        if (cap_requeue(c, idx) < 0) return -1;
+        if (cap_requeue(c, idx) < 0) { mark_recovering(c, "QBUF CAPTURE"); return -1; }
         return 1;
     }
+
+    /* L2-B: drain all ready frames and present only the newest.  Older decoded
+     * frames are requeued without display; the decoder still decoded them, so
+     * the reference chain is untouched. */
+    int skipped = 0;
+    struct fed_au fed = {0};
+    int have_fed = fed_pop(c, &fed);
+    if (!no_display) {
+        for (;;) {
+            struct v4l2_buffer nb;
+            struct v4l2_plane np[VIDEO_MAX_PLANES];
+            memset(&nb, 0, sizeof(nb));
+            memset(np, 0, sizeof(np));
+            nb.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+            nb.memory = V4L2_MEMORY_MMAP;
+            nb.length = 2;
+            nb.m.planes = np;
+            if (xioctl(c->video_fd, VIDIOC_DQBUF, &nb) < 0) {
+                if (errno == EAGAIN) break;
+                perror("DQBUF CAPTURE");
+                mark_recovering(c, "DQBUF EIO");
+                return -1;
+            }
+            unsigned int nidx = nb.index;
+            c->cap[nidx].queued = 0;
+            if (nb.flags & V4L2_BUF_FLAG_ERROR) {
+                (*corrupt)++;
+                fprintf(stderr, "capture buffer flagged ERROR (idx=%u corrupt=%d)\n",
+                        nidx, *corrupt);
+                if (cap_requeue(c, nidx) < 0) { mark_recovering(c, "QBUF CAPTURE"); return -1; }
+                continue;
+            }
+            if (cap_requeue(c, idx) < 0) { mark_recovering(c, "QBUF CAPTURE"); return -1; }
+            skipped++;
+            idx = nidx;
+            dq_ns = mono_ns();
+            struct fed_au nf;
+            if (fed_pop(c, &nf)) { fed = nf; have_fed = 1; } else { have_fed = 0; }
+        }
+    }
+
     if (c->dump_dir && dump_frame(c, idx, (unsigned int)*frames) < 0) return -1;
+    if (dump_first_frame(c, idx) < 0) return -1;
+    if (dump_recover_frame(c, idx) < 0) return -1;
+    /* Startup gate: keep the console until the stream has survived N decoded
+     * frames without a rebuild; the first 0xf usually happens within ~1 s. */
+    if (!no_display && !c->gate_open && c->start_gate > 0) {
+        c->gate_frames += 1 + skipped;
+        if (c->gate_frames < c->start_gate) {
+            c->gated_frames += 1 + skipped;
+            if (cap_requeue(c, idx) < 0) { mark_recovering(c, "QBUF CAPTURE"); return -1; }
+            return 1;
+        }
+        c->gate_open = 1;
+        printf("START_GATE open after %d frames t=%.1f\n", c->gate_frames, now_ms());
+    }
     if (!no_display) {
         if (drm_present(c, (int)idx) < 0) return -1;
-        if (c->last_idx >= 0 && !c->cap[c->last_idx].queued) {
-            if (cap_requeue(c, (unsigned int)c->last_idx) < 0) return -1;
+    }
+    uint64_t done_ns = mono_ns();
+    if (!no_display) {
+        /* Return the buffer from two presents ago: the meson flip can still be
+         * scanning the previous one, and requeueing it lets the decoder write
+         * over a frame that is on screen (partial black/tearing). */
+        if (c->prev_idx >= 0 && !c->cap[c->prev_idx].queued) {
+            if (cap_requeue(c, (unsigned int)c->prev_idx) < 0) {
+                mark_recovering(c, "QBUF CAPTURE");
+                return -1;
+            }
         }
+        c->prev_idx = c->last_idx;
         c->last_idx = (int)idx;
         c->last_fb = c->cap[idx].fb_id;
+        c->have_last_present = 1;
+        c->last_present_ms = (double)done_ns / 1e6;
     } else {
-        if (cap_requeue(c, idx) < 0) return -1;
+        if (cap_requeue(c, idx) < 0) { mark_recovering(c, "QBUF CAPTURE"); return -1; }
     }
+    double age_ms = -1.0, decode_ms = -1.0, wait_ms = -1.0;
+    if (have_fed) {
+        if (c->have_pop_seq && fed.seq != c->last_pop_seq + 1) c->seq_gaps++;
+        c->last_pop_seq = fed.seq;
+        c->have_pop_seq = 1;
+        age_ms = (done_ns - fed.send_ns) / 1e6;
+        decode_ms = (dq_ns - fed.recv_ns) / 1e6;
+        wait_ms = (done_ns - dq_ns) / 1e6;
+        if (c->age_n < MAX_AGE_SAMPLES) c->age_ms[c->age_n++] = age_ms;
+        if (c->lat_fp) {
+            fprintf(c->lat_fp, "%d,%u,%llu,%.2f,%.2f,%.2f,%d,%d\n",
+                    *frames, fed.seq, (unsigned long long)done_ns,
+                    age_ms, decode_ms, wait_ms, skipped, session);
+        }
+    }
+    if (skipped > c->backlog_max) c->backlog_max = skipped;
     (*frames)++;
     if (c->recovering) {
-        printf("RECOVER first_frame t=%.1f dt=%.1f\n", now_ms(), now_ms() - c->recover_start_ms);
+        printf("RECOVER first_frame t=%.1f dt=%.1f", now_ms(), now_ms() - c->recover_start_ms);
+        if (c->have_recover_last_present) {
+            printf(" VISIBLE_GAP gap_ms=%.1f", (double)done_ns / 1e6 - c->recover_last_present_ms);
+        }
+        printf(" primary_fb=%u\n", plane_fb_id(c, c->primary_id));
         c->recovering = 0;
     }
     return 1;
@@ -1136,30 +1367,68 @@ static int session_open(struct ctx *c) {
 }
 
 static void held_release(struct ctx *c) {
-    if (!c->held.active) return;
+    for (int h = 0; h < c->held_n; h++) {
+        struct held_fb *hf = &c->held[h];
+        if (!hf->active) continue;
+        for (unsigned int p = 0; p < 2; p++) {
+            if (hf->map[p]) { munmap(hf->map[p], hf->maplen[p]); hf->map[p] = NULL; }
+            if (hf->dmabuf[p] >= 0) { close(hf->dmabuf[p]); hf->dmabuf[p] = -1; }
+        }
+        if (c->card_fd >= 0 && hf->handle[0]) {
+            struct drm_gem_close gc = { .handle = hf->handle[0] };
+            xioctl(c->card_fd, DRM_IOCTL_GEM_CLOSE, &gc);
+            hf->handle[0] = 0;
+        }
+        if (c->card_fd >= 0 && hf->handle[1]) {
+            struct drm_gem_close gc = { .handle = hf->handle[1] };
+            xioctl(c->card_fd, DRM_IOCTL_GEM_CLOSE, &gc);
+            hf->handle[1] = 0;
+        }
+        if (c->card_fd >= 0 && hf->fb_id) {
+            uint32_t fb = hf->fb_id;
+            xioctl(c->card_fd, DRM_IOCTL_MODE_RMFB, &fb);
+            hf->fb_id = 0;
+        }
+        hf->active = 0;
+    }
+    c->held_n = 0;
+    c->held_release_countdown = 0;
+}
+
+/* Keep one more recent frame: the meson flip can take effect late, so the
+ * plane may still scan the previous frame when it is freed. */
+static int held_add(struct ctx *c, unsigned int i) {
+    if (c->held_n >= 2 || !c->cap[i].fb_id) return 0;
+    struct held_fb *hf = &c->held[c->held_n++];
+    hf->active = 1;
+    hf->fb_id = c->cap[i].fb_id;
     for (unsigned int p = 0; p < 2; p++) {
-        if (c->held.map[p]) { munmap(c->held.map[p], c->held.maplen[p]); c->held.map[p] = NULL; }
-        if (c->held.dmabuf[p] >= 0) { close(c->held.dmabuf[p]); c->held.dmabuf[p] = -1; }
+        hf->dmabuf[p] = c->cap[i].dmabuf[p];
+        hf->handle[p] = c->cap[i].handle[p];
+        hf->map[p] = c->cap[i].map[p];
+        hf->maplen[p] = c->cap[i].maplen[p];
+        c->cap[i].dmabuf[p] = -1;
+        c->cap[i].handle[p] = 0;
+        c->cap[i].map[p] = NULL;
     }
-    if (c->card_fd >= 0 && c->held.handle[0]) {
-        struct drm_gem_close gc = { .handle = c->held.handle[0] };
-        xioctl(c->card_fd, DRM_IOCTL_GEM_CLOSE, &gc);
-        c->held.handle[0] = 0;
-    }
-    if (c->card_fd >= 0 && c->held.handle[1]) {
-        struct drm_gem_close gc = { .handle = c->held.handle[1] };
-        xioctl(c->card_fd, DRM_IOCTL_GEM_CLOSE, &gc);
-        c->held.handle[1] = 0;
-    }
-    if (c->card_fd >= 0 && c->held.fb_id) {
-        uint32_t fb = c->held.fb_id;
-        xioctl(c->card_fd, DRM_IOCTL_MODE_RMFB, &fb);
-        c->held.fb_id = 0;
-    }
-    c->held.active = 0;
+    c->cap[i].fb_id = 0;
+    return 1;
 }
 
 static void session_teardown(struct ctx *c, int keep_fd) {
+    /* If a newer frame was presented after the held frame (countdown > 0),
+     * the held one is no longer scanned and can be freed before we keep the
+     * current scanout.  countdown == 0 means no frame was presented yet. */
+    if (c->held_n > 0 && c->held_release_countdown > 0) {
+        held_release(c);
+    }
+    /* AUs fed in the dead session will never produce a frame; drop their
+     * latency entries so the next session starts with a clean FIFO. */
+    c->fed_head = c->fed_tail = 0;
+    c->age_n = 0;
+    c->backlog_max = 0;
+    c->have_pop_seq = 0;
+    if (!c->gate_open) c->gate_frames = 0;
     if (c->video_fd >= 0) {
         uint32_t type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
         xioctl(c->video_fd, VIDIOC_STREAMOFF, &type);
@@ -1169,21 +1438,8 @@ static void session_teardown(struct ctx *c, int keep_fd) {
     for (unsigned int i = 0; i < c->num_cap; i++) {
         /* Keep the frame that is currently on screen alive so the overlay
          * keeps scanning it during the V4L2 rebuild (no black flash). */
-        if ((int)i == c->last_idx && c->cap[i].fb_id && !c->held.active) {
-            c->held.active = 1;
-            c->held.fb_id = c->cap[i].fb_id;
-            for (unsigned int p = 0; p < 2; p++) {
-                c->held.dmabuf[p] = c->cap[i].dmabuf[p];
-                c->held.handle[p] = c->cap[i].handle[p];
-                c->held.map[p] = c->cap[i].map[p];
-                c->held.maplen[p] = c->cap[i].maplen[p];
-                c->cap[i].dmabuf[p] = -1;
-                c->cap[i].handle[p] = 0;
-                c->cap[i].fb_id = 0;
-                c->cap[i].map[p] = NULL;
-            }
+        if (((int)i == c->last_idx || (int)i == c->prev_idx) && held_add(c, i))
             continue;
-        }
         for (unsigned int p = 0; p < 2; p++) {
             if (c->cap[i].map[p]) { munmap(c->cap[i].map[p], c->cap[i].maplen[p]); c->cap[i].map[p] = NULL; }
             if (c->cap[i].dmabuf[p] >= 0) { close(c->cap[i].dmabuf[p]); c->cap[i].dmabuf[p] = -1; }
@@ -1249,6 +1505,30 @@ static int wait_irap_au(struct ctx *c, struct au_hdr *h, unsigned char *msg, int
     return -1;
 }
 
+static int cmp_double_(const void *a, const void *b) {
+    double x = *(const double *)a, y = *(const double *)b;
+    return (x > y) - (x < y);
+}
+
+static void report_second(struct ctx *c, int frames, int corrupt, int oversize,
+                          int eos, int sessions, double now, double t0) {
+    double p50 = -1, p95 = -1, mx = -1;
+    if (c->age_n > 0) {
+        qsort(c->age_ms, (size_t)c->age_n, sizeof(double), cmp_double_);
+        p50 = c->age_ms[c->age_n / 2];
+        int idx95 = (int)(c->age_n * 0.95);
+        if (idx95 >= c->age_n) idx95 = c->age_n - 1;
+        p95 = c->age_ms[idx95];
+        mx = c->age_ms[c->age_n - 1];
+    }
+    printf("aus_frames=%d corrupt=%d oversize=%d eos=%d sessions=%d %.1f fps "
+           "age_p50=%.1f age_p95=%.1f age_max=%.1f backlog_max=%d\n",
+           frames, corrupt, oversize, eos, sessions, frames * 1000.0 / (now - t0),
+           p50, p95, mx, c->backlog_max);
+    c->age_n = 0;
+    c->backlog_max = 0;
+}
+
 static int run_socket(struct ctx *c, int frames_limit) {
     unsigned char *msg = malloc(sizeof(struct au_hdr) + AU_MAX_BYTES);
     if (!msg) return -1;
@@ -1259,7 +1539,7 @@ static int run_socket(struct ctx *c, int frames_limit) {
     while (!g_stop && (frames_limit <= 0 || frames < frames_limit)) {
         if (session_open(c) < 0) { session_close(c); break; }
         sessions++;
-        printf("session %d opened; waiting for IRAP AU\n", sessions);
+        printf("t=%.1f session %d opened; waiting for IRAP AU\n", now_ms(), sessions);
         if (c->recovering)
             printf("RECOVER reopened t=%.1f dt=%.1f\n", now_ms(), now_ms() - c->recover_start_ms);
 
@@ -1268,8 +1548,10 @@ static int run_socket(struct ctx *c, int frames_limit) {
         if (n == 0) { eos = 1; session_close(c); break; }
         unsigned int idx;
         if (!out_alloc(c, &idx)) { session_close(c); break; }
+        uint64_t recv_ns = mono_ns();
         if (out_fill_data(c, idx, msg + sizeof(h), (size_t)n) < 0) { session_close(c); break; }
-        printf("first AU seq=%u len=%d flags=0x%x\n", h.seq, n, h.flags);
+        fed_push(c, h.seq, h.ts_ns, recv_ns);
+        printf("t=%.1f first AU seq=%u len=%d flags=0x%x\n", now_ms(), h.seq, n, h.flags);
 
         uint32_t type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
         if (xioctl(c->video_fd, VIDIOC_STREAMON, &type) < 0) {
@@ -1292,6 +1574,7 @@ static int run_socket(struct ctx *c, int frames_limit) {
             printf("RECOVER capture_ready t=%.1f dt=%.1f\n", now_ms(), now_ms() - c->recover_start_ms);
 
         int recovered = 0;
+        int backlog = 0;
         while (!g_stop && (frames_limit <= 0 || frames < frames_limit)) {
             struct pollfd pfds[2] = {
                 { .fd = c->video_fd, .events = POLLIN | POLLPRI | POLLERR },
@@ -1325,10 +1608,12 @@ static int run_socket(struct ctx *c, int frames_limit) {
             }
             if (recovered) break;
 
+            backlog = 0; /* frames already drained in this pass */
             for (;;) {
-                int r = cap_present_one(c, c->card_fd < 0, &frames, &corrupt);
+                int r = cap_present_one(c, c->card_fd < 0, &frames, &corrupt, backlog, sessions);
                 if (r < 0) { recovered = 1; break; }
                 if (r == 0) break;
+                backlog++;
             }
             if (recovered) break;
 
@@ -1337,15 +1622,16 @@ static int run_socket(struct ctx *c, int frames_limit) {
             if (m == -2) continue;
             if (m < 0 || (h.flags & AU_FLAG_EOS)) { eos = 1; break; }
             if ((size_t)m > AU_MAX_BYTES) { oversize++; continue; }
+            recv_ns = mono_ns();
             unsigned int oi;
             if (out_alloc(c, &oi)) {
                 if (out_fill_data(c, oi, msg + sizeof(h), (size_t)m) < 0) { recovered = 1; break; }
+                fed_push(c, h.seq, h.ts_ns, recv_ns);
             }
 
             double now = now_ms();
             if (now - last_log > 1000) {
-                printf("aus_frames=%d corrupt=%d oversize=%d eos=%d sessions=%d %.1f fps\n",
-                       frames, corrupt, oversize, eos, sessions, frames * 1000.0 / (now - t0));
+                report_second(c, frames, corrupt, oversize, eos, sessions, now, t0);
                 last_log = now;
             }
         }
@@ -1353,16 +1639,20 @@ static int run_socket(struct ctx *c, int frames_limit) {
         session_teardown(c, recovered ? 1 : 0);
         if (eos) break;
         if (recovered) {
-            fprintf(stderr, "session %d rebuilt after error; frames=%d\n", sessions, frames);
-            usleep(100000);
+            fprintf(stderr, "t=%.1f session %d rebuilt after error; frames=%d\n",
+                    now_ms(), sessions, frames);
+            if (c->recover_sleep_ms > 0)
+                usleep((useconds_t)c->recover_sleep_ms * 1000);
             continue;
         }
         if (frames_limit > 0 && frames >= frames_limit) break;
     }
 
     double dt = (now_ms() - t0) / 1000.0;
-    printf("DECODED frames=%d corrupt=%d oversize=%d sessions=%d wall=%.3fs fps=%.2f\n",
-           frames, corrupt, oversize, sessions, dt, dt > 0 ? frames / dt : 0.0);
+    printf("DECODED frames=%d corrupt=%d oversize=%d sessions=%d seq_gaps=%u gated=%u "
+           "wall=%.3fs fps=%.2f\n",
+           frames, corrupt, oversize, sessions, c->seq_gaps, c->gated_frames,
+           dt, dt > 0 ? frames / dt : 0.0);
     free(msg);
     return frames > 0 ? 0 : -1;
 }
@@ -1397,6 +1687,7 @@ static void cleanup(struct ctx *c) {
     if (c->card_fd >= 0 && c->master) xioctl(c->card_fd, DRM_IOCTL_DROP_MASTER, 0);
     if (c->sock_fd >= 0) close(c->sock_fd);
     if (c->card_fd >= 0) close(c->card_fd);
+    if (c->lat_fp) { fclose(c->lat_fp); c->lat_fp = NULL; }
 }
 
 static void usage(const char *argv0) {
@@ -1405,7 +1696,9 @@ static void usage(const char *argv0) {
             "       %s --file PATH [--bytes N] [--frames N] [--hold S] [--dump DIR]\n"
             "          [--dump-frames N] [--no-display] [--hide-primary] [--video WxH]\n"
             "          [--cap-bufs N]\n"
-            "       %s --socket PATH [--frames N] [--hide-primary] [--cap-bufs N] [--mode WxH@Hz]\n",
+            "       %s --socket PATH [--frames N] [--hide-primary] [--cap-bufs N] [--mode WxH@Hz]\n"
+            "          [--lat-csv PATH] [--dump-recover DIR] [--dump-first DIR] [--start-gate N]\n"
+            "          [--recv-buf-kb N]\n",
             argv0, argv0, argv0);
 }
 
@@ -1417,7 +1710,10 @@ int main(int argc, char **argv) {
     size_t limit = 0, filelen = 0;
     unsigned char *data = NULL;
     int inv = 0, no_display = 0, hide_primary = 0, frames = 1, hold_ms = 0, frames_set = 0;
+    const char *lat_csv = NULL;
     c.dump_frames = 1;
+    c.start_gate = 60;
+    c.recover_sleep_ms = 0;
 
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--inventory")) inv = 1;
@@ -1425,12 +1721,24 @@ int main(int argc, char **argv) {
         else if (!strcmp(argv[i], "--hide-primary")) hide_primary = 1;
         else if (!strcmp(argv[i], "--file") && i + 1 < argc) file = argv[++i];
         else if (!strcmp(argv[i], "--socket") && i + 1 < argc) sock_path = argv[++i];
+        else if (!strcmp(argv[i], "--lat-csv") && i + 1 < argc) lat_csv = argv[++i];
         else if (!strcmp(argv[i], "--bytes") && i + 1 < argc) limit = strtoull(argv[++i], NULL, 0);
         else if (!strcmp(argv[i], "--frames") && i + 1 < argc) { frames = atoi(argv[++i]); frames_set = 1; }
         else if (!strcmp(argv[i], "--hold") && i + 1 < argc) hold_ms = atoi(argv[++i]) * 1000;
         else if (!strcmp(argv[i], "--cap-bufs") && i + 1 < argc) c.cap_bufs = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--dump") && i + 1 < argc) c.dump_dir = argv[++i];
         else if (!strcmp(argv[i], "--dump-frames") && i + 1 < argc) c.dump_frames = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "--dump-recover") && i + 1 < argc) {
+            c.dump_recover_dir = argv[++i];
+            c.rec_dump_max = 4;
+        }
+        else if (!strcmp(argv[i], "--dump-first") && i + 1 < argc) {
+            c.dump_first_dir = argv[++i];
+            c.first_dump_max = 30;
+        }
+        else if (!strcmp(argv[i], "--start-gate") && i + 1 < argc) c.start_gate = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "--recover-sleep-ms") && i + 1 < argc) c.recover_sleep_ms = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "--recv-buf-kb") && i + 1 < argc) c.recv_buf_kb = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--mode") && i + 1 < argc) {
             unsigned w, h, hz;
             if (sscanf(argv[++i], "%ux%u@%u", &w, &h, &hz) != 3) { usage(argv[0]); return 2; }
@@ -1444,13 +1752,21 @@ int main(int argc, char **argv) {
     if (inv) { inventory(); return 0; }
     if (!file && !sock_path) { usage(argv[0]); return 2; }
     if (sock_path && !frames_set) frames = 0;
+    if (lat_csv) {
+        c.lat_fp = fopen(lat_csv, "a");
+        if (!c.lat_fp) { perror(lat_csv); return 2; }
+        setvbuf(c.lat_fp, NULL, _IOLBF, 0);
+        if (ftell(c.lat_fp) == 0)
+            fprintf(c.lat_fp,
+                    "frame,seq,present_mono_ns,age_ms,decode_ms,wait_ms,backlog,session\n");
+    }
 
     signal(SIGINT, on_signal);
     signal(SIGTERM, on_signal);
 
     if (!no_display) {
         if (drm_setup(&c) < 0) { cleanup(&c); return 1; }
-        if (hide_primary) drm_hide_primary(&c);
+        c.hide_primary = hide_primary;
     }
 
     if (file) {
@@ -1476,6 +1792,16 @@ int main(int argc, char **argv) {
         if (v4l2_output_setup_socket(&c) < 0) { cleanup(&c); return 1; }
         c.sock_fd = sock_connect(sock_path);
         if (c.sock_fd < 0) { cleanup(&c); return 1; }
+        if (c.recv_buf_kb > 0) {
+            int sz = c.recv_buf_kb * 1024;
+            if (setsockopt(c.sock_fd, SOL_SOCKET, SO_RCVBUF, &sz, sizeof(sz)) == 0) {
+                socklen_t sl = sizeof(sz);
+                if (getsockopt(c.sock_fd, SOL_SOCKET, SO_RCVBUF, &sz, &sl) == 0)
+                    printf("AU socket SO_RCVBUF=%d (requested %d KB)\n", sz, c.recv_buf_kb);
+            } else {
+                perror("SO_RCVBUF");
+            }
+        }
         printf("AU socket connected: %s\n", sock_path);
         rc = run_socket(&c, frames);
     } else {

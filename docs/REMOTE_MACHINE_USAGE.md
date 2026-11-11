@@ -468,7 +468,52 @@ the working directory and environment between commands.
 
 ## System profile
 
-Read-only inventory snapshot on 2026-11-06 15:52 HKT:
+### 2026-11-10 18:00 HKT snapshot (L0 read-only)
+
+- Identity: `armbian`, `6.18.59-ophub`, `aarch64`, Armbian OS 26.11.0 noble;
+  uptime 4 d 3 h; 1787 MB RAM (~1409 MB available); root `/dev/sda2` 115 GB,
+  16 GB used.
+- Boot cmdline includes `video=HDMI-A-1:1920x1080@60e`; `/sys/class/graphics/fb0/virtual_size`
+  is `1920,2160`; HDMI-A-1 `connected`; mode list starts `1024x600, 1920x1080`.
+- Display stack: LightDM `inactive`, `multi-user.target`, no Xorg; DRM master
+  free (`/dev/dri/card0` unused). The kiosk worker takes/drops master itself.
+- Devices: DJI `2ca3:1020` on Bus 001 Dev 006 (USB 2.0 480 Mb/s, 6 interfaces,
+  ttyACM0/ttyACM1 via cdc_acm); USB SG Flash on the same xHCI controller.
+  `/dev/video0` free, `meson_vdec` refcnt 0.
+- IRQ placement (idle snapshot): xhci-hcd on CPU2 (10.5 M) with 14 k on CPU0;
+  `vdec-mbox1` (254 k) and `esparserirq` (258 k) on CPU0.
+- Tools: `v4l2-ctl`, `jq`, `bc`, `tmux`, `rsync`, `git` present;
+  **no `pidstat`, `perf`, `trace-cmd`, `modetest`** — do not install without
+  approval; use `/proc` sampling (`tools/latency_sampler.py`).
+- `journalctl -k` is readable as `billieguo` (no sudo needed for kernel logs).
+- `/proc/pressure/*` is not available (PSI disabled).
+- `~/mobile_vt` is still **not a git repository**. Deployed hashes on
+  2026-11-10: `config.py 1a6160d1`, `pipeline.py 60b7d312`,
+  `worker_client.py d03297a6`, `decoder.py 0a63d896`, `control.py cc0cbcdc`,
+  `cli.py a74bb800`, `config/vt13_video.kiosk.yaml d4d155f2`,
+  `build/d3/d3_probe 51346c85` (startup gate + green-curtain fix + R1 sleep=0 +
+  L2-B newest-frame presentation, deployed 2026-11-11 14:28; previous 888118fb
+  backed up at `~/.codex_tmp/backup_l2b_20261111_142801/`); the repo `decoder.py`
+  differs only by the local codec-identity logging (`5c7460f0`).
+- Low-latency evidence (2026-11-10/11): all three reports (baseline, replay,
+  live) are archived at `.codex_tmp/docs_backup_20261111_lowlatency/`
+  (each with checksums; see `ARCHIVE_MANIFEST.md`). The original plan remains
+  `plans/CM311_DJI_C5_Low_Latency_60FPS_Optimization_Plan.md`.
+- 2026-11-11 14:28-14:58 V1 30 min soak on the deployed L2-B worker:
+  **59.86 fps, 6 rebuilds, 0 corrupt, RC=0**, device idle after. **V1 status:
+  ACCEPTED_WITH_LIMITATION** (glass-to-glass TODO; startup console 1-2 s;
+  ~217 ms freeze per content-dependent `0xf`).
+- **Sync check (2026-11-11 15:35)**: deployed Python matches repo HEAD
+  `e56c5fe` except `decoder.py` (`0a63d896` vs `5c7460f0`, codec logging only);
+  deployed worker `51346c85` was built from the current local
+  `tools/d3_probe.c` (`8ace8282`). The local instrumentation, tools, tests and
+  docs are not deployed (staging only); `~/mobile_vt` is not a git repo and has
+  no `tools/`.
+- **Operational note**: a background job started with `&` by a non-interactive
+  shell ignores SIGINT, so stop the pipeline with `--seconds N` (or SIGTERM),
+  not `kill -INT`.
+
+### 2026-11-06 15:52 HKT snapshot (historical)
 
 - Hostname: `armbian`
 - Board: `Aml.S905l3b` (previous record; not rechecked in this inventory)

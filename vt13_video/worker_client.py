@@ -29,6 +29,28 @@ DEFAULT_WORKER = "~/mobile_vt/build/d3/d3_probe"
 SEND_STALL_S = 0.02
 
 
+class LatencyCsv:
+    """Opt-in per-AU timing log shared with the C worker (joined on seq)."""
+
+    def __init__(self, path: str) -> None:
+        target = Path(path).expanduser()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        self._fh = target.open("w", encoding="utf-8", buffering=1)
+        self._fh.write("kind\tseq\tmono_ns\tcompleted_ns\tflags\tbytes\n")
+
+    def au(self, seq: int, completed_ns: int, send_ns: int, flags: int, nbytes: int) -> None:
+        self._fh.write(f"au\t{seq}\t{send_ns}\t{completed_ns}\t{flags}\t{nbytes}\n")
+
+    def event(self, kind: str, seq: int, mono_ns: int, dropped: int) -> None:
+        self._fh.write(f"{kind}\t{seq}\t{mono_ns}\t-1\t-1\t{dropped}\n")
+
+    def close(self) -> None:
+        try:
+            self._fh.close()
+        except OSError:
+            pass
+
+
 class WorkerDecoder:
     def __init__(self, config, logger: logging.Logger | None = None, on_recover=None) -> None:
         self.config = config
@@ -49,6 +71,14 @@ class WorkerDecoder:
         self._srv: socket.socket | None = None
         self._conn: socket.socket | None = None
         self._proc: subprocess.Popen | None = None
+        self._lat: LatencyCsv | None = None
+        lat_path = os.environ.get("VT13_LAT_CSV")
+        if lat_path:
+            try:
+                self._lat = LatencyCsv(lat_path)
+                self.logger.info("worker latency csv: %s", lat_path)
+            except OSError as exc:
+                self.logger.warning("cannot open VT13_LAT_CSV %s: %r", lat_path, exc)
         self._start()
         atexit.register(self._stop)
 
@@ -83,6 +113,18 @@ class WorkerDecoder:
         mode = os.environ.get("VT13_WORKER_MODE")
         if mode:
             args += ["--mode", mode]
+        worker_lat = os.environ.get("VT13_WORKER_LAT_CSV")
+        if worker_lat:
+            args += ["--lat-csv", os.path.expanduser(worker_lat)]
+        worker_dump = os.environ.get("VT13_WORKER_DUMP_RECOVER")
+        if worker_dump:
+            args += ["--dump-recover", os.path.expanduser(worker_dump)]
+        worker_first = os.environ.get("VT13_WORKER_DUMP_FIRST")
+        if worker_first:
+            args += ["--dump-first", os.path.expanduser(worker_first)]
+        worker_rcvbuf = os.environ.get("VT13_WORKER_RECV_BUF_KB")
+        if worker_rcvbuf:
+            args += ["--recv-buf-kb", worker_rcvbuf]
         if os.environ.get("VT13_WORKER_NO_DISPLAY") == "1":
             args.append("--no-display")
         else:
@@ -134,16 +176,20 @@ class WorkerDecoder:
             except FileNotFoundError:
                 pass
             self._sock_path = None
+        if self._lat is not None:
+            self._lat.close()
+            self._lat = None
 
-    def _send(self, payload: bytes, flags: int) -> None:
+    def _send(self, payload: bytes, flags: int) -> int:
         assert self._conn is not None
-        msg = _HDR.pack(MAGIC, len(payload), self._seq, flags, time.monotonic_ns()) + payload
+        send_ns = time.monotonic_ns()
+        msg = _HDR.pack(MAGIC, len(payload), self._seq, flags, send_ns) + payload
         self._seq += 1
         deadline = time.monotonic() + SEND_STALL_S
         while True:
             try:
                 self._conn.send(msg)
-                return
+                return send_ns
             except BlockingIOError:
                 if time.monotonic() >= deadline:
                     raise TimeoutError("worker socket backpressure")
@@ -164,6 +210,8 @@ class WorkerDecoder:
                 return
             if msg == b"R":
                 self.recoveries += 1
+                if self._lat is not None:
+                    self._lat.event("rec", self._seq, time.monotonic_ns(), self.dropped_aus)
                 if self._on_recover is not None:
                     try:
                         self._on_recover()
@@ -181,16 +229,24 @@ class WorkerDecoder:
         payload = au.wire_bytes
         if irap and bootstrap_bytes:
             payload = bytes(bootstrap_bytes) + payload
+        completed_ns = int((au.completed_at or au.received_at) * 1e9)
         if len(payload) > 512 * 1024:
             self.dropped_aus += 1
+            if self._lat is not None:
+                self._lat.event("oversize", self._seq, time.monotonic_ns(), self.dropped_aus)
             return []
+        seq = self._seq
         try:
-            self._send(payload, FLAG_IRAP if irap else 0)
+            send_ns = self._send(payload, FLAG_IRAP if irap else 0)
+            if self._lat is not None:
+                self._lat.au(seq, completed_ns, send_ns, FLAG_IRAP if irap else 0, len(payload))
         except TimeoutError:
             # Worker is behind (socket buffer full). Drop this and all
             # following non-IRAP AUs until the next IRAP; do NOT restart.
             self.dropped_aus += 1
             self._dropping = True
+            if self._lat is not None:
+                self._lat.event("backpressure", seq, time.monotonic_ns(), self.dropped_aus)
             return []
         except (BrokenPipeError, ConnectionResetError, OSError) as exc:
             self.errors += 1

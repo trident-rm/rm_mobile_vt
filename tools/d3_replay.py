@@ -24,6 +24,13 @@ HDR = struct.Struct("<IIIIQ")
 
 
 def split_aus(data: bytes) -> list[tuple[int, int, bool]]:
+    """Split Annex-B into AUs, attaching prefix NALs to the following AU.
+
+    Mirrors the live pipeline's AccessUnitAssembler: VPS/SPS/PPS/AUD/prefix SEI
+    belong to the *next* picture, suffix SEI/filler to the current one.  An
+    earlier version started each AU at the first VCL NAL, which left the IRAP
+    without its parameter sets and made a replay fail with POLLERR.
+    """
     n = len(data)
     starts: list[int] = []
     pos = 0
@@ -51,16 +58,31 @@ def split_aus(data: bytes) -> list[tuple[int, int, bool]]:
     au_start = nals[0][0]
     have_vcl = False
     au_irap = False
+    pending_start: int | None = None
     for s, end, nal_type, first_slice in nals:
-        if nal_type <= 31 and first_slice and have_vcl:
-            aus.append((au_start, s - au_start, au_irap))
-            au_start = s
-            au_irap = False
-        if nal_type <= 31:
+        is_vcl = nal_type <= 31
+        if is_vcl and first_slice:
+            if have_vcl:
+                cut = pending_start if pending_start is not None else s
+                if cut > au_start:
+                    aus.append((au_start, cut - au_start, au_irap))
+                au_start = cut
+                au_irap = False
             have_vcl = True
+            pending_start = None
             if nal_type in IRAP_TYPES:
                 au_irap = True
-    aus.append((au_start, n - au_start, au_irap))
+            continue
+        if is_vcl:
+            if not have_vcl:
+                pending_start = None
+            continue
+        if have_vcl and nal_type in (38, 40):
+            continue  # suffix SEI / filler belongs to the current picture
+        if have_vcl and pending_start is None:
+            pending_start = s  # prefix NALs open the next picture
+    if have_vcl:
+        aus.append((au_start, n - au_start, au_irap))
     return aus
 
 
@@ -95,6 +117,7 @@ def main() -> int:
 
     sent = 0
     dropped = 0
+    recoveries = 0
     dropping = False
     bytes_sent = 0
     t0 = time.monotonic()
@@ -102,6 +125,21 @@ def main() -> int:
     next_at = t0
 
     for idx, (off, length, irap) in enumerate(aus):
+        # Mirror the live client: a worker rebuild ("R") means the current GOP
+        # can no longer be decoded, so drop non-IRAP AUs until the next IRAP
+        # instead of queueing stale pictures.
+        try:
+            while True:
+                ev = conn.recv(16, socket.MSG_DONTWAIT)
+                if not ev:
+                    break
+                if ev == b"R":
+                    recoveries += 1
+                    dropping = True
+        except BlockingIOError:
+            pass
+        except OSError:
+            break
         if period:
             next_at += period
             delay = next_at - time.monotonic()
@@ -153,8 +191,8 @@ def main() -> int:
     except FileNotFoundError:
         pass
     dt = time.monotonic() - t0
-    print(f"SENT={sent} DROPPED={dropped} BYTES={bytes_sent} WALL={dt:.3f}s FPS={sent / dt if dt else 0:.2f}",
-          flush=True)
+    print(f"SENT={sent} DROPPED={dropped} RECOVERIES={recoveries} BYTES={bytes_sent} "
+          f"WALL={dt:.3f}s FPS={sent / dt if dt else 0:.2f}", flush=True)
     return 0
 
 

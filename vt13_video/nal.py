@@ -96,6 +96,9 @@ class AccessUnit:
 
     nals: tuple[NALUnit, ...]
     received_at: float
+    # Monotonic time when the assembler learned this AU was complete (the
+    # arrival of the next AU's first NAL).  None when flushed at shutdown.
+    completed_at: float | None = None
 
     @property
     def wire_bytes(self) -> bytes:
@@ -250,7 +253,7 @@ class AccessUnitAssembler:
 
         if nal.is_aud:
             if self._current_has_vcl:
-                output.append(self._finish_current())
+                output.append(self._finish_current(received_at))
             self._append_pending(nal, received_at)
             return output
 
@@ -268,7 +271,7 @@ class AccessUnitAssembler:
                 return output
 
             if self._current_has_vcl:
-                output.append(self._finish_current())
+                output.append(self._finish_current(received_at))
             self._current = self._pending
             self._current_started_at = self._pending_started_at
             self._pending = []
@@ -294,8 +297,10 @@ class AccessUnitAssembler:
             self._pending_started_at = received_at
         self._pending.append(nal)
 
-    def _finish_current(self) -> AccessUnit:
-        au = AccessUnit(tuple(self._current), self._current_started_at or 0.0)
+    def _finish_current(self, completed_at: float | None = None) -> AccessUnit:
+        au = AccessUnit(
+            tuple(self._current), self._current_started_at or 0.0, completed_at
+        )
         self._current = []
         self._current_has_vcl = False
         self._current_started_at = None

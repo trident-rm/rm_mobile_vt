@@ -1,7 +1,219 @@
 # Intersession Transfer: VT13 / CM311
 
-## Current status (2026-11-10 17:20 HKT) — D3 live kiosk working
+## Final status (2026-11-11 15:00 HKT) — V1 ACCEPTED_WITH_LIMITATION (session closed)
 
+- **User decision**: the working kiosk is accepted with limitations
+  (`ACCEPTED_WITH_LIMITATION`); no further optimization on CM311 is required
+  now.
+- **Final deployed state**: `build/d3/d3_probe 51346c85` (L2-B drain-to-newest),
+  Python unchanged (`config.py 1a6160d1`, `pipeline.py 60b7d312`,
+  `worker_client.py d03297a6`, `kiosk.yaml d4d155f2`), kiosk config, gate 60,
+  recover sleep 0. Backup chain:
+  `888118fb` -> `~/.codex_tmp/backup_l2b_20261111_142801/`;
+  `f288c28a` -> `backup_r1_20261111_135710/`;
+  `21c7f288` -> `backup_gate_20261111_124124/`;
+  `4749ed94` -> `backup_greenfix_20261111_114324/`.
+- **V1 30 min soak** (`captures/manual_live/soak_l2b_20261111_142851`):
+  **107,763 frames / 1800.102 s = 59.86 fps**; 1-s presented p50/p10 = 60,
+  0 zero-frame seconds; **0 corrupt/oversize**; **6 rebuilds/`0xf`**;
+  visible freeze **200-233 ms (p50 216.7, ~0.07 % of the time)**; internal
+  age median **29.7 ms** (per-second p50); CPU 26 %, Python ~0.96 core;
+  IRQ vdec/esparser 59.8/s; memory steady ~1.12 GB; 61-72 °C;
+  `PIPELINE_RC=0`, idle after exit.
+- **Fixes delivered this session**: green curtain/tearing (held fb release
+  deferred 5 presents + two-frame display ownership); startup green (primary
+  hidden only at the first frame); startup black (60-frame start gate, console
+  visible ~1-2 s); R1 freeze (rebuild sleep 100 -> 0 ms, ~366 -> ~217 ms);
+  L2-B newest-frame presentation (internal 131.5 -> ~30-32 ms p50).
+  L2-A (shrinking the socket queue) was tested and rejected (age worsened).
+- **Known limitations**:
+  1. `0xf` is content-dependent (not USB/RF); ~6/30 min in this window, each
+     rebuild freezes ~217 ms with automatic recovery (no reboot/SSH loss).
+  2. Console visible ~1-2 s at startup (start gate hides the startup flash).
+  3. A very small eye-visible delay remains; **glass-to-glass is TODO
+     (not measured)**; the remaining delay is likely DJI encode/wireless and
+     the display panel, not CM311.
+  4. L2-B skips at most 2 frames per drain (display only; references intact).
+  5. `0xf` driver/firmware root cause unresolved; further freeze reduction is
+     a separate driver task (R3).
+- **Evidence**: the three reports of this session are archived at
+  `.codex_tmp/docs_backup_20261111_lowlatency/`
+  (`rc1_baseline_20261110/`, `rc1_replay_20261110/`, `rc1_live_20261111/`,
+  each with checksums; see `ARCHIVE_MANIFEST.md`). The original plan remains
+  `plans/CM311_DJI_C5_Low_Latency_60FPS_Optimization_Plan.md`.
+- **Sync state (2026-11-11 15:35)**: deployed Python equals repo HEAD
+  `e56c5fe` for config/pipeline/worker_client/control/cli/nal/kiosk; only
+  `decoder.py` differs (deployed `0a63d896` vs HEAD `5c7460f0`, local codec
+  logging only). Deployed worker `51346c85` was built on the device from the
+  current local `tools/d3_probe.c` (`8ace8282`); the staging source/binary
+  match. The local uncommitted instrumentation/tools/tests/docs are **not**
+  on the deployed tree (staging only). The remote `~/mobile_vt` is not a git
+  repository and has no `tools/`; the local docs/plan are not copied there.
+- **Working tree**: uncommitted changes on branch
+  `rc1-latency-instrumentation`; `main` remains `e56c5fe`. Do not push/commit
+  without the user's explicit instruction.
+- **Future work (not scheduled)**: glass-to-glass L1a, 60 min V2, K3 systemd
+  service (R3), driver/firmware `0xf` investigation.
+
+## Current status (2026-11-11 10:25 HKT) — L1 live internal latency measured
+
+- VT link on; instrumented package + worker ran **from staging only**
+  (`~/.codex_staging/l1_live_20261111_101319/`), deployed tree unchanged.
+- Baseline 180 s (201.6 s of data): source 59.9 AU/s, **11,781 presented frames
+  = 58.42 fps**, 18 rebuilds/`0xf`, 0 corrupt, 250 AUs dropped in rebuilds.
+- **Internal `AU complete → present`: p50 131.5 ms, p95 160.2, p99 216.8**;
+  decomposition p50 = socket 51.8 + decode 49.8 + present 16.5 ms.
+  Steady (excluding 0.5 s after rebuilds) 130.8 ms.
+- **Present wait = one vblank (16.5 ms) on 99.9 % of frames.**
+- **Visible freeze per rebuild: 283.7-367.1 ms** (18 events, p50 ≈317 ms).
+- CPU: total 26.4 % of 4 cores; **Python ≈0.95 core** (73 % user + 21 % sys),
+  worker ≈3.4 %; iowait ≈0; IRQ vdec/esparser ≈58/s; 59-64 °C; backlog_max 15/17.
+- Reporting: `reports/low_latency/rc1_live_20261111/live_results.md` +
+  `run_manifest.json` + both run dirs + checksums.
+- Operational fix: `kill -INT` is ignored for background jobs in a
+  non-interactive shell; launchers now use `--seconds` and wait/TERM.
+- Next = L2 (new R2, one variable): age-bound the socket backlog; present the
+  newest decoded frame; atomic flip (L3); reduce Python read CPU.
+- Not tested: glass-to-glass, DJI-inherent latency, 1832 mode, long soak.
+
+## 2026-11-11 11:10-11:45 HKT — rebuild green curtain fixed and deployed
+
+- User visual: rebuild produced a short freeze, then a **partial black band /
+  tearing and a green curtain** (not a full-screen flash).
+- Diagnosis: 20 dumped frames (held + first 4 after 4 rebuilds) were complete
+  and normal; `primary_fb=0` at every recovery. Root cause: the held frame's
+  **Y and UV are separate dmabufs**, and the old code freed them right after the
+  first new SETPLANE returned; meson flips can latch 1-2 frames later, so the UV
+  plane could be freed while still scanned -> chroma 0 over valid luma (green).
+- Fix: defer `held_release()` by **5 presents (~83 ms)**; teardown releases a
+  held frame only if a new frame was presented after it, then keeps the current
+  scanout. No latency change.
+- Confirmed: replay 4 rebuilds + live 90 s 2 rebuilds show **only the freeze**,
+  no green/tearing. Deployed `build/d3/d3_probe` `4749ed94` -> `21c7f288`
+  (backup `~/.codex_tmp/backup_greenfix_20261111_114324/`); deployed Python
+  unchanged. Post-deploy live 60 s: 3,573 frames/59.43 fps, 1 rebuild,
+  `VISIBLE_GAP 266.6 ms`, 0 corrupt, RC=0, idle.
+- Remaining: the freeze itself (267-728 ms, R1 recovery cost) and the ~130 ms
+  internal queue (L2 candidates).
+
+## 2026-11-11 12:30-12:42 HKT — startup gate, final worker deployed
+
+- Added `--start-gate N` (default 60 frames in socket mode): decoded frames are
+  requeued without presenting until the current session has survived 60 frames;
+  the console is visible until then, then the primary is hidden and video
+  starts. The gate resets on an early rebuild and never re-engages once open.
+- Replay: the first two sessions presented 0 frames (early `0xf` hidden); gate
+  opened in session 3 after 60 frames; later rebuilds stayed live.
+- Worker also defers the primary hide to the first present (fixes startup
+  green), defers `held_release` by 5 presents (green curtain fix), holds the
+  last two presented frames, and requeues N-2 (display ownership).
+- Deployed `build/d3/d3_probe` `21c7f288` -> `f288c28a` (backup
+  `~/.codex_tmp/backup_gate_20261111_124124/`); deployed Python unchanged.
+  Post-deploy live 30 s: 1 early rebuild hidden, 1,722 frames/57.21 fps,
+  0 corrupt, RC=0.
+- Known limitation: console visible ~1-2 s at startup (hides the startup
+  black flash). Remaining: rebuild freeze 267-728 ms (R1), ~130 ms queue (L2).
+
+## 2026-11-11 13:50-13:58 HKT — R1 freeze shortened (sleep removed), deployed
+
+- A/B replay with the same worker: fixed rebuild `usleep(100 ms)` vs 0.
+  Mid-run `VISIBLE_GAP` 350/383/367 and 383/317/383 ms -> 283/250/283 and
+  250/217/250 ms; `first_frame` 314-375 -> 215-271 ms; `reopened` 211-240 ->
+  119-150 ms; 0 corrupt, no new errors (fewer AUs dropped).
+- Default `recover_sleep_ms=0`; deployed `build/d3/d3_probe` `f288c28a` ->
+  `888118fb` (backup `~/.codex_tmp/backup_r1_20261111_135710/`); Python
+  unchanged. Post-deploy live 60 s: 4 rebuilds, gaps 200.0/216.7/216.7 ms,
+  3,495 frames/58.14 fps, 0 corrupt, RC=0.
+- R1 gate (-25 %) met for the sleep component; remaining freeze ~200 ms.
+
+## 2026-11-11 14:00-14:40 HKT — L2: A negative, B adopted, deployed; soak started
+
+- L2-A (worker `SO_RCVBUF` limit): **negative** — age 128.8/136.7 ->
+  163.9/157.3 ms, socket/decode worse; not deployed.
+- L2-B (drain to newest, present only the newest): live internal
+  `AU complete -> present` **p50 32.3 / p95 50.5 ms** (was 131.5/160.2),
+  socket 0.3, decode 17.6, present 13.7; 0 corrupt. Rebuild gap 216.6 ms.
+  User: motion follow a bit better, a very small delay remains.
+- Deployed `build/d3/d3_probe` `888118fb` -> `51346c85` (backup
+  `~/.codex_tmp/backup_l2b_20261111_142801/`); Python unchanged.
+- **30 min soak running** (`captures/manual_live/soak_l2b_20261111_142851`,
+  started 14:28:51) on the deployed path with 1 Hz /proc sampling; results
+  pending. Keep the VT link on during the soak.
+- Composition of the remaining delay: ~32 ms CM311 (decode ~17 + vblank ~14 +
+  socket ~0.3), plus unmeasured DJI encode/wireless and panel; glass-to-glass
+  (L1a) is the next measurement to split controllable vs inherent.
+
+## 2026-11-11 14:28-14:58 HKT — V1 30 min soak: metrics PASS
+
+- Deployed L2-B worker `51346c85`, kiosk config, VT on for 30 min, 1 Hz sampler.
+- **107,763 frames / 1800.102 s = 59.86 fps**; 1-s presented p50/p10 = 60,
+  0 zero-frame seconds; 0 corrupt/oversize; **6 rebuilds**, visible freeze
+  200-233 ms (p50 216.7, total ~1.3 s = 0.07 %).
+- Worker age p50 median 29.7 ms; Python 0.96 core; total CPU 26 %; IRQ
+  vdec/esparser 59.8/s; memory steady ~1.12 GB; 61-72 °C.
+- `PIPELINE_RC=0`; no leftover processes; `/dev/video0` free; refcnt 0.
+- V1: frame-rate/correctness/recovery/resources/internal latency PASS;
+  **glass-to-glass NOT_TESTED**; known limits: startup console 1-2 s,
+  ~217 ms freeze per `0xf`, a very small eye-visible delay. Final visual
+  verdict pending (PASS vs ACCEPTED_WITH_LIMITATION).
+- Report `reports/low_latency/rc1_live_20261111/V1_soak_results.md`.
+
+## Previous status (2026-11-10 18:30 HKT) — RC1 low-latency plan: L0 PASS
+
+- New plan archived: `plans/CM311_DJI_C5_Low_Latency_60FPS_Optimization_Plan.md`
+  (SHA256 `8dfff72e…`). Round 1 = L0 only (read-only audit + measurement design).
+- Report: `reports/low_latency/rc1_baseline_20261110/` — `decision.md` (PASS),
+  `baseline.json`, `metric_definitions.md`, `latency_path_audit.md`,
+  `instrumentation_proposal.md`, `L1_runbook.md`, remote K3/D3d logs, checksums.
+- **Metric correction**: `stats.decode.fps` / `decode.frames` count AUs *sent*
+  (K3: 107,445), not presented frames. Presented = worker `DECODED` 105,856 /
+  1800.087 s = 58.81 fps. 127 rebuilds × 266 ms TTFV explains the whole
+  average-fps gap (model 58.87 fps).
+- **Audit**: AU completion is only known when the next AU starts (no timestamp
+  existed); present uses blocking legacy SETPLANE before requeue (display-paced
+  loop, so low `htop` CPU is expected); every rebuild contains a fixed 100 ms
+  `usleep`; only 10/127 rebuilds carried `RECOVER` markers (`QBUF CAPTURE` EIO
+  was unmarked); no per-frame age/backlog/visible-gap record existed.
+- **Prepared (local branch `rc1-latency-instrumentation`, uncommitted, NOT
+  deployed)**: `AccessUnit.completed_at`; Python `VT13_LAT_CSV`; worker
+  `--lat-csv` with a 32-entry seq FIFO (age/decode/wait/backlog); per-second
+  `age_p50/p95/max`; `VISIBLE_GAP` freeze duration; recovery markers on every
+  requeue failure; `tools/latency_report.py`; `tools/latency_sampler.py`;
+  `.codex_runs/live_latency_l1.sh`. PC gcc build clean, pytest 50/38.
+- **Next = L1 (needs R2 approval)**: deploy instrumented worker + Python files
+  (backups kept), run one 180 s live baseline per `L1_runbook.md`, optionally a
+  240 fps phone glass-to-glass clip. No reboot/service/kernel change.
+- CM311 state at L0: idle, `/dev/video0` free, no Xorg, LightDM inactive,
+  `multi-user.target`, DJI receiver enumerated; no writes, no live run.
+
+## 2026-11-10 19:00-19:15 HKT — replay validation (R2, no wireless)
+
+- Approved R2 window: ran the **instrumented worker from staging** against
+  recorded streams on CM311. Deployed files untouched (`d3_probe 4749ed94`,
+  `worker_client.py d03297a6`, `kiosk.yaml d4d155f2`); staging
+  `~/.codex_staging/l1_replay_20261110_185859/`; no reboot/service/module.
+- **Instrumentation works end-to-end**: 3500+ frames/60 s per run, 0 corrupt,
+  `seq_gaps` 4-7 (AU→frame FIFO valid), clean exit, console restored.
+- **Recorded "clean" stream reproduces `0xf`**: 4-5 aborts/60 s (same as live)
+  from a transport-clean 10.6 Mbps capture → **content-dependent, not USB/RF**.
+- **Visible freeze per rebuild: 367-400 ms** (one 733.7 ms outlier), first
+  direct measurement.
+- **Present waits one vblank**: 12.4-16.4 ms on ~100 % of frames.
+- **Age decomposition**: `clean4` (60.0 AU/s) 161.6 ms = socket 63.0 +
+  decode 65.7 + present 16.4; `clean5` (59.5) 62.8 ms; `damaged2` (59.5)
+  30.8 ms = socket 0.7 + decode 17.8 + present 12.4 → intrinsic floor ~31 ms.
+  Queue depth is the dominant variable; live `SO_SNDBUF=1 MB` (~48 AU ≈800 ms)
+  is the prime L2 candidate to bound (age-based drop at IRAP), to be measured
+  live first.
+- **Replay-tool defect fixed**: `d3_replay.split_aus` used to leave VPS/SPS/PPS
+  on the previous AU (first IRAP lacked parameter sets → 453 rebuilds/0 frames).
+  Now mirrors `AccessUnitAssembler`; validated **1056/1056 AUs identical** on
+  `captures/vt13_live_raw.h265`. Sender also honours the worker `R` event.
+- Report: `reports/low_latency/rc1_replay_20261110/` (`replay_results.md`,
+  `run_manifest.json`, 6 run dirs, checksums). Not tested: live USB/assembly,
+  1 MB SNDBUF queue, glass-to-glass, real recovery cadence.
+
+## Previous status (2026-11-10 17:20 HKT) — D3 live kiosk working
 **Working configuration** (`config/vt13_video.kiosk.yaml`): `decoder.backend=worker`
 (C V4L2/KMS worker), `VT13_ASYNC_USB=0` (must stay off), control on, kernel abort
 watch on, `stall_restart_s=0`, no recording, `--hide-primary`.
