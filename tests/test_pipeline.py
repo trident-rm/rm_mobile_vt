@@ -810,6 +810,29 @@ class ControlRecoveryIntegrationTests(unittest.TestCase):
 
 
 class RecoveryControllerTests(unittest.TestCase):
+    def test_backoff_remains_bounded_during_long_usb_absence(self) -> None:
+        config = RecoveryConfig(jitter_fraction=0.0)
+        controller = RecoveryController(config)
+        for i in range(10000):
+            delay = controller.on_error(float(i), "USB absent")
+            self.assertLessEqual(delay, config.max_backoff_s)
+        self.assertEqual(delay, config.max_backoff_s)
+        self.assertEqual(controller.consecutive_failures, 10000)
+
+    def test_zero_backoff_remains_zero_after_many_failures(self) -> None:
+        config = RecoveryConfig(initial_backoff_s=0.0, jitter_fraction=0.0)
+        controller = RecoveryController(config)
+        for i in range(1100):
+            self.assertEqual(controller.on_error(float(i), "USB absent"), 0.0)
+
+    def test_unit_multiplier_keeps_initial_backoff(self) -> None:
+        config = RecoveryConfig(multiplier=1.0, jitter_fraction=0.0)
+        controller = RecoveryController(config)
+        for i in range(1100):
+            self.assertEqual(
+                controller.on_error(float(i), "USB absent"), config.initial_backoff_s
+            )
+
     def test_backoff_reset_and_healthy_read_recovery(self) -> None:
         config = RecoveryConfig(
             initial_backoff_s=0.5,

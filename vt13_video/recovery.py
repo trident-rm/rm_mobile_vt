@@ -48,7 +48,12 @@ class RecoveryController:
         self.last_error_at = now
 
         exponent = max(0, self.consecutive_failures - 1)
-        delay = self.config.initial_backoff_s * (self.config.multiplier ** exponent)
+        delay = self.config.initial_backoff_s
+        if delay > 0:
+            try:
+                delay *= self.config.multiplier ** exponent
+            except OverflowError:
+                delay = self.config.max_backoff_s
         delay = min(delay, self.config.max_backoff_s)
         if delay > 0 and self.config.jitter_fraction > 0:
             delay += delay * self.config.jitter_fraction * self._rng.uniform(-1.0, 1.0)

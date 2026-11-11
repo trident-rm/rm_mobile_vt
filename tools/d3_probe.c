@@ -168,6 +168,7 @@ struct ctx {
     uint32_t orig_fb;
     int mode_changed;
     int recovering;
+    int need_fresh_fd;
     double recover_start_ms;
     /* Latency instrumentation (opt-in --lat-csv). All clocks are
      * CLOCK_MONOTONIC, matching the sender's ts_ns in the AU header. */
@@ -1229,8 +1230,12 @@ static int cap_present_one(struct ctx *c, int no_display, int *frames, int *corr
     b.m.planes = planes;
     if (xioctl(c->video_fd, VIDIOC_DQBUF, &b) < 0) {
         if (errno == EAGAIN) return 0;
+        int err = errno;
         perror("DQBUF CAPTURE");
-        mark_recovering(c, "DQBUF EIO");
+        /* EPIPE means the capture format no longer matches the stream; the
+         * driver session is wedged and only a fresh open recovers it. */
+        if (err == EPIPE) c->need_fresh_fd = 1;
+        mark_recovering(c, err == EPIPE ? "DQBUF EPIPE" : "DQBUF EIO");
         return -1;
     }
     uint64_t dq_ns = mono_ns();
@@ -1261,8 +1266,10 @@ static int cap_present_one(struct ctx *c, int no_display, int *frames, int *corr
             nb.m.planes = np;
             if (xioctl(c->video_fd, VIDIOC_DQBUF, &nb) < 0) {
                 if (errno == EAGAIN) break;
+                int err = errno;
                 perror("DQBUF CAPTURE");
-                mark_recovering(c, "DQBUF EIO");
+                if (err == EPIPE) c->need_fresh_fd = 1;
+                mark_recovering(c, err == EPIPE ? "DQBUF EPIPE" : "DQBUF EIO");
                 return -1;
             }
             unsigned int nidx = nb.index;
@@ -1349,6 +1356,7 @@ static int cap_present_one(struct ctx *c, int no_display, int *frames, int *corr
 }
 
 static int session_open(struct ctx *c) {
+    c->need_fresh_fd = 0;
     if (c->video_fd < 0) {
         c->video_fd = open("/dev/video0", O_RDWR | O_NONBLOCK);
         if (c->video_fd < 0) { perror("open /dev/video0"); return -1; }
@@ -1429,6 +1437,18 @@ static void session_teardown(struct ctx *c, int keep_fd) {
     c->backlog_max = 0;
     c->have_pop_seq = 0;
     if (!c->gate_open) c->gate_frames = 0;
+    /* A reused fd may still queue a SOURCE_CHANGE from the dead session (a
+     * resolution switch that raced the abort).  Drain pending events so the
+     * next session cannot consume a stale one; a pending source change means
+     * the driver session is wedged, so reopen from scratch instead. */
+    if (keep_fd && c->video_fd >= 0) {
+        for (;;) {
+            struct v4l2_event ev;
+            memset(&ev, 0, sizeof(ev));
+            if (xioctl(c->video_fd, VIDIOC_DQEVENT, &ev) < 0) break;
+            if (ev.type == V4L2_EVENT_SOURCE_CHANGE) keep_fd = 0;
+        }
+    }
     if (c->video_fd >= 0) {
         uint32_t type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
         xioctl(c->video_fd, VIDIOC_STREAMOFF, &type);
@@ -1582,6 +1602,24 @@ static int run_socket(struct ctx *c, int frames_limit) {
             };
             int pr = poll(pfds, 2, 500);
             if (pr < 0) { if (errno == EINTR) continue; perror("poll"); recovered = 1; break; }
+            /* Handle a mid-stream resolution change before any error path: the
+             * driver pauses decoding (source_change_pending) until userspace
+             * reinits, and a reused fd cannot clear that state. */
+            if (pfds[0].revents & POLLPRI) {
+                int src_changed = 0;
+                for (;;) {
+                    struct v4l2_event ev;
+                    memset(&ev, 0, sizeof(ev));
+                    if (xioctl(c->video_fd, VIDIOC_DQEVENT, &ev) < 0) break;
+                    if (ev.type == V4L2_EVENT_SOURCE_CHANGE) src_changed = 1;
+                }
+                if (src_changed) {
+                    mark_recovering(c, "SOURCE_CHANGE");
+                    c->need_fresh_fd = 1;
+                    recovered = 1;
+                    break;
+                }
+            }
             if (pfds[0].revents & POLLERR) {
                 mark_recovering(c, "POLLERR");
                 recovered = 1;
@@ -1625,7 +1663,10 @@ static int run_socket(struct ctx *c, int frames_limit) {
             recv_ns = mono_ns();
             unsigned int oi;
             if (out_alloc(c, &oi)) {
-                if (out_fill_data(c, oi, msg + sizeof(h), (size_t)m) < 0) { recovered = 1; break; }
+                if (out_fill_data(c, oi, msg + sizeof(h), (size_t)m) < 0) {
+                    mark_recovering(c, "QBUF OUTPUT");
+                    recovered = 1; break;
+                }
                 fed_push(c, h.seq, h.ts_ns, recv_ns);
             }
 
@@ -1636,7 +1677,7 @@ static int run_socket(struct ctx *c, int frames_limit) {
             }
         }
 
-        session_teardown(c, recovered ? 1 : 0);
+        session_teardown(c, recovered && !c->need_fresh_fd ? 1 : 0);
         if (eos) break;
         if (recovered) {
             fprintf(stderr, "t=%.1f session %d rebuilt after error; frames=%d\n",

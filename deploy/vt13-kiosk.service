@@ -1,8 +1,7 @@
-# DRAFT ONLY — do not enable or start without explicit human approval (R3).
-# Install: copy to /etc/systemd/system/vt13-kiosk.service after review.
 [Unit]
 Description=VT13 DJI C5 -> CM311 KMS kiosk
-After=multi-user.target
+After=systemd-udev-trigger.service
+RequiresMountsFor=/home/billieguo/mobile_vt
 StartLimitIntervalSec=60
 StartLimitBurst=5
 
@@ -11,17 +10,20 @@ Type=simple
 User=billieguo
 Group=billieguo
 WorkingDirectory=/home/billieguo/mobile_vt
-Environment=DJI_BACKEND=worker
 Environment=VT13_ASYNC_USB=0
-Environment=DJI_CONTROL_ENABLED=true
-Environment=DJI_KERNEL_ABORT_WATCH=true
-Environment=DJI_STALL_RESTART_S=0
-ExecStart=/home/billieguo/mobile_vt/.venv-v4l2/bin/python -m vt13_video stream --config /home/billieguo/mobile_vt/config/vt13_video.kiosk.yaml --headless
-Restart=on-failure
-RestartSec=2
+ExecStart=/home/billieguo/mobile_vt/.venv-v4l2/bin/python -u -m vt13_video stream --config /home/billieguo/mobile_vt/config/vt13_video.kiosk.yaml --headless
+Restart=always
+RestartSec=15
+KillSignal=SIGINT
+KillMode=mixed
+TimeoutStopSec=30
+NoNewPrivileges=true
+UMask=0077
 MemoryMax=512M
-StandardOutput=append:/home/billieguo/mobile_vt/.codex_tmp/vt13-kiosk.log
-StandardError=append:/home/billieguo/mobile_vt/.codex_tmp/vt13-kiosk.log
+LogNamespace=vt13-kiosk
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vt13-kiosk
 
 [Install]
 WantedBy=multi-user.target
