@@ -513,6 +513,9 @@ the working directory and environment between commands.
   PASS** — 30 s, gate opened, 1,745 frames / 30.106 s = 57.96 fps, 0 corrupt,
   RC=0, idle. A previous smoke was inconclusive because
   the VT source stopped after 0.47 MB (link apparently off).
+- **Local repo (2026-11-11 16:05)**: `main` = `47ddd08` (fast-forward merge of
+  the RC1 session commits); working tree clean; not pushed. Runtime on CM311
+  unchanged (commit `a4d82c2` Python + worker `51346c85`).
 - **Operational note**: a background job started with `&` by a non-interactive
   shell ignores SIGINT, so stop the pipeline with `--seconds N` (or SIGTERM),
   not `kill -INT`.

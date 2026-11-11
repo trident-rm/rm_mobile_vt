@@ -54,9 +54,10 @@
   60 frames, **1,745 frames / 30.106 s = 57.96 fps** (includes ~1 s gate),
   0 corrupt, 1 session, RC=0, idle. The remote is still not a git repo; the
   local tools/tests/docs/plan are not mirrored there.
-- **Working tree**: uncommitted changes on branch- **Working tree**: uncommitted changes on branch
-  `rc1-latency-instrumentation`; `main` remains `e56c5fe`. Do not push/commit
-  without the user's explicit instruction.
+- **Working tree**: uncommitted changes on branch- **Working tree**: clean. `main` is **47ddd08** (fast-forward merge of
+  `a4d82c2` + `c19a436` + `47ddd08`); `rc1-latency-instrumentation` points at
+  the same commit. **Not pushed.** No commit/push without the user's explicit
+  instruction.
 - **Future work (not scheduled)**: glass-to-glass L1a, 60 min V2, K3 systemd
   service (R3), driver/firmware `0xf` investigation.
 
