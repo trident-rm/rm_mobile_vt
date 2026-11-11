@@ -503,12 +503,14 @@ the working directory and environment between commands.
   **59.86 fps, 6 rebuilds, 0 corrupt, RC=0**, device idle after. **V1 status:
   ACCEPTED_WITH_LIMITATION** (glass-to-glass TODO; startup console 1-2 s;
   ~217 ms freeze per content-dependent `0xf`).
-- **Sync check (2026-11-11 15:35)**: deployed Python matches repo HEAD
-  `e56c5fe` except `decoder.py` (`0a63d896` vs `5c7460f0`, codec logging only);
-  deployed worker `51346c85` was built from the current local
-  `tools/d3_probe.c` (`8ace8282`). The local instrumentation, tools, tests and
-  docs are not deployed (staging only); `~/mobile_vt` is not a git repo and has
-  no `tools/`.
+- **Sync check (2026-11-11 15:42)**: local changes committed as `a4d82c2`
+  (`rc1-latency-instrumentation`); runtime Python on the CM311 synced to that
+  commit (`worker_client f227791c`, `nal f2de7db7`, `decoder 5c7460f0`;
+  full `vt13_video/*.py` + `kiosk.yaml` parity passed). Backup
+  `~/.codex_tmp/backup_sync_20261111_154224/`. Deployed worker `51346c85` was
+  built from the same commit's `tools/d3_probe.c`. The remote is not a git repo;
+  tools/tests/docs/plan stay local. A post-sync smoke was inconclusive because
+  the VT source stopped after 0.47 MB (link apparently off).
 - **Operational note**: a background job started with `&` by a non-interactive
   shell ignores SIGINT, so stop the pipeline with `--seconds N` (or SIGTERM),
   not `kill -INT`.

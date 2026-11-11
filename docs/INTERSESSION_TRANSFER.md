@@ -41,15 +41,18 @@
   (`rc1_baseline_20261110/`, `rc1_replay_20261110/`, `rc1_live_20261111/`,
   each with checksums; see `ARCHIVE_MANIFEST.md`). The original plan remains
   `plans/CM311_DJI_C5_Low_Latency_60FPS_Optimization_Plan.md`.
-- **Sync state (2026-11-11 15:35)**: deployed Python equals repo HEAD
-  `e56c5fe` for config/pipeline/worker_client/control/cli/nal/kiosk; only
-  `decoder.py` differs (deployed `0a63d896` vs HEAD `5c7460f0`, local codec
-  logging only). Deployed worker `51346c85` was built on the device from the
-  current local `tools/d3_probe.c` (`8ace8282`); the staging source/binary
-  match. The local uncommitted instrumentation/tools/tests/docs are **not**
-  on the deployed tree (staging only). The remote `~/mobile_vt` is not a git
-  repository and has no `tools/`; the local docs/plan are not copied there.
-- **Working tree**: uncommitted changes on branch
+- **Sync state (2026-11-11 15:42)**: local changes committed as **`a4d82c2`**
+  on `rc1-latency-instrumentation` (12 files, clean tree). Runtime Python on
+  CM311 synced to that commit: `worker_client.py f227791c`, `nal.py f2de7db7`,
+  `decoder.py 5c7460f0`; full `vt13_video/*.py` + `kiosk.yaml` parity check
+  passed (`RUNTIME_PARITY_OK`). Backup
+  `~/.codex_tmp/backup_sync_20261111_154224/`. Deployed worker `51346c85` was
+  built from the same commit's `tools/d3_probe.c` (`8ace8282`). A post-sync
+  20 s smoke was inconclusive because the source stopped after 0.47 MB / 21 AU
+  (VT link apparently off); the gate kept 0 frames, RC=0, no leftover process.
+  Re-enable VT for a final live check. The remote is still not a git repo; the
+  local tools/tests/docs/plan are not mirrored there.
+- **Working tree**: uncommitted changes on branch- **Working tree**: uncommitted changes on branch
   `rc1-latency-instrumentation`; `main` remains `e56c5fe`. Do not push/commit
   without the user's explicit instruction.
 - **Future work (not scheduled)**: glass-to-glass L1a, 60 min V2, K3 systemd
