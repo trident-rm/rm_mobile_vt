@@ -509,7 +509,9 @@ the working directory and environment between commands.
   full `vt13_video/*.py` + `kiosk.yaml` parity passed). Backup
   `~/.codex_tmp/backup_sync_20261111_154224/`. Deployed worker `51346c85` was
   built from the same commit's `tools/d3_probe.c`. The remote is not a git repo;
-  tools/tests/docs/plan stay local. A post-sync smoke was inconclusive because
+  tools/tests/docs/plan stay local. **Post-sync live check with VT on (15:56):
+  PASS** — 30 s, gate opened, 1,745 frames / 30.106 s = 57.96 fps, 0 corrupt,
+  RC=0, idle. A previous smoke was inconclusive because
   the VT source stopped after 0.47 MB (link apparently off).
 - **Operational note**: a background job started with `&` by a non-interactive
   shell ignores SIGINT, so stop the pipeline with `--seconds N` (or SIGTERM),

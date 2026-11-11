@@ -319,6 +319,8 @@ CM311 真正的版本信息应通过 `uname -m`、`uname -r`、`ldd --version`�
 
 91. **2026-11-11 15:42 HKT 提交并同步到远端：完成**。本地改动提交为 **`a4d82c2`**（分支 `rc1-latency-instrumentation`，12 文件，工作树干净）；随后把运行时 Python 同步到 CM311：`vt13_video/worker_client.py f227791c`、`nal.py f2de7db7`、`decoder.py 5c7460f0`，备份 `~/.codex_tmp/backup_sync_20261111_154224/`；**全包逐文件核对 `RUNTIME_PARITY_OK`**（`vt13_video/*.py` + kiosk.yaml 与提交一致）。部署 worker 仍为 `51346c85`，由该提交的 `tools/d3_probe.c`（`8ace8282`）在板端构建。**同步后 20 s 烟测不具结论**：USB 仅 0.47 MB/21 AU/1 IRAP 后无数据（VT 链路应已关闭），门控保持 0 帧、RC=0、无残留；不是同步回归，live 复验需重新开启 VT。远端 `~/mobile_vt` 仍非 Git 仓库，无 `tools/`/本地 docs；tools/tests/plans 仅本地。未 push。
 
+92. **2026-11-11 15:56 HKT 同步后 live 复验（VT 已开）：PASS**。部署路径（`a4d82c2` 同步后的 Python + worker `51346c85`），30 s：`START_GATE open after 60 frames`、**1,745 帧 / 30.106 s = 57.96 fps**（含约 1 s 门控；稳态约 60）、0 corrupt/0 oversize、sessions=1（无 rebuild）、`RC=0`、无残留进程、device idle。同步闭环完成；`glass-to-glass` 仍为 TODO；未 push。
+
 ### 3.2 已知实验性代码状态——需要审查，不应照单全收
 
 - `~/ffmpeg-6.1.1-v4l2/libavcodec/v4l2_buffers.c`：曾移动 `atomic_fetch_add_explicit(&s->refcount,1,...)`，试图修正 plane/group 引用计数不对称；**没有完成必要性与正确性验证**。

@@ -50,7 +50,9 @@
   built from the same commit's `tools/d3_probe.c` (`8ace8282`). A post-sync
   20 s smoke was inconclusive because the source stopped after 0.47 MB / 21 AU
   (VT link apparently off); the gate kept 0 frames, RC=0, no leftover process.
-  Re-enable VT for a final live check. The remote is still not a git repo; the
+  **Post-sync live check (15:56, VT on): PASS** — 30 s, `START_GATE` after
+  60 frames, **1,745 frames / 30.106 s = 57.96 fps** (includes ~1 s gate),
+  0 corrupt, 1 session, RC=0, idle. The remote is still not a git repo; the
   local tools/tests/docs/plan are not mirrored there.
 - **Working tree**: uncommitted changes on branch- **Working tree**: uncommitted changes on branch
   `rc1-latency-instrumentation`; `main` remains `e56c5fe`. Do not push/commit
