@@ -1,5 +1,4 @@
-SUBSYSTEM=="usb", ATTR{idVendor}=="2ca3", ATTR{idProduct}=="1020", TAG+="uaccess"
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="2ca3", ATTR{idProduct}=="1020", MODE="0660", GROUP="plugdev", TAG+="uaccess"
 
-# TAG+="uaccess" applies to active local desktop sessions. For SSH/headless use,
-# replace the rule above with an owner/group rule, for example:
-# SUBSYSTEM=="usb", ATTR{idVendor}=="2ca3", ATTR{idProduct}=="1020", OWNER="youruser", GROUP="yourgroup", MODE="0660"
+# The group/mode rule is what makes the headless service work; TAG+="uaccess"
+# additionally grants the active local desktop session access.

@@ -1,5 +1,234 @@
 # Remote Machine Usage Reference
 
+## eMMC-only cold boot / G6 — PASS_WITH_LIMITATION (2026-11-13 02:03 HKT; HDMI visual and physical hotplug pending)
+
+> G6 was authorized and executed. No reboot, module reload, or golden-data
+> overwrite occurred. It included one manual `vt13-kiosk.service` restart and
+> one kernel USB `unbind/bind` hotplug simulation.
+
+- The SG USB was physically removed and the board was powered on. The board
+  boot time is `2026-11-12 23:40:55 HKT`, after the G5 `poweroff` at
+  `23:19:57 HKT`.
+- The old `10.42.0.11` address is no longer assigned. The PC profile
+  `cm311-local` provides shared DHCP (`10.42.0.10-254`), and CM311 is currently
+  at `10.42.0.253`. This is a dynamic lease; rediscover it before G6 if the
+  lease changes.
+- Root is `/dev/mmcblk2p2` ext4 UUID `61e6bfac-70ad-4d87-92db-a7399341722c`;
+  `/boot` is `/dev/mmcblk2p1` vfat UUID `EE59-E094`. `lsblk` shows only the
+  eMMC devices and `zram0`, with no USB block disk.
+- SG Flash `23a9:ef18` is absent; DJI receiver `2ca3:1020` is present.
+  `systemctl --failed` reports 0 units. `vt13-kiosk.service` is enabled and
+  active with `MainPID=433`, `NRestarts=0`. `meson_vdec` is loaded (refcount 2)
+  and `/etc/modules-load.d/vt13-vdec.conf` contains `meson_vdec`.
+- Root free space is about 3.4 GiB with 354,636 free inodes; `/boot` has about
+  352 MiB free.
+- Evidence: `.codex_tmp/emmc_deploy_20261112/g6_coldboot_20261113_0055/g6_coldboot_precheck.txt`
+  SHA256 `9c0ef4168c13d4ae03618b18fbb075c9b4ae2520d9ebe2a5cad4fa2a1a32bbbe`;
+  summary `G6_COLDBOOT_PRECHECK.md`.
+- **G6 layered result**: eMMC-only boot, fstab/uEnv/DTB and boot-file hashes,
+  ca46 hash/vermagic, firmware, worker/config/service/runtime hashes, user
+  permissions, system Python/PyAV, V4L2 HEVC output, and HDMI-A-1
+  connected/enabled all passed. The live path reached ~60 FPS with
+  `corrupt=0`; the service restart returned RC=0 and kept `NRestarts=0`.
+- **G6 limitations**: the agent verified connector/plane/frame counters, not
+  actual HDMI pixels; the user must visually confirm the picture. Physical USB
+  hotplug was simulated with kernel `unbind/bind` (this kernel has no `rebind`
+  attribute); the manual `bind` required `udevadm trigger` to restore the
+  libusb ACL. A real connector pull remains the stronger test.
+- **Residual live errors**: cold boot had a concentrated startup `0xf` burst
+  (122 errors / 42 recoveries at 01:29-01:33, mostly 23:59:13-23:59:30), then
+  isolated recoveries through 01:16:51. After the 01:47:23 manual restart the
+  clean session had 0 errors / 0 recoveries, but content-dependent `0xf`
+  occurred at 01:51:48 and 01:56:45 and auto-recovered. The service remained
+  active throughout; no SSH loss.
+- **Evidence**: `.codex_tmp/emmc_deploy_20261112/g6_validation_20261113_0110/`
+  contains `G6_FINAL_REPORT.md`, layer/error/restart/USB/final-state logs and
+  `SHA256SUMS` (9/9 OK). The remote copy has 10 files with matching SHA256;
+  the cold-boot evidence copy has 3 matching files.
+- **Next**: user visually confirms HDMI; optionally performs one physical DJI
+  receiver unplug/replug and reports the result. Do not start G7/G8 until that
+  confirmation is recorded.
+
+- **02:12 HKT read-only post-check**: the board remained at `10.42.0.253` with
+  `/` on `/dev/mmcblk2p2` and `/boot` on `/dev/mmcblk2p1`; no USB block disk
+  was present. `vt13-kiosk.service` remained active with the same
+  `MainPID=2935`, worker PID 2937 and `NRestarts=0`; `HDMI-A-1` remained
+  `connected/enabled`. Latest counters were 78,937 frames, 60.0 FPS, 38
+  errors / 1 recovery, `corrupt=0`, `backlog_max=0`, sessions=5. Boot time was
+  confirmed as `2026-11-12 23:40:55 HKT` via `uptime -s` and PID 1 `lstart`;
+  `who -b` displayed 21:59 due to a wtmp discrepancy. Evidence:
+  `.codex_tmp/emmc_deploy_20261112/g6_postcheck_20261113_0211/g6_postcheck.txt`
+  SHA256 `49919c75639340fe65abf68d6ccc2edd25480ab555623126a2c93f03a5054bb6`;
+  remote `sha256sum -c` OK.
+
+- **02:39 HKT HDMI black-screen diagnostic**: the user reported a black HDMI
+  picture while the service still streamed at ~60 FPS with `corrupt=0`. The
+  worker had inherited the console's `1920x1080i` CRTC mode and had no
+  `--mode` argument; DRM showed the overlay plane active with NV12 while the
+  primary plane was disabled. A runtime-only `VT13_WORKER_MODE=1920x1080@60`
+  plus `VT13_WORKER_DUMP_FIRST=.../first` restart produced progressive
+  1920x1080@60, an active overlay plane, and dumped frames with
+  `Y_mean≈109` (non-black). This proves the decoder output is not black and
+  points to KMS presentation. Visual confirmation of the temporary 1080p60
+  test is still pending; no source/config/service file was changed. Evidence:
+  `.codex_tmp/emmc_deploy_20261112/g6_hdmi_black_20261113_023851/diagnostic.txt`
+  SHA256 `bd7893fe700936a62ad103b85d49fd78cf415621fd43903ef551fd73e11d54eb`;
+  remote hash check OK.
+
+## Current development stage (2026-11-13 12:37 HKT — G5 PASS; eMMC cold boot PASS; G6 user-confirmed HDMI/hotplug/cold start/reboot; rotation deployed but visually unconfirmed; ~29.7 FPS)
+
+> G6's previously pending HDMI output and physical hotplug were confirmed by the
+> user. The display-rotation service restart changed only the worker binary and
+> source; no reboot, module change, or golden-data overwrite occurred.
+
+**Stage: K3 service deployment — `ACCEPTED_WITH_LIMITATION`; display rotation is
+`IMPLEMENTED / VISUALLY UNCONFIRMED`.**
+
+| Area | Status | Evidence / remaining limit |
+|---|---|---|
+| D3-0 DMA-BUF/KMS feasibility | verified | Real NV12M CAPTURE buffers exported/imported and scanned out on the overlay plane. |
+| D3a native V4L2 HEVC + KMS file replay | verified | Native C worker decodes and presents recorded HEVC without PyAV/FFmpeg in the hot path. |
+| D3b socket AU worker | verified | Python USB/DUML control plane feeds the C worker over `SOCK_SEQPACKET`; 60 AU/s offline replay demonstrated. |
+| D3c in-process recovery | verified | Fatal/POLLERR/source-change paths rebuild the V4L2 session without a systemd restart; hotplug test kept `NRestarts=0`. |
+| Source Change repair | verified | Cold-start `1832x1032 → 1920x1080` wedge fixed; offline A/B, hardware replay, in-situ cold start, and visual check passed. Current worker includes this repair; the rotation variant is `build/d3/d3_probe d1257c49…`, source `tools/d3_probe.c 6838cd3e…`. |
+| systemd kiosk | installed/enabled | `vt13-kiosk.service` runs as `billieguo`, `VT13_ASYNC_USB=0`, `VT13_WORKER_ROTATION=180`, `Restart=always`, `MemoryMax=512M`, dedicated volatile `vt13-kiosk` journal namespace. ExecStart uses `/usr/bin/python3`; the native worker has only a libc dependency. |
+| Display 180° rotation | implemented / visual unconfirmed | Meson overlay plane 42 has **no DRM `rotation` property**. The worker uses a software fallback: four NV12 scratch dumb framebuffers, cached staging copy, and NEON row/UV-pair reversal. Service `MainPID=15994`, worker 15996, `NRestarts=0`; DRM scans scratch `fb=49`, `imported=no`. Live observation is ~29.7 FPS, `corrupt=0`, 0 errors/recoveries; user must confirm orientation. |
+| ca46 `meson-vdec` module | permanently installed | Source build `ca467983…` replaced the stock `a6cc08ca…` module; cold boot after a hard power cycle auto-loaded ca46 and decoded. Backup `meson-vdec.ko.a6cc08ca.bak` retained. |
+| Cold-boot acceptance | verified (user-confirmed) | User reports HDMI output, physical hotplug, cold start, and start-from-reboot all work. Cleanest observed boot was ~60.4 fps, `sessions=1`, `corrupt=0`, 0 errors, 0 `0xf`; formal G8 still requires three independent cold boots plus one supervised soft reboot. |
+| Residual `0xf` | **open** | Content-dependent firmware/driver abort still occurs; automatic recovery produces roughly 217–283 ms freezes. Root cause not fixed. |
+| Startup `0xf` bursts | **open** | Some boots show an initial burst before settling; automatic recovery handles it, but it is not eliminated. |
+| Soft reboot | **open** | One `systemctl reboot` after the module install hung (black screen, no SSH); a hard power cycle recovered. Cold boot works; monitor soft-reboot reliability. |
+| Glass-to-glass latency | **not measured** | Internal frame age (~22–35 ms) is not camera-to-photon latency. |
+| Final-worker 30-min soak | optional / not done | Earlier K3 soak used `51346c85`; the current `d1257c49` rotation worker + ca46 combination has not had a fresh 30-minute soak. |
+| G6 eMMC-only cold boot | **PASS (user-confirmed)** | eMMC-only boot, ca46/firmware, worker/config/service hashes, HDMI connector, V4L2 HEVC, ~60 FPS live path and `corrupt=0` verified. User then confirmed HDMI output, physical hotplug, cold start, and reboot all work. Formal G8 still requires three independent cold boots plus one supervised soft reboot. Residual content-dependent `0xf` remains open. |
+| eMMC migration | G2 PASS; G3/G4 recommended; **G5 PASS**; eMMC cold-boot precondition PASS; **G6 PASS (user-confirmed)** | Installer RC=0 with ampart/ext4; `BOOT_EMMC` at 117 MiB and `ROOTFS_EMMC` at 629 MiB; required runtime/module/firmware/service/KMS checks passed. Evidence saved and SHA256-verified locally/remotely. SG USB preserved but physically removed for normal boot. After SG USB removal, CM311 cold-booted from `/dev/mmcblk2p2` and `/dev/mmcblk2p1` at 23:40:55 HKT; current SSH is `10.42.0.253` via shared DHCP. Formal G8 remains open. |
+| Remote Git parity | hash-based only | CM311 `~/mobile_vt` is not a valid Git repository; runtime parity is checked with SHA256 manifests. |
+| Kiosk logs | volatile | `LogNamespace=vt13-kiosk` uses volatile storage; logs do not survive reboot. |
+
+**Plan status**
+
+- `plans/CM311_D3_Native_V4L2_KMS_Execution_Plan.md`: historical execution
+  plan. D3-0, D3a, D3b, D3c, D3d, and K3 have been implemented; the plan is no
+  longer the current work queue.
+- `plans/CM311_DJI_C5_Low_Latency_60FPS_Optimization_Plan.md`: RC1 was
+  `ACCEPTED_WITH_LIMITATION`; L1 glass-to-glass measurement is still missing,
+  L2-B is only partially executed, and the R1 `0xf`/freeze work remains open.
+- `plans/CM311_HEVC_Recovery_Performance_Plan.md` and
+  `plans/CM311_VDEC_Upstream_Audit_USB_RootFS_Plan.md`: audit and next-step
+  plans. Upstream meson-vdec patches are audited but not fully deployed.
+
+**Current deployment topology (2026-11-13)**: the internal eMMC is the active
+boot/root: `/` is `/dev/mmcblk2p2` ext4 and `/boot` is `/dev/mmcblk2p1` vfat.
+The SG Flash (`23a9:ef18`) is physically absent during normal boot; the DJI
+receiver (`2ca3:1020`) is present. The SG USB remains the preserved fallback but
+must not be inserted when validating eMMC-only boot.
+
+**Display rotation evidence (2026-11-13 12:37 HKT)**:
+
+- `tools/d3_probe.c` now supports `--rotation 0|90|180|270`; for 180° it first
+  tries the DRM rotation property and falls back to the software path when the
+  property is absent.
+- The software path creates four 1920x1080 NV12 scratch framebuffers, copies the
+  decoded dmabuf into a cached staging buffer with a NEON loop, reverses Y rows
+  and UV pairs, then presents the scratch framebuffer. No bitstream/decoder or
+  kernel change is involved.
+- Live timing after deployment: `stage_copy_avg_ms≈17.2–17.7`,
+  `rot_copy_avg_ms≈2.8–2.9`, `setplane_avg_ms≈12.2–12.7`; about 29.7 FPS with
+  `corrupt=0` and no errors/recoveries during the 30-second observation.
+- **Visual direction is still unconfirmed.** Do not record the rotation as
+  visually fixed until the user confirms it. If the orientation is still wrong,
+  distinguish 180° rotation from vertical-only or horizontal-only flip.
+- Evidence: `.codex_tmp/emmc_deploy_20261112/g7_rotation_stage_20261113_1226/`
+  with `SHA256SUMS` 29/29 OK locally and remotely; manifest SHA256
+  `e337cce734d09715d8642ab54e1534dc834f8d19d56619210bed1c8ed70be69a`.
+
+## G2 backup verification — PASS (2026-11-12 14:59 HKT)
+
+- Backup root: `/home/billieguo/cm311-deployment/backups/cm311-sg-20261112_121131` (about 12 GiB). The backup includes rootfs, boot, kernel/module, FFmpeg source/install, PyAV venv, runtime tree, captures, Codex temp data, and service logs.
+- `SHA256SUMS`: **28/28 OK**, failures 0, stderr empty. The original 27-entry manifest was supplemented with `sg-rootfs-toplinks.tar` (`f6847974…`) because `sg-rootfs.tar` only covered `etc/home/opt/root/srv/usr/var`; the supplement records `bin -> usr/bin`, `lib -> usr/lib`, and `sbin -> usr/sbin`.
+- Archive readability: **10/10** archives passed `tar -tf`; all `.tgz` archives passed `gzip -t`; overall RC=0, stderr 0 bytes.
+- Sample restore: worker, config, ca46 module, service/journald, and boot/uEnv/DTB extracted and verified. Restored files **17/17 OK**, direct boot copies **4/4 OK**, cross-archive comparisons **6/6 MATCH**; modes preserved. Worker `eb1dbb67…`, ca46 `ca467983…`, service `15ade4bb…`, uEnv `2b488bb1…`, DTB `1a568548…`/`6bdcf618…`.
+- **Installed udev rule**: `/etc/udev/rules.d/99-vt13.rules` exists with SHA256 `9509a4c1…` and uses `MODE=0660`, `GROUP=plugdev`, `TAG+=uaccess`. The repo source at G2 backup time was `6d9b78ee…`; the current repo source is `4455e3b2…`, which has the same effective rule plus explanatory comments. The G1 `MISSING /etc/udev/rules.d/99-vt13-video.rules` was a filename mismatch, not a missing installed rule. Preserve the installed rule during deployment unless deliberately changing behavior.
+- `codex_tmp.tgz` was created from a live `.codex_tmp`; its wrapper aggregate status was 1 because directory/socket state changed during archive creation. The archive itself passes `tar -tf`/`gzip -t`, and a sampled payload extraction matches its recorded hash.
+- Sample extraction ran as PC user `1001:1001`; root-owned entries therefore show that uid/gid on the PC. Archive metadata remains authoritative: installed service/module and boot files are `0/0`; extracted modes were preserved.
+- `sg-rootfs.tar` is a file-level backup of selected directories, not a block-level disk image. No original eMMC image was taken because `/dev/mmcblk2` currently has no partitions or mounted data.
+- Evidence: `.codex_tmp/emmc_deploy_20261112/g2/archive_readability_20261112_145703.txt`, `.codex_tmp/emmc_deploy_20261112/g2/restore_verify_corrected_20261112_150929.txt`, and `G2_REPORT.md` (copied into the backup root). No USB/HDMI/wireless run, reboot, module reload, or eMMC write occurred.
+- **Gate decision: G2 PASS** for the stated backup scope. G3/G4 may proceed; G5 eMMC installation still requires explicit human approval.
+
+## G5 authorization and final read-only preflight — PASS (2026-11-12 22:12 HKT)
+
+- **Authorization**: the user explicitly approved G5 eMMC installation for CM311-1S / S905L3B, target `/dev/mmcblk2`, ext4, DTB `meson-gxl-s905l3b-m302a-gxl-test.dtb`.
+- **Preflight command**: Ubuntu PC ran `bash deploy/g5-run-from-pc.sh --preflight-only`; interactive SSH/sudo was used only for the prompt. Result: `G5_PREFLIGHT_OK`, `G5_PREFLIGHT_ONLY_COMPLETE`, RC=0. No eMMC write, service stop, reboot, module reload, or USB/HDMI/wireless run.
+- **Passed checks**: target size `7,474,249,728 B`; source `/`=`/dev/sda2` ext4 and `/boot`=`/dev/sda1` vfat; target unmounted; eMMC first 4 MiB/boot0/boot1 all `f61b153c…90262`; source `/boot` seven reviewed hashes, KMS helper hashes, and installer/patch/exclude/service hashes all match. PC backup recheck: `28/28 OK`.
+- **Current state**: SG USB remains the boot device; `vt13-kiosk.service` active (MainPID=447, NRestarts=0). eMMC has no partition table yet. After install, the wrapper must observe p1 start at 117 MiB (ampart) or 128 MiB (fallback), both beyond the reserved 4 MiB bootloader region.
+- **UART**: `picocom` is installed on the PC; no `/dev/ttyUSB*` was enumerated at check time, so physical UART/recovery availability is recorded from the user's authorization. The previously observed recovery method remains: with SG USB connected, a serial-console `reboot` has started USB Armbian; this is observed, not guaranteed after eMMC flashing.
+- **Evidence**: local `.codex_tmp/emmc_deploy_20261112/g5_pc_20261112_221209/` (`preflight-session.log` `64c6c9f2…b3a`, `preflight.txt` `b134db8e…1cf`, `g5-result.env` `773e939e…ab0`); remote `~/mobile_vt/.codex_tmp/emmc_deploy_20261112/g5/run_20261112_221223/`.
+- **Next**: run the reviewed installer with `127`, `1` (ext4), validate the installed eMMC, save and verify logs/evidence/bootloader/MBR backups, then `sync` + `poweroff`. Stop before G6.
+
+## G5 installer completed; wrapper post-validation false-failed (2026-11-12 22:41 HKT)
+
+- **Installer result**: selections were exactly `127` and `1` (ext4). The installer returned RC=0 and logged `Successfully repartitioned eMMC with ampart.` plus `Installation completed successfully`.
+- **Actual target geometry**: `/dev/mmcblk2` is `7,474,249,728 B`; `mmcblk2p1` is vfat `BOOT_EMMC`, START=239616 sectors (=122,683,392 B = 117 MiB), SIZE=535,822,336 B; `mmcblk2p2` is ext4 `ROOTFS_EMMC`, START=1,288,192 sectors (=659,554,304 B = 629 MiB), SIZE=6,814,695,424 B. The boot partition starts beyond the reserved 4 MiB bootloader area.
+- **Why the wrapper failed**: `deploy/g5-install-wrapper.sh` compares `lsblk -bno START` values, which are 512-byte sectors, against byte constants in `validate_install()` around lines 221–235. It reported `p1_start=239616 p2_start=1288192`; multiplying by 512 yields the approved ampart starts. This is a validator unit bug, not a partition-layout failure.
+- **Finalization state**: wrapper exited before mounting the target, so `g5-result.env` is `STATUS=FAILED`; no `postinstall-evidence.txt` exists; the PC runner did not transfer log/evidence/bootloader/MBR and did not issue final `sync` + `poweroff`.
+- **Current boot state**: SG USB remains the boot source (`/`=`/dev/sda2`, `/boot`=`/dev/sda1`). The runner trap restarted `vt13-kiosk.service`; active, MainPID=35832, NRestarts=0. No reboot or poweroff occurred.
+- **Evidence**: local `.codex_tmp/emmc_deploy_20261112/g5_pc_20261112_223331/install-session.log`; remote `~/mobile_vt/.codex_tmp/emmc_deploy_20261112/g5/run_20261112_223446/armbian-install.log` and `g5-result.env`.
+- **Next**: do not rerun the installer. Perform read-only eMMC validation with corrected sector-to-byte conversion, export the install log, bootloader 4 MiB image, and post-install MBR first 512 B, transfer to the PC, verify SHA256/sizes, then `sync` + `poweroff`. A wrapper unit fix and hash reapproval are optional if the original `G5_VALIDATED` marker path is required; no eMMC rewrite is needed.
+
+## G5 final result — PASS; evidence saved/verified; poweroff issued (2026-11-12 23:19 HKT)
+
+- **Status**: G5 **PASS**. The installer completed with RC=0; the eMMC was not rewritten after validation.
+- **Layout**: `/dev/mmcblk2` `7,474,249,728 B`; `mmcblk2p1` vfat `BOOT_EMMC`, START=122,683,392 B (117 MiB), SIZE=535,822,336 B; `mmcblk2p2` ext4 `ROOTFS_EMMC`, START=659,554,304 B (629 MiB), SIZE=6,814,695,424 B, UUID `61e6bfac-70ad-4d87-92db-a7399341722c`. The boot partition is beyond the reserved 4 MiB bootloader region.
+- **Validation**: a temporary validation-only wrapper copy (`f0d71787…`) corrected the `lsblk START` sectors-to-bytes conversion and the incompatible `df -i --output=iavail` invocation; the reviewed original wrapper was not modified. It returned `G5_VALIDATED`. Boot files, uEnv, fstab/root UUID, ca46 module, firmware, native worker, system Python/PyAV closure, non-root service/enable symlink, udev rule, journald config, KMS helper, and `meson_vdec` modules-load passed. Root free space was about 3.64 GB with 354,676 free inodes.
+- **Evidence**: local `.codex_tmp/emmc_deploy_20261112/g5_validation_20261112_231207/`; `SHA256SUMS` 5/5 OK. Hashes: result `9ebd188d…`, installer log `80eb6452…`, evidence `0e753462…`, bootloader `f61b153c…` (4,194,304 B), MBR `d110adfe…` (512 B). Remote `~/mobile_vt/.codex_tmp/emmc_deploy_20261112/g5/run_20261112_231207/` matches.
+- **SG USB**: remains the boot source (`/dev/sda2` ext4, `/dev/sda1` vfat); source boot/runtime hashes unchanged; PC G2 backup remains 28/28 OK. Expected source-side effects were machine-id regeneration, `/ddbr` staging, and bootloader-image creation.
+- **Power**: `sudo sync && sudo poweroff` at 23:19:57 HKT; SSH closed; ping 10.42.0.11 received 0/2 replies. No reboot.
+- **G6**: not started. Remove the SG USB before the first eMMC-only cold boot, then verify `/`=`/dev/mmcblk2p2`, `/boot`=`/dev/mmcblk2p1`, SSH, HDMI/KMS, ca46 autoload, native worker, non-root service autostart, DJI USB reception, HEVC hardware decode, and stable display. Do not start G7/G8 until G6 passes. `K3 ACCEPTED_WITH_LIMITATION` is unchanged.
+
+## G3/G4 eMMC final minimal-runtime audit — recommended pass; G5 not started (2026-11-12 19:16 HKT)
+
+> This section records static/read-only audit results for the final minimal runtime payload. It does not prove that eMMC can boot. G5 writes nothing until explicitly approved; G6 is the first dynamic eMMC test. The earlier 17:16 report and its `3,685,431,296 B` payload are superseded and retained only as history.
+
+**Status distinction**
+
+- **Verified**: eMMC identity/capacity, final selective payload bytes/members, installer/exclude/service hashes, capacity arithmetic, bootloader header, DTB hashes/diff, module/firmware/autoload metadata, service/udev/journald hashes, worker/system-Python/system-FFmpeg dependencies, and backup archive coverage.
+- **Recommended pass**: G3 selective-copy plan and G4 boot/runtime compatibility are sufficient to request G5 approval.
+- **Pending G6**: eMMC-only cold boot, boot priority, DTB/HDMI output, ca46 auto-load, service auto-start, USB enumeration, video, SSH, and post-ext4 free space.
+
+**G3 fixed plan**
+
+- eMMC: `/dev/mmcblk2`, Biwin, `7,474,249,728 B`; no partitions/mounts during audit or at the 19:16 recheck. Final root tar stream: `2,853,621,760 B`, 61,468 members; after installer post-copy additions the final root file payload is `2,853,710,642 B` (2.6577 GiB), down `831,720,654 B` (793.2 MiB) from the superseded `3,685,431,296 B` plan.
+- Include: Armbian OS/kernel/DTB/firmware; ca46 `meson-vdec.ko` and `gxl_hevc.bin`; native `build/d3/d3_probe` worker (libc only); `vt13_video` source/config/tests/deploy/udev; systemd service, volatile journald namespace, actual installed udev rule; DRM/KMS runtime; system Python plus dist-packages (`av`, `cv2`, `numpy`, `yaml`, `usb`); system FFmpeg shared libraries under `/usr/lib/aarch64-linux-gnu`.
+- Exclude: `.venv-v4l2`, custom `ffmpeg-6.1.1-v4l2-shared`, `captures`, `live_runs`, both `.codex_tmp` trees, kernel/FFmpeg source/build trees, toolchains, old backups, apt lists/cache, historical logs, `/usr/share/doc|man|locale`, `/usr/src`, and unused build artifacts. The authoritative manifest is `deploy/PAYLOAD_MANIFEST.md`.
+- ampart-success root budget: `6,814,695,424 B` (6.347 GiB), leaving `3,960,984,782 B` (3.6890 GiB) before filesystem metadata. ampart-fallback root: `6,048,186,368 B` (5.633 GiB), leaving `3,194,475,726 B` (2.9751 GiB). The boot partition is a separate fixed 512 MiB FAT32 `BOOT_EMMC`; G6 must measure `df -hT /`, `df -hT /boot`, and `df -i`.
+- Final installer `armbian-install-final.sh` SHA256 `90cb0390…` (30,340 B); patch `175920b5…`; exclude `deploy/emmc-exclude.txt` SHA256 `58b8fe24…`; reviewed service `deploy/vt13-kiosk.service` SHA256 `3ed77408…` (842 B); original `/usr/sbin/armbian-install` `defc9646…` untouched. The installer forces the `-gxl-test` DTB, applies the exclude manifest, recreates `.codex_tmp` with `billieguo:billieguo`/`775`, copies only the two KMS helper files, installs the reviewed service, writes `/etc/modules-load.d/vt13-vdec.conf`, and fail-closes on 12 critical runtime files. Expected source-side writes remain machine-id regeneration, `/ddbr/install`, and `/usr/lib/u-boot/mybox-bootloader.img` (first 4 MiB eMMC backup); source `/boot` is not modified.
+- G5 staging at `/home/billieguo/mobile_vt/.codex_tmp/emmc_deploy_20261112/g5/`: all four files match local SHA256 and `bash -n` RC=0; `/ddbr` is currently absent; `/dev/mmcblk2` is unmounted; `vt13-kiosk.service` is active with `MainPID=447`, `NRestarts=0`. No eMMC write.
+- Note: the full 61,468-member payload was not expanded on the PC; capacity/member audit used the actual remote uncompressed tar stream, and the installer performs fail-closed critical-file checks. G3 is therefore **recommended pass with this documented note**; G6 must measure actual ext4 free space and inodes.
+
+**G4 fixed findings**
+
+- eMMC user area has an `@AML` bootloader header at `0x200` (`Built : 13:36:55, Jun 22 2020`, `gxl g85d6ad1`); `mmcblk2boot0/1` contain the same 4 MiB vendor bootloader bytes (`f61b153c…`) with `force_ro=1`. The installer backs up the first 4 MiB to `mybox-bootloader.img` and writes it back; that file did not exist before G5.
+- MODEL_ID 127 / S905L3B: normal FDT `meson-gxl-s905l3b-m302a.dtb` `1a568548…`, `-gxl-test` FDT `6bdcf618…`; decompiled diff is only the HDMI node. Current `uEnv.txt` `2b488bb1…` selects `-gxl-test`, so the patched installer forces that DTB. `zImage` `4b7b8882…` has TEXT_OFFSET `0108` (`NEED_OVERLOAD=no`); `boot-emmc.cmd` uses `devtype=mmc`, `l_mmc="2 1 0"`; `u-boot-s905x-s912.bin` `207cdbe1…` is present.
+- ca46 module `ca467983…`, vermagic `6.18.59-ophub SMP preempt mod_unload aarch64`, dependencies in `modules.dep`, and `modules.alias` contains `of:N*T*Camlogic,gxl-vdec`; firmware `gxl_hevc.bin` `f1336295…`. Worker depends only on libc. Target runtime uses system `/usr/bin/python3` and system dist-packages (including system PyAV 11.0.0 for diagnostics) plus system FFmpeg shared libraries; the `.venv-v4l2` and custom `ffmpeg-6.1.1-v4l2-shared/install` are excluded. The worker backend does not import PyAV. A static import/config check on CM311 reported `backend=worker`, `codec=hevc_v4l2m2m`, `av=False`; the service has not yet run on eMMC.
+- Current SG USB installed service `15ade4bb…` will be replaced during G5 by the reviewed `3ed77408…` service (`ExecStart=/usr/bin/python3 ...`). Journald `f39e019b…`; actual udev rule `9509a4c1…`; repo source `4455e3b2…` has the same effective rule plus comments; preserve the installed rule unless intentionally changing it.
+- `sg-boot.tar` contains `uEnv.txt`, both DTBs, kernel/initrd, `zImage`, `u-boot-s905x-s912.bin`, and `boot-emmc.*`; archive hashes match the running system.
+
+**Residual risk**
+
+- eMMC boot success, boot priority, HDMI/DTB behavior, ca46 auto-load, system-Python service auto-start, USB hotplug, and SSH remain unverified until G6. USB fallback is not guaranteed to win automatically after bootloader write; a failed boot may require physical reset or Amlogic USB Burning Tool. One historical soft reboot hung; use `poweroff` plus cold power cycle, not `systemctl reboot`.
+- Report: `.codex_tmp/emmc_deploy_20261112/g3g4/G3G4_REPORT.md` SHA256 `82ee6c50…`; evidence manifest `EVIDENCE_SHA256.txt` SHA256 `6baab39d…`; `sha256sum -c` 30/30 OK. The old 17:16 report is retained as `G3G4_REPORT_20261112_1716_superseded.md`; copies in the backup root are from the earlier version and must not be used for G5 approval.
+
+**G5 final confirmation — read-only review passed; G5 not started (2026-11-12 21:33 HKT)**
+
+- **`mybox-bootloader.img` provenance/applicability**: the installer's `create_partition()` runs `dd if=/dev/mmcblk2 of=/usr/lib/u-boot/mybox-bootloader.img bs=1M count=4 conv=fsync` before partitioning. The file is therefore a **4 MiB backup of the same CM311 unit's eMMC user-area vendor bootloader**, not a generic U-Boot image and not a full-disk image. The file did not exist before G5; `/etc/ophub-release` has `MAINLINE_UBOOT=''` and `BOOTLOADER_IMG=''`, so the installer selects the mybox vendor-writeback branch. Current user-area first 4 MiB, `mmcblk2boot0`, and `mmcblk2boot1` all hash to `f61b153c1ec98ce54ee770be43198af2d2ac60642cc6004500cfbd3b87490262`; the user area has `@AML`/`gxl` at `0x200`.
+- **Recovery semantics**: preserve the new G5 MBR partition table by restoring only bootloader bytes 0–443 and 512–4194303 from the backup, matching the installer: `dd if=mybox-bootloader.img of=/dev/mmcblk2 bs=1 count=444 conv=fsync` then `dd if=mybox-bootloader.img of=/dev/mmcblk2 bs=512 skip=1 seek=1 count=8191 conv=fsync`. Do **not** treat `dd bs=1M count=4` as an unverified universal recovery command: it also restores the backup's old MBR/partition table. The wrapper exports both `mybox-bootloader.img` and the post-install `mbr-first512.bin` to the PC; normal bootloader recovery does not require rewriting the new MBR unless that table itself is lost.
+- **Installer target/copy/service review**: target selection uses `lsblk` boot0 detection or excludes the current root device; the only current eMMC candidate is `/dev/mmcblk2`. The wrapper additionally fail-closes on exactly one eMMC disk, exact `7,474,249,728 B`, source `/dev/sda2`/`/dev/sda1`, target unmounted, and 4 MiB boot0/boot1 with `force_ro=1`. Selective root copy remains `COPY_SRC="etc home opt root selinux srv usr var"` with `/ddbr/emmc-exclude.txt`; `/boot` is written separately as a 512 MiB `BOOT_EMMC` FAT32 partition. The reviewed service is installed to target `/etc/systemd/system/vt13-kiosk.service` and `/home/billieguo/mobile_vt/deploy/vt13-kiosk.service`; the existing `multi-user.target.wants` symlink is preserved by the tar copy. The wrapper validates the unit, `ExecStart=/usr/bin/python3 ...`, `VT13_ASYNC_USB=0`, `User=billieguo`, `Restart=always`, `WantedBy=multi-user.target`, and the enable symlink.
+- **Source SG USB side effects**: expected writes are `/etc/machine-id` and `/var/lib/dbus/machine-id` regeneration, `/ddbr/install` recreation, `/usr/lib/u-boot/mybox-bootloader.img` creation, and the wrapper's four small `/ddbr` staging files. Source `/boot` content is not modified. All installer dependency commands (`tar`, `hexdump`, `mkfs.vfat`, `mkfs.ext4`, `mkfs.btrfs`, `parted`, `losetup`, `fdisk`, `lsblk`, `dbus-uuidgen`, etc.) are present, so the expected path is `Dependency check completed` rather than apt installation.
+- **Final scripts**: `deploy/g5-install-wrapper.sh` SHA256 `1bef8ba4e410d7b54c6c88548de6d6273ad56eff2d0268fec2cbe82d9d34257d`; `deploy/g5-run-from-pc.sh` SHA256 `c3ef51f004f44b6ed257d83a7481b4aff32a9335abaae2a18d2c6ba727ef9af8`; both `bash -n` RC=0. The wrapper verifies source boot artifacts, KMS helpers (`a071cfed…`, `fbd8c439…`), target partitions/boot files/rootfs/service/KMS/module/firmware, rechecks source `/boot`, KMS, and `/ddbr` hashes after install, exports the bootloader backup and post-install MBR, and only then reports `VALIDATED`. The PC runner verifies local and remote wrapper hashes, fetches the install log, post-install evidence, `mybox-bootloader.img`, and `mbr-first512.bin`, verifies all SHA256 values and sizes, and only then runs `sync` and `poweroff`.
+- **Final preflight evidence**: local `.codex_tmp/emmc_deploy_20261112/g5_pc_20261112_213308/`; `preflight.txt` SHA256 `41f62d3beadc5482428b9c969a94cf425742f0a20b019da733c84f3d0df0ba51`, `g5-result.env` SHA256 `8921c5a88163fdad30e09e74c69bf97cdf05ee1e3d4b25ef4d6e2feafd8157d0`, `preflight-session.log` SHA256 `2df2bae72162f0871844e2e16ec7c817882be94040a776c20a6e68755242ec40`. Remote `~/mobile_vt/.codex_tmp/emmc_deploy_20261112/g5/run_20261112_213343/preflight.txt` and `g5-result.env` match the local hashes; remote wrapper hash is `1bef8ba4…`; `/ddbr` still absent, eMMC unmounted, kiosk active. No eMMC write, service stop, reboot, module reload, or live USB/HDMI/wireless run occurred.
+
+**Gate decision**: G3 **RECOMMENDED PASS** for the final `2,853,710,642 B` minimal payload; G4 **RECOMMENDED PASS_WITH_APPROVED_RISK** with the runtime dependency change (system Python/system FFmpeg; no venv/custom FFmpeg); **G5 later PASS**; G6 later **PASS_WITH_LIMITATION** (HDMI visual and physical hotplug pending).
+
 ## meson-vdec module — cold boot must use ca46 (FIXED permanently 2026-11-11 21:13 HKT)
 
 - **Two different modules exist**:
@@ -357,6 +586,574 @@ kernel module still follows the R2/R3 rules in `AGENTS.md`.
   tests, put recordings under `/dev/shm` to remove rootfs write-back from the
   shared-controller path (no system change needed).
 
+### eMMC / Armbian install assessment (2026-11-11 21:40 HKT, read-only)
+
+- Current root: `/dev/sda2` ext4 on USB `SG Flash` (117.2 GB, serial
+  `63FAF0B2735338D7`); `/boot` is `/dev/sda1` vfat. The internal eMMC is
+  `/dev/mmcblk2` (Biwin, 7,474,249,728 B) with no partition table, filesystem,
+  or mountpoint; `mmcblk2boot0/1` are 4 MiB each and `force_ro=1`.
+- Board metadata: `/etc/ophub-release` and `/etc/model_database.conf` list
+  `MODEL_ID=127`, `MODEL_NAME=M302A,M304A,CM201-1,CM211-1,CM311-1`,
+  `SOC=s905l3b`, `FDTFILE=meson-gxl-s905l3b-m302a.dtb`, and
+  `UBOOT_OVERLOAD=u-boot-s905x-s912.bin`. The live device tree identifies
+  `Amlogic Meson GXL (S905L3B) MBH-M302A Box` (`amlogic,m302a`).
+- `armbian-install` is present and supports USB→eMMC installation. It detects
+  `mmcblk2` and copies `etc home opt root selinux srv usr var` without excluding
+  project data. `/usr/bin/ampart` exists, so the `s905l3b` layout reserves
+  117 + 512 MiB and leaves about 6.3 GiB for the root filesystem; without ampart
+  the fallback layout reserves 128 + 512 + 720 MiB (about 5.6 GiB).
+- Current copy set is about 15.3 GiB (`/usr` 3.04 GB, `/var` 0.74 GB, `/home`
+  12.60 GB; `~/mobile_vt` 8.0 GB including `captures` 4.2 GB and
+  `.codex_tmp` 3.2 GB). A direct eMMC install will not fit; clean or move the
+  project/build trees first, or keep the USB root.
+- Current `/boot/uEnv.txt` uses
+  `meson-gxl-s905l3b-m302a-gxl-test.dtb`; `uEnv.txt.bak` uses the normal
+  `meson-gxl-s905l3b-m302a.dtb`. `armbian-install` rewrites FDT to the model
+  database's normal m302a DTB, so verify the installed system and switch back
+  to the `-gxl-test` variant if required by this board.
+- No install, reboot, or remote write was performed in this read-only check.
+
+## Full CM311 deployment runbook (system + application)
+
+This is the complete rebuild/migration procedure for the current verified
+stack. Commands are labeled by host. Approval levels follow `AGENTS.md` §5:
+R0 read-only, R1 offline, R2 live USB/HDMI/service, R3 reboot/partition/
+module/apt/boot changes. Do not run a phase whose prerequisites are unmet.
+
+### Deployment choices
+
+| Choice | Use when | Main risk |
+|---|---|---|
+| **A. Keep the USB SG root** (current) | Normal operation, fastest recovery, least change | USB disk is a single point of failure; root shares a USB controller with the DJI receiver |
+| **B. Install Armbian to eMMC** | Standalone appliance; free the USB port/controller | eMMC root is only ~6.3 GiB; project data must be moved; the installer rewrites the DTB; boot priority changes |
+
+Recommendation: keep A as the known-good deployment. Treat B as an optional
+migration that must be separately approved and validated.
+
+### Phase 0 — Preflight and backup (R0/R1)
+
+```bash
+# CM311, read-only
+uname -a
+cat /etc/os-release | head -12
+lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT
+findmnt /
+df -h /
+systemctl is-enabled vt13-kiosk.service
+systemctl is-active vt13-kiosk.service
+systemctl show vt13-kiosk.service -p MainPID -p NRestarts
+lsusb | grep 2ca3:1020 || echo 'receiver not enumerated'
+```
+
+Back up the runtime, module, custom FFmpeg install, venv, and system files.
+Do not include `captures/` or `.codex_tmp/` in the runtime tar; back them up
+separately if they are golden data.
+
+```bash
+# CM311, R1
+STAMP=$(date +%Y%m%d_%H%M%S)
+B=$HOME/mobile_vt/.codex_tmp/deploy_backup_$STAMP
+mkdir -p "$B"
+tar -C "$HOME" -czf "$B/mobile_vt_runtime.tgz" \
+  --ignore-failed-read \
+  --exclude='mobile_vt/captures' --exclude='mobile_vt/.codex_tmp' \
+  mobile_vt/vt13_video mobile_vt/config mobile_vt/build/d3 \
+  mobile_vt/requirements.txt mobile_vt/pyproject.toml
+tar -C "$HOME" -czf "$B/kernel_module.tgz" \
+  linux-6.18-vdec/drivers/staging/media/meson/vdec/meson-vdec.ko
+tar -C "$HOME" -czf "$B/ffmpeg_shared_install.tgz" \
+  ffmpeg-6.1.1-v4l2-shared/install
+tar -C "$HOME" -czf "$B/venv_v4l2.tgz" mobile_vt/.venv-v4l2
+cp /etc/systemd/system/vt13-kiosk.service "$B/"
+cp /etc/systemd/journald@vt13-kiosk.conf "$B/"
+cp /etc/udev/rules.d/99-vt13-video.rules "$B/" 2>/dev/null || true
+cp /boot/uEnv.txt "$B/"
+cp /lib/modules/6.18.59-ophub/kernel/drivers/staging/media/meson/vdec/meson-vdec.ko \
+  "$B/meson-vdec.ko.installed"
+( cd "$B" && sha256sum *.tgz *.service *.conf uEnv.txt *.installed > SHA256SUMS )
+[ -f "$B/99-vt13-video.rules" ] && \
+  ( cd "$B" && sha256sum 99-vt13-video.rules >> SHA256SUMS )
+( cd "$B" && sha256sum -c SHA256SUMS )
+```
+
+Copy `SHA256SUMS` and the backup to the PC, then verify the copy:
+
+```bash
+# Ubuntu PC
+rsync -a --info=progress2 \
+  billieguo@10.42.0.11:~/mobile_vt/.codex_tmp/deploy_backup_*/ \
+  /home/billieguo/billie_guo/src/rm/mobile_vt/.codex_tmp/deploy_backup_copy/
+( cd /home/billieguo/billie_guo/src/rm/mobile_vt/.codex_tmp/deploy_backup_copy && \
+  sha256sum -c SHA256SUMS )
+```
+
+### Phase 1 — Operating system (R3 for eMMC install)
+
+#### Option A — keep the USB SG root
+
+No OS install is needed. The current system is Armbian OS 26.11.0 noble,
+kernel `6.18.59-ophub`, aarch64, with `/dev/sda1` as `/boot` and `/dev/sda2`
+as ext4 root on the USB `SG Flash` (117.2 GB, serial
+`63FAF0B2735338D7`). Preserve this disk; it is the fallback.
+
+#### Option B — install Armbian to the internal eMMC
+
+Read-only capacity check first:
+
+```bash
+# CM311, R0
+lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT
+findmnt /
+df -h /
+sudo du -xhd1 /home /usr /var | sort -h
+du -sh ~/mobile_vt ~/mobile_vt/captures ~/mobile_vt/.codex_tmp \
+  ~/linux-6.18-vdec ~/ffmpeg-6.1.1-v4l2 ~/ffmpeg-6.1.1-v4l2-shared \
+  ~/mobile_vt/.venv-v4l2
+cat /boot/uEnv.txt
+grep -E 'MODEL_ID|MODEL_NAME|SOC|FDTFILE|UBOOT_OVERLOAD' \
+  /etc/ophub-release /etc/model_database.conf
+```
+
+Known board metadata: `MODEL_ID=127`,
+`MODEL_NAME=M302A,M304A,CM201-1,CM211-1,CM311-1`, `SOC=s905l3b`,
+`FDTFILE=meson-gxl-s905l3b-m302a.dtb`,
+`UBOOT_OVERLOAD=u-boot-s905x-s912.bin`. The eMMC is `/dev/mmcblk2`
+(Biwin, 7,474,249,728 B), currently empty; `mmcblk2boot0/1` are 4 MiB each
+and `force_ro=1`.
+
+The s905l3b layout with `ampart` reserves 117 + 512 MiB and leaves about
+**6.3 GiB** for the root filesystem. The current copy set
+(`etc home opt root selinux srv usr var`) is about **15.3 GiB**
+(`/home` 12.6 GB, including `~/mobile_vt` 8.0 GB with 4.2 GB captures and
+3.2 GB `.codex_tmp`). A direct install will not fit. Before installing,
+move or delete at least ~9 GiB and keep at least ~1 GiB free:
+
+- Move `~/mobile_vt/captures` and `~/mobile_vt/.codex_tmp` to external
+  storage or the PC; verify SHA256 before deleting the originals.
+- Keep `~/ffmpeg-6.1.1-v4l2-shared/install` in place: the venv rpath points
+  to it. The rest of the shared source/build tree can be removed after
+  `make install`.
+- Keep `~/mobile_vt/.venv-v4l2` and the installed ca46 module.
+- `~/linux-6.18-vdec` (~2 GB) and `~/ffmpeg-6.1.1-v4l2` (~1.3 GB) can be
+  moved to external storage after the module and venv are built. Keep a copy
+  of `meson-vdec.ko` for rollback.
+
+```bash
+# CM311, R1 copy then R2/R3 delete after verification
+mkdir -p /mnt/backup/captures /mnt/backup/codex_tmp
+rsync -a --info=progress2 ~/mobile_vt/captures/ /mnt/backup/captures/
+rsync -a --info=progress2 ~/mobile_vt/.codex_tmp/ /mnt/backup/codex_tmp/
+# Compare SHA256 manifests before deleting the originals.
+```
+
+Run the installer interactively:
+
+```bash
+# CM311, R3
+sudo armbian-install
+```
+
+Select model ID `127` (M302A/M304A/CM201-1/CM211-1/CM311-1), the eMMC
+device `mmcblk2`, and `ext4`. Confirm the erase and wait for completion.
+Then power off cleanly:
+
+```bash
+sudo poweroff
+```
+
+Remove the USB SG, power on, and verify the eMMC boot:
+
+```bash
+# CM311 after eMMC boot
+lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT
+findmnt /
+uname -a
+cat /boot/uEnv.txt
+grep -E 'MODEL_ID|MODEL_NAME|SOC|FDTFILE' \
+  /etc/ophub-release /etc/model_database.conf
+ip -4 addr show
+systemctl status vt13-kiosk --no-pager
+modinfo meson_vdec | grep -E 'filename|vermagic'
+grep -E 'vdec|esparser' /proc/interrupts
+```
+
+**DTB caveat:** the current USB system uses
+`meson-gxl-s905l3b-m302a-gxl-test.dtb` in `/boot/uEnv.txt`;
+`armbian-install` rewrites the FDT to the model database's normal
+`meson-gxl-s905l3b-m302a.dtb`. If HDMI, Ethernet, or USB is broken after the
+eMMC boot, restore the `-gxl-test` variant and cold boot again:
+
+```bash
+# CM311, R3, only if the normal DTB does not work
+sudo cp /boot/uEnv.txt /boot/uEnv.txt.bak.$(date +%s)
+sudo sed -i 's#meson-gxl-s905l3b-m302a\.dtb#meson-gxl-s905l3b-m302a-gxl-test.dtb#' \
+  /boot/uEnv.txt
+sudo poweroff
+```
+
+**Boot fallback:** keep the USB SG untouched. Reinsert it if eMMC boot fails.
+After the installer writes a bootloader to eMMC, the SoC may prefer eMMC over
+USB; if the board will not boot the USB disk, use the box's reset/recovery
+path or the Amlogic USB Burning Tool. Verify this before depending on USB as
+an automatic fallback.
+
+### Phase 2 — Base OS packages and toolchain (R3 for apt)
+
+```bash
+# CM311, R3
+sudo apt-get update
+sudo apt-get install -y \
+  build-essential pkg-config libdrm-dev python3-venv python3-dev \
+  libusb-1.0-0 v4l-utils git rsync bc flex bison libelf-dev libssl-dev \
+  device-tree-compiler
+# Optional diagnostic only; the custom FFmpeg/PyAV remains the runtime:
+# sudo apt-get install -y ffmpeg
+```
+
+Verify:
+
+```bash
+gcc --version | head -1
+make --version | head -1
+pkg-config --version
+python3 --version
+test -f /usr/include/drm/drm.h && echo drm-headers-ok
+id billieguo
+ls -l /dev/dri /dev/video* 2>/dev/null
+```
+
+The service runs as `billieguo` and needs access to `/dev/video0`,
+`/dev/dri/card0`, and the USB receiver. If the account is not in the
+`video`/`render` groups:
+
+```bash
+sudo usermod -aG video,render billieguo
+# Log out/in or reboot (R3) before validating the service.
+```
+
+### Phase 3 — Build and install the ca46 meson-vdec module (R1 build, R3 install)
+
+The installed stock module `a6cc08ca…` parses but never completes the HEVC
+decode core. The source build `ca467983…` is the working module. Build it
+against the matching kernel tree:
+
+```bash
+# CM311
+cd ~/linux-6.18-vdec
+test -f Module.symvers || echo 'Module.symvers missing: run a full make once'
+make -j4 M=drivers/staging/media/meson/vdec modules
+```
+
+If `Module.symvers` or `include/generated/autoconf.h` is missing, the tree has
+not been fully built; run `make -j4` once in the already-configured tree.
+This is the standard in-tree kbuild invocation; re-confirm it on the first
+clean rebuild, because the exact historical build command is not recorded.
+
+Verify the artifact:
+
+```bash
+cd ~/linux-6.18-vdec
+modinfo drivers/staging/media/meson/vdec/meson-vdec.ko | \
+  grep -E 'filename|vermagic|name'
+sha256sum drivers/staging/media/meson/vdec/meson-vdec.ko
+```
+
+Expected vermagic: `6.18.59-ophub SMP preempt mod_unload aarch64`. The
+known-good SHA256 is
+`ca46798328e0975290151c40e1ddbf191a277b563a9694344aca910507aacdab`;
+record the actual hash if a rebuild differs.
+
+Back up and install:
+
+```bash
+# CM311, R3
+INST=/lib/modules/6.18.59-ophub/kernel/drivers/staging/media/meson/vdec/meson-vdec.ko
+sudo cp "$INST" "$INST.$(sha256sum "$INST" | cut -c1-8).bak"
+sudo cp ~/linux-6.18-vdec/drivers/staging/media/meson/vdec/meson-vdec.ko "$INST"
+sudo depmod -a
+sha256sum "$INST"
+modinfo meson_vdec | grep -E 'filename|vermagic'
+```
+
+Expected installed hash `ca467983…`. Then cold boot; do not use a soft reboot
+for the first validation because one soft reboot hung after this install:
+
+```bash
+sudo poweroff
+# Power on physically.
+```
+
+Verify after boot:
+
+```bash
+lsmod | grep meson_vdec
+grep -E 'vdec|esparser' /proc/interrupts
+dmesg | grep -i -E 'vdec|hevc' | tail -30
+```
+
+IRQ counts may be zero while idle; start the kiosk and live stream to confirm
+the VDEC core completes. If the wrong module is loaded, do not rely on
+`modprobe`; load the source build explicitly:
+
+```bash
+sudo systemctl stop vt13-kiosk
+sudo rmmod meson_vdec
+sudo insmod ~/linux-6.18-vdec/drivers/staging/media/meson/vdec/meson-vdec.ko
+sudo systemctl start vt13-kiosk
+```
+
+Rollback the installed module:
+
+```bash
+INST=/lib/modules/6.18.59-ophub/kernel/drivers/staging/media/meson/vdec/meson-vdec.ko
+sudo cp "$INST".a6cc08ca.bak "$INST"
+sudo depmod -a
+sudo poweroff
+```
+
+### Phase 4 — Custom FFmpeg shared libraries and PyAV venv (R1 offline)
+
+The current `~/ffmpeg-6.1.1-v4l2-shared/install` and
+`~/mobile_vt/.venv-v4l2` are already built and verified. Skip this phase when
+migrating a preserved system; run it for a clean rebuild.
+
+The shared source tree must contain the three patched files from the original
+`~/ffmpeg-6.1.1-v4l2` tree: `libavcodec/v4l2_buffers.c`,
+`libavcodec/v4l2_m2m.c`, and `libavcodec/v4l2_m2m_dec.c`. The shared tree was
+created with `git archive HEAD` plus the saved `ffmpeg_uncommitted.patch`.
+
+```bash
+# CM311, R1
+cd ~/ffmpeg-6.1.1-v4l2-shared
+./configure --prefix="$HOME/ffmpeg-6.1.1-v4l2-shared/install" \
+  --disable-doc --disable-ffplay --disable-ffprobe --enable-debug=2 \
+  --enable-decoder=hevc_v4l2m2m --enable-demuxer=hevc --enable-parser=hevc \
+  --enable-muxer=null --enable-shared --disable-static
+make -j3
+make install
+```
+
+This build previously exceeded 40 minutes at `-j2`; use `-j3` and a generous
+timeout. Verify:
+
+```bash
+ls -l "$HOME/ffmpeg-6.1.1-v4l2-shared/install/lib/libavcodec.so"
+LD_LIBRARY_PATH="$HOME/ffmpeg-6.1.1-v4l2-shared/install/lib" \
+  "$HOME/ffmpeg-6.1.1-v4l2-shared/ffmpeg" -hide_banner -decoders | \
+  grep hevc_v4l2m2m
+```
+
+Build PyAV 11.0.0 into a venv that is linked to the custom libraries, not the
+system libavcodec:
+
+```bash
+# CM311, R1
+export FFSH="$HOME/ffmpeg-6.1.1-v4l2-shared/install"
+export VENV="$HOME/mobile_vt/.venv-v4l2"
+python3 -m venv --system-site-packages "$VENV"
+export PIP_KEYRING_PROVIDER=disabled PIP_DISABLE_PIP_VERSION_CHECK=1
+export PKG_CONFIG_PATH="$FFSH/lib/pkgconfig"
+export LDFLAGS="-Wl,-rpath,$FFSH/lib"
+export CFLAGS="-I$FFSH/include"
+"$VENV/bin/pip" install --timeout 30 --retries 2 "Cython>=3.0,<3.1" wheel
+D="$HOME/mobile_vt/.codex_tmp/deploy_pyav"
+mkdir -p "$D"
+"$VENV/bin/pip" download av==11.0.0 --no-binary :all: --no-deps \
+  --no-build-isolation -d "$D"
+"$VENV/bin/pip" wheel "$D/av-11.0.0.tar.gz" --no-deps \
+  --no-build-isolation -w "$D/wheels"
+"$VENV/bin/pip" install --force-reinstall --no-deps "$D"/wheels/av-11.0.0-*.whl
+```
+
+Install the remaining application dependencies, but **do not** run
+`pip install -r requirements.txt` blindly: it lists `av` and can replace the
+custom build with a generic wheel. Install the non-`av` dependencies
+explicitly:
+
+```bash
+"$VENV/bin/pip" install pyusb numpy opencv-python PyYAML
+```
+
+Verify the linkage and codec availability:
+
+```bash
+"$VENV/bin/python" - <<'PY'
+import av, pathlib, subprocess
+print("PyAV", av.__version__, av.library_versions)
+so = next((pathlib.Path(av.__file__).parent / "codec").glob("*.so"))
+print(subprocess.run(["ldd", str(so)], capture_output=True, text=True).stdout)
+print("hevc_v4l2m2m:", "hevc_v4l2m2m" in av.codec.codecs_available)
+print("hevc:", "hevc" in av.codec.codecs_available)
+PY
+```
+
+Acceptance for this phase: `libavcodec.so.60` resolves to
+`~/ffmpeg-6.1.1-v4l2-shared/install/lib`, `hevc_v4l2m2m` is `True`, and
+`av.__version__` is `11.0.0`. If ldd resolves to
+`/lib/aarch64-linux-gnu/libavcodec.so.60`, the rpath was not baked in and the
+venv is using the system library.
+
+### Phase 5 — Deploy the application and kiosk service (R1 staging, R2/R3 install)
+
+Copy the runtime sources and deployment assets from the PC. The remote
+`~/mobile_vt` has no `tools/` directory; create it from the local tree.
+Do not copy `captures/` or `.codex_tmp/`.
+
+```bash
+# Ubuntu PC
+rsync -a --info=progress2 \
+  vt13_video config tools deploy udev \
+  billieguo@10.42.0.11:~/mobile_vt/
+```
+
+Compile the native worker on the target (aarch64), not on the PC:
+
+```bash
+# CM311
+cd ~/mobile_vt
+mkdir -p build/d3
+gcc -O2 -Wall -Wextra -o build/d3/d3_probe tools/d3_probe.c
+file build/d3/d3_probe
+sha256sum build/d3/d3_probe
+```
+
+Expected: ELF 64-bit LSB pie executable, ARM aarch64. Source
+`tools/d3_probe.c 4af75b7c…` built with gcc 13.3 produced
+`eb1dbb67…`; record the actual hash if the compiler differs.
+
+Install the udev rule:
+
+```bash
+# CM311, R2/R3
+sudo install -m 0644 ~/mobile_vt/udev/99-vt13-video.rules \
+  /etc/udev/rules.d/99-vt13-video.rules
+sudo udevadm control --reload-rules
+sudo udevadm trigger --subsystem-match=usb
+ls -l /dev/video* /dev/dri/card* /dev/dri/renderD* 2>/dev/null
+```
+
+The deployed rule uses `TAG+="uaccess"`, which applies to active local
+sessions. For a strictly headless deployment where the service starts before
+any login, replace it with an owner/group rule:
+
+```text
+SUBSYSTEM=="usb", ATTR{idVendor}=="2ca3", ATTR{idProduct}=="1020", OWNER="billieguo", GROUP="billieguo", MODE="0660"
+```
+
+Disable the desktop display manager so it does not compete for KMS/DRM:
+
+```bash
+# CM311, R3
+sudo systemctl disable --now lightdm
+sudo systemctl set-default multi-user.target
+systemctl get-default
+systemctl is-active lightdm || true
+```
+
+Install the kiosk unit and its dedicated journal namespace:
+
+```bash
+# CM311, R3
+sudo install -m 0644 ~/mobile_vt/deploy/vt13-kiosk.service \
+  /etc/systemd/system/vt13-kiosk.service
+sudo install -m 0644 ~/mobile_vt/deploy/vt13-kiosk-journald.conf \
+  /etc/systemd/journald@vt13-kiosk.conf
+sudo systemctl daemon-reload
+sudo systemctl enable vt13-kiosk.service
+systemctl cat vt13-kiosk.service
+```
+
+The unit must run as `billieguo`, set `VT13_ASYNC_USB=0`, use
+`/home/billieguo/mobile_vt/.venv-v4l2/bin/python`, and pass
+`--headless` with `config/vt13_video.kiosk.yaml`. Do not run a manual kiosk
+while the service owns USB/V4L2/DRM.
+
+Start the receiver while the VT transmitter is still off, confirm it is
+waiting, then have the human turn the transmitter on:
+
+```bash
+# CM311, R2
+sudo systemctl start vt13-kiosk.service
+journalctl --namespace=vt13-kiosk -u vt13-kiosk -f
+```
+
+READY evidence is the `USB source open` line followed by a waiting state;
+the source has no literal `READY` string. Only after that should the human
+power/enable the wireless VT link.
+
+### Phase 6 — Acceptance and evidence (R2 live; R3 cold boot)
+
+```bash
+# CM311
+systemctl is-enabled vt13-kiosk.service
+systemctl is-active vt13-kiosk.service
+systemctl show vt13-kiosk.service -p MainPID -p NRestarts
+journalctl --namespace=vt13-kiosk -u vt13-kiosk -b --no-pager | tail -200
+v4l2-ctl -d /dev/video0 --list-formats-out
+lsusb | grep 2ca3:1020
+grep -E 'vdec|esparser' /proc/interrupts
+```
+
+Acceptance criteria:
+
+- service is `active` and `enabled`, with `NRestarts=0` during normal
+  operation;
+- the receiver enumerates as `2ca3:1020` and V4L2 advertises HEVC output;
+- HDMI shows live video, confirmed by a human; the console/login is hidden;
+- a clean cold boot reaches approximately 60 fps with `sessions=1`,
+  `corrupt=0`, and zero errors on the cleanest run;
+- USB disconnect/reconnect recovers in-process without a systemd restart;
+- no SSH loss and no unbounded memory/FD growth over the observation window;
+- `0xf` may still occur; record the count and maximum freeze. Do not claim
+  "zero `0xf`" as a universal property.
+
+Cold-boot validation:
+
+```bash
+sudo poweroff
+# Power on physically; verify service auto-start, ca46 auto-load, vdec IRQ,
+# USB enumeration, HDMI output, and steady frame counters.
+```
+
+Prefer poweroff/power-on over soft reboot: one soft reboot hung after the
+module install, while a hard power cycle recovered.
+
+### Phase 7 — Rollback
+
+```bash
+# Stop and disable the kiosk
+sudo systemctl disable --now vt13-kiosk.service
+
+# Restore the previous worker binary
+cp ~/mobile_vt/.codex_tmp/backup_srcchange_20261111_201335/d3_probe.51346c85 \
+   ~/mobile_vt/build/d3/d3_probe
+
+# Restore the stock module and regenerate dependencies
+INST=/lib/modules/6.18.59-ophub/kernel/drivers/staging/media/meson/vdec/meson-vdec.ko
+sudo cp "$INST.a6cc08ca.bak" "$INST"
+sudo depmod -a
+
+# Restore service, journald, udev, config, and uEnv.txt from the Phase 0 backup
+# (or the prior known-good copies), then:
+sudo systemctl daemon-reload
+sudo systemctl enable --now vt13-kiosk.service
+```
+
+For an eMMC rollback, reinsert the USB SG and cold boot. If the board still
+prefers the eMMC bootloader, use the box's recovery/reset path or the Amlogic
+USB Burning Tool; the USB filesystem itself is untouched by the installer.
+
+### Deployment pitfalls (verified lessons)
+
+- Do not assume `modprobe meson_vdec` loads ca46; verify the installed hash.
+- Do not run `pip install -r requirements.txt` into `.venv-v4l2` without
+  checking that `av` remains the custom rpath build.
+- Do not compile `d3_probe` on the PC for CM311; compile aarch64 on target.
+- Do not assume the eMMC installer preserves the `-gxl-test` DTB.
+- Do not run the manual kiosk and `vt13-kiosk.service` simultaneously.
+- Do not treat the volatile `vt13-kiosk` journal as persistent evidence.
+- Do not overwrite `captures/` golden data during migration.
+
 ## Kiosk state (2026-11-10 01:30 HKT)
 
 - `lightdm` stopped; enable symlink removed (unit static); default target
@@ -395,7 +1192,7 @@ kernel module still follows the R2/R3 rules in `AGENTS.md`.
 
 ## Connection details
 
-- SSH host: `10.42.0.11`
+- SSH host: current DHCP lease `10.42.0.253` (dynamic; the historical `10.42.0.11` lease is no longer assigned after the eMMC cold boot)
 - SSH port: `22`
 - User: `billieguo`
 - Password: `020816`

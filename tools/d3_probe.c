@@ -39,10 +39,18 @@
 #include <drm/drm.h>
 #include <drm/drm_mode.h>
 
+#if defined(__aarch64__) || defined(__ARM_NEON)
+#include <arm_neon.h>
+#define HAVE_NEON 1
+#else
+#define HAVE_NEON 0
+#endif
+
 #define FOURCC(a, b, c, d) ((uint32_t)(a) | ((uint32_t)(b) << 8) | ((uint32_t)(c) << 16) | ((uint32_t)(d) << 24))
 #define MAX_CAP_BUFS 24
 #define MAX_OUT_BUFS 8
 #define MAX_PLANES 2
+#define ROT_BUFS 4
 #define AU_MAX_BYTES (512 * 1024)
 #define AU_MAGIC 0x44574155u /* "DWAU" */
 #define AU_FLAG_IRAP 1u
@@ -113,6 +121,17 @@ struct held_fb {
     size_t maplen[2];
 };
 
+/* Software 180-degree rotation fallback: the meson overlay plane exposes
+ * NV12 but has no DRM rotation property.  Keep a small ring of linear NV12
+ * framebuffers so the decoded dmabuf never has to be transformed in place. */
+struct rot_buf {
+    uint32_t handle[2];
+    uint32_t fb_id;
+    void *map[2];
+    size_t maplen[2];
+    uint32_t pitch[2];
+};
+
 struct ctx {
     int video_fd;
     int card_fd;
@@ -154,6 +173,21 @@ struct ctx {
     int first_dump_max;
     int hide_primary;
     int primary_hidden;
+    unsigned rotation_deg;
+    int rotation_sw;
+    struct rot_buf rot[ROT_BUFS];
+    unsigned rot_next;
+    uint8_t *stage_y;
+    uint8_t *stage_uv;
+    size_t stage_y_len;
+    size_t stage_uv_len;
+    uint32_t stage_pitch;
+    double stage_copy_ms_sum;
+    unsigned stage_copy_n;
+    double rot_copy_ms_sum;
+    unsigned rot_copy_n;
+    double setplane_ms_sum;
+    unsigned setplane_n;
     int recover_sleep_ms;
     int recv_buf_kb;
     int start_gate;
@@ -368,6 +402,375 @@ static uint32_t find_nv12_plane(int fd, uint32_t *primary_out) {
     return chosen;
 }
 
+static int drm_set_rotation(struct ctx *c, uint32_t plane_id, unsigned deg) {
+    uint32_t rotation;
+    switch (deg) {
+        case 0: rotation = DRM_MODE_ROTATE_0; break;
+        case 90: rotation = DRM_MODE_ROTATE_90; break;
+        case 180: rotation = DRM_MODE_ROTATE_180; break;
+        case 270: rotation = DRM_MODE_ROTATE_270; break;
+        default:
+            fprintf(stderr, "invalid rotation %u (expected 0/90/180/270)\n", deg);
+            return -1;
+    }
+
+    struct drm_mode_obj_get_properties op;
+    memset(&op, 0, sizeof(op));
+    op.obj_id = plane_id;
+    op.obj_type = DRM_MODE_OBJECT_PLANE;
+    if (xioctl(c->card_fd, DRM_IOCTL_MODE_OBJ_GETPROPERTIES, &op) < 0) {
+        perror("OBJ_GETPROPERTIES(count)");
+        return -1;
+    }
+    uint32_t nprops = op.count_props;
+    uint32_t *props = calloc(nprops ? nprops : 1, sizeof(*props));
+    uint64_t *values = calloc(nprops ? nprops : 1, sizeof(*values));
+    if (!props || !values) {
+        free(props); free(values);
+        fprintf(stderr, "rotation: out of memory\n");
+        return -1;
+    }
+    op.props_ptr = (uint64_t)(uintptr_t)props;
+    op.prop_values_ptr = (uint64_t)(uintptr_t)values;
+    op.count_props = nprops;
+    if (xioctl(c->card_fd, DRM_IOCTL_MODE_OBJ_GETPROPERTIES, &op) < 0) {
+        perror("OBJ_GETPROPERTIES(values)");
+        free(props); free(values);
+        return -1;
+    }
+
+    int found = -1;
+    for (uint32_t i = 0; i < nprops; i++) {
+        struct drm_mode_get_property gp;
+        memset(&gp, 0, sizeof(gp));
+        gp.prop_id = props[i];
+        if (xioctl(c->card_fd, DRM_IOCTL_MODE_GETPROPERTY, &gp) == 0 &&
+            strcmp(gp.name, "rotation") == 0) {
+            found = (int)i;
+            break;
+        }
+    }
+    if (found < 0) {
+        fprintf(stderr, "plane %u has no rotation property\n", plane_id);
+        free(props); free(values);
+        return -1;
+    }
+
+    struct drm_mode_get_property gp;
+    memset(&gp, 0, sizeof(gp));
+    gp.prop_id = props[found];
+    if (xioctl(c->card_fd, DRM_IOCTL_MODE_GETPROPERTY, &gp) < 0) {
+        perror("GETPROPERTY(rotation)");
+        free(props); free(values);
+        return -1;
+    }
+    printf("rotation property %u current=%llu flags=0x%x", props[found],
+           (unsigned long long)values[found], gp.flags);
+    if (gp.count_enum_blobs) {
+        uint32_t nenum = gp.count_enum_blobs;
+        struct drm_mode_property_enum *enums = calloc(nenum, sizeof(*enums));
+        if (enums) {
+            gp.enum_blob_ptr = (uint64_t)(uintptr_t)enums;
+            gp.count_enum_blobs = nenum;
+            if (xioctl(c->card_fd, DRM_IOCTL_MODE_GETPROPERTY, &gp) == 0) {
+                printf(" enums:");
+                for (uint32_t i = 0; i < nenum; i++)
+                    printf(" %s=%llu", enums[i].name,
+                           (unsigned long long)enums[i].value);
+            }
+            free(enums);
+        }
+    }
+    printf("\n");
+
+    struct drm_mode_obj_set_property sp;
+    memset(&sp, 0, sizeof(sp));
+    sp.value = rotation;
+    sp.prop_id = props[found];
+    sp.obj_id = plane_id;
+    sp.obj_type = DRM_MODE_OBJECT_PLANE;
+    if (xioctl(c->card_fd, DRM_IOCTL_MODE_OBJ_SETPROPERTY, &sp) < 0) {
+        perror("OBJ_SETPROPERTY(rotation)");
+        free(props); free(values);
+        return -1;
+    }
+    printf("rotation set: plane=%u deg=%u value=%u\n", plane_id, deg, rotation);
+    free(props); free(values);
+    return 0;
+}
+
+static void drm_free_rot_buffers(struct ctx *c) {
+    for (unsigned int i = 0; i < ROT_BUFS; i++) {
+        struct rot_buf *rb = &c->rot[i];
+        if (rb->fb_id && c->card_fd >= 0) {
+            uint32_t fb = rb->fb_id;
+            xioctl(c->card_fd, DRM_IOCTL_MODE_RMFB, &fb);
+            rb->fb_id = 0;
+        }
+        for (unsigned int p = 0; p < 2; p++) {
+            if (rb->map[p]) {
+                munmap(rb->map[p], rb->maplen[p]);
+                rb->map[p] = NULL;
+            }
+            if (rb->handle[p] && c->card_fd >= 0) {
+                struct drm_gem_close gc = { .handle = rb->handle[p] };
+                struct drm_mode_destroy_dumb dd = { .handle = rb->handle[p] };
+                xioctl(c->card_fd, DRM_IOCTL_GEM_CLOSE, &gc);
+                xioctl(c->card_fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dd);
+                rb->handle[p] = 0;
+            }
+            rb->maplen[p] = 0;
+            rb->pitch[p] = 0;
+        }
+    }
+    c->rot_next = 0;
+    free(c->stage_y);
+    free(c->stage_uv);
+    c->stage_y = NULL;
+    c->stage_uv = NULL;
+    c->stage_y_len = 0;
+    c->stage_uv_len = 0;
+    c->stage_pitch = 0;
+}
+
+static int drm_alloc_rot_buf(struct ctx *c, struct rot_buf *rb,
+                             uint32_t w, uint32_t h) {
+    struct drm_mode_create_dumb y = { .width = w, .height = h, .bpp = 8 };
+    if (xioctl(c->card_fd, DRM_IOCTL_MODE_CREATE_DUMB, &y) < 0) {
+        perror("CREATE_DUMB(Y)");
+        return -1;
+    }
+    rb->handle[0] = y.handle;
+    rb->pitch[0] = y.pitch;
+    rb->maplen[0] = (size_t)y.size;
+
+    struct drm_mode_map_dumb my = { .handle = y.handle };
+    if (xioctl(c->card_fd, DRM_IOCTL_MODE_MAP_DUMB, &my) < 0) {
+        perror("MAP_DUMB(Y)");
+        return -1;
+    }
+    rb->map[0] = mmap(NULL, rb->maplen[0], PROT_READ | PROT_WRITE,
+                      MAP_SHARED, c->card_fd, (off_t)my.offset);
+    if (rb->map[0] == MAP_FAILED) {
+        perror("mmap(Y)");
+        rb->map[0] = NULL;
+        return -1;
+    }
+
+    uint32_t uw = (w + 1) / 2;
+    uint32_t uh = (h + 1) / 2;
+    struct drm_mode_create_dumb uv = { .width = uw, .height = uh, .bpp = 16 };
+    if (xioctl(c->card_fd, DRM_IOCTL_MODE_CREATE_DUMB, &uv) < 0) {
+        perror("CREATE_DUMB(UV)");
+        return -1;
+    }
+    rb->handle[1] = uv.handle;
+    rb->pitch[1] = uv.pitch;
+    rb->maplen[1] = (size_t)uv.size;
+
+    struct drm_mode_map_dumb muv = { .handle = uv.handle };
+    if (xioctl(c->card_fd, DRM_IOCTL_MODE_MAP_DUMB, &muv) < 0) {
+        perror("MAP_DUMB(UV)");
+        return -1;
+    }
+    rb->map[1] = mmap(NULL, rb->maplen[1], PROT_READ | PROT_WRITE,
+                      MAP_SHARED, c->card_fd, (off_t)muv.offset);
+    if (rb->map[1] == MAP_FAILED) {
+        perror("mmap(UV)");
+        rb->map[1] = NULL;
+        return -1;
+    }
+
+    struct drm_mode_fb_cmd2 fb;
+    memset(&fb, 0, sizeof(fb));
+    fb.width = w;
+    fb.height = h;
+    fb.pixel_format = FOURCC('N', 'V', '1', '2');
+    fb.handles[0] = rb->handle[0];
+    fb.handles[1] = rb->handle[1];
+    fb.pitches[0] = rb->pitch[0];
+    fb.pitches[1] = rb->pitch[1];
+    fb.offsets[0] = 0;
+    fb.offsets[1] = 0;
+    if (xioctl(c->card_fd, DRM_IOCTL_MODE_ADDFB2, &fb) < 0) {
+        perror("ADDFB2(rotation NV12)");
+        return -1;
+    }
+    rb->fb_id = fb.fb_id;
+    return 0;
+}
+
+static int drm_alloc_rot_buffers(struct ctx *c) {
+    uint32_t stage_pitch = (c->disp_w + 63u) & ~63u;
+    size_t stage_y_len = (size_t)stage_pitch * c->disp_h;
+    size_t stage_uv_len = (size_t)stage_pitch * ((c->disp_h + 1u) / 2u);
+
+    printf("software rotation: allocating %u NV12 scratch framebuffers %ux%u\n",
+           ROT_BUFS, c->disp_w, c->disp_h);
+    for (unsigned int i = 0; i < ROT_BUFS; i++) {
+        if (drm_alloc_rot_buf(c, &c->rot[i], c->disp_w, c->disp_h) < 0) {
+            fprintf(stderr, "software rotation framebuffer allocation failed at %u/%u\n",
+                    i + 1, ROT_BUFS);
+            drm_free_rot_buffers(c);
+            return -1;
+        }
+        printf("rot[%u] Y pitch=%u size=%zu UV pitch=%u size=%zu fb=%u\n",
+               i, c->rot[i].pitch[0], c->rot[i].maplen[0],
+               c->rot[i].pitch[1], c->rot[i].maplen[1], c->rot[i].fb_id);
+    }
+
+    if (posix_memalign((void **)&c->stage_y, 64, stage_y_len) != 0 ||
+        posix_memalign((void **)&c->stage_uv, 64, stage_uv_len) != 0) {
+        fprintf(stderr, "software rotation staging allocation failed; "
+                "falling back to direct rotation\n");
+        free(c->stage_y);
+        free(c->stage_uv);
+        c->stage_y = NULL;
+        c->stage_uv = NULL;
+        c->stage_y_len = 0;
+        c->stage_uv_len = 0;
+        c->stage_pitch = 0;
+        return 0;
+    }
+    c->stage_y_len = stage_y_len;
+    c->stage_uv_len = stage_uv_len;
+    c->stage_pitch = stage_pitch;
+    printf("rotation staging: %zu Y bytes + %zu UV bytes pitch=%u\n",
+           c->stage_y_len, c->stage_uv_len, c->stage_pitch);
+    return 0;
+}
+
+/* Reverse a byte row in 8-byte chunks; widths in the live stream are even
+ * and normally divisible by 8, so the scalar tail is only a safety path. */
+static void reverse_bytes_row(uint8_t *dst, const uint8_t *src, size_t n) {
+    size_t i = 0;
+#if HAVE_NEON
+    while (n >= 16) {
+        uint8x16_t v = vld1q_u8(src + n - 16);
+        v = vrev64q_u8(v);
+        v = vextq_u8(v, v, 8);
+        vst1q_u8(dst + i, v);
+        n -= 16;
+        i += 16;
+    }
+#endif
+    while (n >= 8) {
+        uint64_t v;
+        memcpy(&v, src + n - 8, sizeof(v));
+        v = __builtin_bswap64(v);
+        memcpy(dst + i, &v, sizeof(v));
+        n -= 8;
+        i += 8;
+    }
+    while (n > 0) dst[i++] = src[--n];
+}
+
+/* NV12 stores chroma as interleaved U,V pairs.  Reverse the pair order while
+ * keeping each pair intact; reversing individual bytes would swap U and V. */
+static void reverse_uv_pairs(uint8_t *dst, const uint8_t *src, size_t pairs) {
+    size_t i = 0;
+#if HAVE_NEON
+    while (pairs >= 8) {
+        uint16x8_t v = vld1q_u16((const uint16_t *)(src + (pairs - 8) * 2));
+        v = vrev64q_u16(v);
+        v = vextq_u16(v, v, 4);
+        vst1q_u16((uint16_t *)(dst + i * 2), v);
+        pairs -= 8;
+        i += 8;
+    }
+#endif
+    while (pairs >= 4) {
+        uint64_t v;
+        memcpy(&v, src + (pairs - 4) * 2, sizeof(v));
+        v = __builtin_bswap64(v);
+        v = ((v & 0x00ff00ff00ff00ffULL) << 8) |
+            ((v & 0xff00ff00ff00ff00ULL) >> 8);
+        memcpy(dst + i * 2, &v, sizeof(v));
+        pairs -= 4;
+        i += 4;
+    }
+    while (pairs > 0) {
+        pairs--;
+        dst[i * 2] = src[pairs * 2];
+        dst[i * 2 + 1] = src[pairs * 2 + 1];
+        i++;
+    }
+}
+
+static void rotate_nv12_180(struct rot_buf *rb,
+                            const uint8_t *src_y, uint32_t src_y_pitch,
+                            const uint8_t *src_uv, uint32_t src_uv_pitch,
+                            uint32_t w, uint32_t h) {
+    uint32_t uw = (w + 1) / 2;
+    uint32_t uh = (h + 1) / 2;
+    for (uint32_t y = 0; y < h; y++)
+        reverse_bytes_row((uint8_t *)rb->map[0] + (size_t)(h - 1 - y) * rb->pitch[0],
+                          src_y + (size_t)y * src_y_pitch, w);
+    for (uint32_t y = 0; y < uh; y++)
+        reverse_uv_pairs((uint8_t *)rb->map[1] + (size_t)(uh - 1 - y) * rb->pitch[1],
+                         src_uv + (size_t)y * src_uv_pitch, uw);
+}
+
+static void copy_bytes_fast(uint8_t *dst, const uint8_t *src, size_t n) {
+#if HAVE_NEON
+    size_t i = 0;
+    for (; i + 128 <= n; i += 128) {
+        if (i + 256 < n) __builtin_prefetch(src + i + 256, 0, 3);
+        uint8x16_t a = vld1q_u8(src + i + 0);
+        uint8x16_t b = vld1q_u8(src + i + 16);
+        uint8x16_t c = vld1q_u8(src + i + 32);
+        uint8x16_t d = vld1q_u8(src + i + 48);
+        uint8x16_t e = vld1q_u8(src + i + 64);
+        uint8x16_t f = vld1q_u8(src + i + 80);
+        uint8x16_t g = vld1q_u8(src + i + 96);
+        uint8x16_t h = vld1q_u8(src + i + 112);
+        vst1q_u8(dst + i + 0, a);
+        vst1q_u8(dst + i + 16, b);
+        vst1q_u8(dst + i + 32, c);
+        vst1q_u8(dst + i + 48, d);
+        vst1q_u8(dst + i + 64, e);
+        vst1q_u8(dst + i + 80, f);
+        vst1q_u8(dst + i + 96, g);
+        vst1q_u8(dst + i + 112, h);
+    }
+    memcpy(dst + i, src + i, n - i);
+#else
+    memcpy(dst, src, n);
+#endif
+}
+
+static int copy_nv12_to_stage(struct ctx *c, int idx) {
+    uint32_t uw = (c->video_w + 1u) / 2u;
+    size_t uv_bytes = (size_t)uw * 2u;
+    if (!c->stage_y || !c->stage_uv || !c->cap[idx].map[0] || !c->cap[idx].map[1])
+        return -1;
+    if (c->video_w > c->disp_w || c->video_h > c->disp_h ||
+        uv_bytes > c->stage_pitch)
+        return -1;
+    if (c->stage_y_len < (size_t)c->stage_pitch * c->video_h ||
+        c->stage_uv_len < (size_t)c->stage_pitch * ((c->video_h + 1u) / 2u))
+        return -1;
+
+    const uint8_t *src_y = (const uint8_t *)c->cap[idx].map[0];
+    const uint8_t *src_uv = (const uint8_t *)c->cap[idx].map[1];
+    if (c->stage_pitch == c->bpl[0]) {
+        copy_bytes_fast(c->stage_y, src_y, (size_t)c->bpl[0] * c->video_h);
+    } else {
+        for (uint32_t row = 0; row < c->video_h; row++)
+            copy_bytes_fast(c->stage_y + (size_t)row * c->stage_pitch,
+                            src_y + (size_t)row * c->bpl[0], c->video_w);
+    }
+    if (c->stage_pitch == c->bpl[1]) {
+        copy_bytes_fast(c->stage_uv, src_uv,
+                        (size_t)c->bpl[1] * ((c->video_h + 1u) / 2u));
+    } else {
+        for (uint32_t row = 0; row < (c->video_h + 1u) / 2u; row++)
+            copy_bytes_fast(c->stage_uv + (size_t)row * c->stage_pitch,
+                            src_uv + (size_t)row * c->bpl[1], uv_bytes);
+    }
+    return 0;
+}
+
 static int drm_setup(struct ctx *c) {
     c->card_fd = open("/dev/dri/card0", O_RDWR);
     if (c->card_fd < 0) { perror("open /dev/dri/card0"); return -1; }
@@ -382,6 +785,16 @@ static int drm_setup(struct ctx *c) {
 
     c->plane_id = find_nv12_plane(c->card_fd, &c->primary_id);
     if (!c->plane_id) { fprintf(stderr, "no NV12 DRM plane\n"); return -1; }
+    if (c->rotation_deg) {
+        if (drm_set_rotation(c, c->plane_id, c->rotation_deg) == 0) {
+            printf("hardware rotation enabled\n");
+        } else if (c->rotation_deg == 180) {
+            printf("using software 180-degree rotation fallback\n");
+            c->rotation_sw = 1;
+        } else {
+            fprintf(stderr, "rotation request failed; continuing with default\n");
+        }
+    }
 
     struct drm_mode_card_res res;
     memset(&res, 0, sizeof(res));
@@ -495,6 +908,10 @@ static int drm_setup(struct ctx *c) {
             c->primary_fb_id = p.fb_id;
         }
     }
+    if (c->rotation_sw && drm_alloc_rot_buffers(c) < 0) {
+        fprintf(stderr, "software rotation disabled; continuing with default orientation\n");
+        c->rotation_sw = 0;
+    }
     printf("drm: crtc=%u plane=%u primary=%u display=%ux%u primary_fb=%u\n",
            c->crtc_id, c->plane_id, c->primary_id, c->disp_w, c->disp_h, c->primary_fb_id);
     return 0;
@@ -519,6 +936,39 @@ static int dump_planes(const char *path, const uint8_t *y, const uint8_t *uv,
 
 static int drm_present(struct ctx *c, int idx) {
     if (!c->cap[idx].fb_id) return -1;
+    uint32_t present_fb = c->cap[idx].fb_id;
+    if (c->rotation_sw) {
+        struct rot_buf *rb = &c->rot[c->rot_next];
+        if (!rb->map[0] || !rb->map[1] ||
+            !c->cap[idx].map[0] || !c->cap[idx].map[1]) {
+            fprintf(stderr, "rotation buffers unavailable (idx=%d)\n", idx);
+            return -1;
+        }
+        int staged = 0;
+        if (c->stage_y && c->stage_uv) {
+            double copy_t0 = now_ms();
+            staged = copy_nv12_to_stage(c, idx) == 0;
+            double copy_t1 = now_ms();
+            if (staged) {
+                c->stage_copy_ms_sum += copy_t1 - copy_t0;
+                c->stage_copy_n++;
+            }
+        }
+        double rot_t0 = now_ms();
+        if (staged)
+            rotate_nv12_180(rb, c->stage_y, c->stage_pitch,
+                            c->stage_uv, c->stage_pitch,
+                            c->video_w, c->video_h);
+        else
+            rotate_nv12_180(rb, c->cap[idx].map[0], c->bpl[0],
+                            c->cap[idx].map[1], c->bpl[1],
+                            c->video_w, c->video_h);
+        double rot_t1 = now_ms();
+        c->rot_copy_ms_sum += rot_t1 - rot_t0;
+        c->rot_copy_n++;
+        present_fb = rb->fb_id;
+        c->rot_next = (c->rot_next + 1) % ROT_BUFS;
+    }
     /* Hide the console only when the first video frame is ready; hiding it at
      * startup leaves no active plane and the CRTC shows its green background. */
     if (c->hide_primary && !c->primary_hidden) {
@@ -536,7 +986,7 @@ static int drm_present(struct ctx *c, int idx) {
     memset(&sp, 0, sizeof(sp));
     sp.plane_id = c->plane_id;
     sp.crtc_id = c->crtc_id;
-    sp.fb_id = c->cap[idx].fb_id;
+    sp.fb_id = present_fb;
     sp.crtc_x = 0;
     sp.crtc_y = 0;
     sp.crtc_w = c->video_w <= c->disp_w ? c->video_w : c->disp_w;
@@ -546,7 +996,11 @@ static int drm_present(struct ctx *c, int idx) {
     sp.src_w = c->video_w << 16;
     sp.src_h = c->video_h << 16;
     /* Blocking commit: on return the previous scanout buffer is released. */
+    double plane_t0 = now_ms();
     if (xioctl(c->card_fd, DRM_IOCTL_MODE_SETPLANE, &sp) < 0) { perror("SETPLANE"); return -1; }
+    double plane_t1 = now_ms();
+    c->setplane_ms_sum += plane_t1 - plane_t0;
+    c->setplane_n++;
     if (c->dump_recover_dir && c->have_recover_last_present && c->held_n > 0 &&
         !c->held_dumped && c->held[0].map[0] && c->held[0].map[1]) {
         char path[512];
@@ -559,6 +1013,22 @@ static int drm_present(struct ctx *c, int idx) {
     if (c->held_n > 0 && c->held_release_countdown == 0)
         c->held_release_countdown = 5;
     return 0;
+}
+
+static void report_worker_timing(struct ctx *c) {
+    if (!c->stage_copy_n && !c->rot_copy_n && !c->setplane_n) return;
+    printf("worker_timing stage_copy_avg_ms=%.2f rot_copy_avg_ms=%.2f "
+           "setplane_avg_ms=%.2f samples=%u/%u/%u\n",
+           c->stage_copy_n ? c->stage_copy_ms_sum / c->stage_copy_n : 0.0,
+           c->rot_copy_n ? c->rot_copy_ms_sum / c->rot_copy_n : 0.0,
+           c->setplane_n ? c->setplane_ms_sum / c->setplane_n : 0.0,
+           c->stage_copy_n, c->rot_copy_n, c->setplane_n);
+    c->stage_copy_ms_sum = 0;
+    c->stage_copy_n = 0;
+    c->rot_copy_ms_sum = 0;
+    c->rot_copy_n = 0;
+    c->setplane_ms_sum = 0;
+    c->setplane_n = 0;
 }
 
 /* ---------------- V4L2 ---------------- */
@@ -979,7 +1449,7 @@ static int v4l2_capture_setup(struct ctx *c) {
         if (xioctl(c->video_fd, VIDIOC_QUERYBUF, &b) < 0) { perror("QUERYBUF CAPTURE"); return -1; }
         for (unsigned int p = 0; p < 2; p++) {
             c->cap[i].maplen[p] = planes[p].length;
-            if (c->dump_dir || c->dump_recover_dir || c->dump_first_dir) {
+            if (c->dump_dir || c->dump_recover_dir || c->dump_first_dir || c->rotation_sw) {
                 c->cap[i].map[p] = mmap(NULL, planes[p].length, PROT_READ, MAP_SHARED,
                                         c->video_fd, planes[p].m.mem_offset);
                 if (c->cap[i].map[p] == MAP_FAILED) { perror("mmap CAPTURE"); c->cap[i].map[p] = NULL; return -1; }
@@ -1179,6 +1649,7 @@ static int run_decode(struct ctx *c, int max_frames, int no_display) {
         if (now - last_log > 1000) {
             printf("frames=%d corrupt=%d %.1f fps\n", frames, corrupt,
                    frames * 1000.0 / (now - t0));
+            report_worker_timing(c);
             last_log = now;
         }
     }
@@ -1545,6 +2016,7 @@ static void report_second(struct ctx *c, int frames, int corrupt, int oversize,
            "age_p50=%.1f age_p95=%.1f age_max=%.1f backlog_max=%d\n",
            frames, corrupt, oversize, eos, sessions, frames * 1000.0 / (now - t0),
            p50, p95, mx, c->backlog_max);
+    report_worker_timing(c);
     c->age_n = 0;
     c->backlog_max = 0;
 }
@@ -1709,6 +2181,7 @@ static void cleanup(struct ctx *c) {
         sp.fb_id = 0;
         xioctl(c->card_fd, DRM_IOCTL_MODE_SETPLANE, &sp);
     }
+    drm_free_rot_buffers(c);
     held_release(c);
     session_close(c);
     if (c->card_fd >= 0 && c->master && c->mode_changed && c->orig_mode_valid) {
@@ -1736,8 +2209,10 @@ static void usage(const char *argv0) {
             "usage: %s --inventory\n"
             "       %s --file PATH [--bytes N] [--frames N] [--hold S] [--dump DIR]\n"
             "          [--dump-frames N] [--no-display] [--hide-primary] [--video WxH]\n"
+            "          [--rotation 0|90|180|270]\n"
             "          [--cap-bufs N]\n"
             "       %s --socket PATH [--frames N] [--hide-primary] [--cap-bufs N] [--mode WxH@Hz]\n"
+            "          [--rotation 0|90|180|270]\n"
             "          [--lat-csv PATH] [--dump-recover DIR] [--dump-first DIR] [--start-gate N]\n"
             "          [--recv-buf-kb N]\n",
             argv0, argv0, argv0);
@@ -1760,6 +2235,15 @@ int main(int argc, char **argv) {
         if (!strcmp(argv[i], "--inventory")) inv = 1;
         else if (!strcmp(argv[i], "--no-display")) no_display = 1;
         else if (!strcmp(argv[i], "--hide-primary")) hide_primary = 1;
+        else if (!strcmp(argv[i], "--rotation") && i + 1 < argc) {
+            char *end = NULL;
+            unsigned long deg = strtoul(argv[++i], &end, 10);
+            if (!end || *end || (deg != 0 && deg != 90 && deg != 180 && deg != 270)) {
+                usage(argv[0]);
+                return 2;
+            }
+            c.rotation_deg = (unsigned)deg;
+        }
         else if (!strcmp(argv[i], "--file") && i + 1 < argc) file = argv[++i];
         else if (!strcmp(argv[i], "--socket") && i + 1 < argc) sock_path = argv[++i];
         else if (!strcmp(argv[i], "--lat-csv") && i + 1 < argc) lat_csv = argv[++i];

@@ -5,6 +5,16 @@ pipeline reads raw HEVC Annex-B data from Bulk IN `0x81`, assembles access
 units, waits for a decodable random-access point, and exposes decoded frames as
 OpenCV-compatible BGR `numpy.ndarray` images.
 
+> **Current deployment (2026-11-13)**: CM311 runs the K3 native C worker plus
+> the `vt13-kiosk.service` KMS kiosk, not the PyAV software path described
+> below. See `docs/REMOTE_MACHINE_USAGE.md` for the current stage summary and
+> the full system + application deployment runbook.
+>
+> The kiosk service sets `VT13_WORKER_ROTATION=180` for the mounted VT camera.
+> The meson overlay plane has no DRM rotation property, so the worker uses a
+> software NV12 180° fallback; current live rate is about 29.7 FPS and the
+> orientation is pending user visual confirmation.
+
 ```text
 VT03 camera -> wireless link -> VT13 -> USB Bulk IN 0x81
     -> Annex-B parser -> access-unit assembler -> PyAV HEVC decoder -> BGR frame
@@ -68,6 +78,11 @@ VT03 camera -> wireless link -> VT13 -> USB Bulk IN 0x81
 - [Remote machine usage reference](docs/REMOTE_MACHINE_USAGE.md)
   covers SSH access, PTY and sudo behavior, system details, tool paths, and
   common HEVC decode/debug commands for the `10.42.0.11` Armbian test machine.
+- [CM311 eMMC deployment runbook](plans/CM311_eMMC_Deployment_Runbook.md)
+  covers the G0-G8 gates, the final selective payload, and the approved-only
+  G5 install command.
+- [Minimal eMMC payload manifest](deploy/PAYLOAD_MANIFEST.md) records the final
+  include/exclude policy, runtime dependencies, capacity budget, and hashes.
 
 ## Requirements
 

@@ -113,6 +113,9 @@ class WorkerDecoder:
         mode = os.environ.get("VT13_WORKER_MODE")
         if mode:
             args += ["--mode", mode]
+        rotation = os.environ.get("VT13_WORKER_ROTATION")
+        if rotation:
+            args += ["--rotation", rotation]
         worker_lat = os.environ.get("VT13_WORKER_LAT_CSV")
         if worker_lat:
             args += ["--lat-csv", os.path.expanduser(worker_lat)]
