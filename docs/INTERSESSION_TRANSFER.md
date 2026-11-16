@@ -1,5 +1,16 @@
 # Intersession Transfer: VT13 / CM311
 
+## 2026-11-16 19:46 HKT — P128 source provenance fixed; exact source canonical and remote tree updated
+
+- **Problem**: local HEAD `6167ce6` contained instrumented `tools/d3_probe.c` (`3a742e53…`), while the deployed exact worker `663f75e0…` was built from exact source `230a2604…` that existed only under `.codex_tmp`. Remote `~/mobile_vt/tools/d3_probe.c` was stale at `fa9e5d07…`.
+- **Repository changes**: replaced `tools/d3_probe.c` with exact P128 source SHA256 `230a26046daaed5ce04a780f2aac4773473b864c5553c6a19061cbfe8a8bc779`; preserved instrumented source SHA256 `3a742e533fbcf557e5840feb4395c547e0b45bba6e93b9fb1a35dc72bef7d826` as `tools/d3_probe_instrumented.c`; added `Makefile` targets `exact` and `instrumented`; added `deploy/P128_BUILD_PROVENANCE.md`.
+- **Build verification (CM311 `billieguo@10.42.0.253`)**: `make exact BUILD_DIR=/tmp/d3_build_check` produced `663f75e09e021b3877ee9da70c543b00fa82742c5f108af4ad6a1e69466285dc`; `make instrumented BUILD_DIR=/tmp/d3_build_check` produced `6cdb04a327df526c84912c0ee300ae9a1e2a32bea0ed14183cec19c4b17c0217`. Both matched the recorded artifacts.
+- **Basename caveat**: the deployed exact binary is unstripped and records `STT_FILE`. Compiling the same exact source as `d3_exact.c` produced `1a091b6a0a4aea9d14a7d4ca50fd4114f75b5ea543afc961b3b7113d77f6a53a`; production builds must use a source named `d3_probe.c`. `make exact` does this.
+- **Remote sync**: backed up old remote source `fa9e5d07d4c7b81d36df2ed81f5275d2631206c084f4e59b24f18789621263a2` to `~/mobile_vt/.codex_tmp/backup_d3_source_20261116_20261116_194545/d3_probe.c`; replaced `~/mobile_vt/tools/d3_probe.c` with exact `230a2604…`; remote rebuild produced `663f75e0…`. Also synced `Makefile`, `tools/d3_probe_instrumented.c`, and `deploy/P128_BUILD_PROVENANCE.md`. No service restart, running-binary replacement, or kiosk config change.
+- **Local verification**: `PYTHONPATH= python3 -m pytest -q` returned **53 passed, 38 skipped, 9 subtests passed** in 2.01 s; `make exact` and `make instrumented` compile on the PC (x86-64 hashes differ from the ARM target as expected).
+- **Worker client**: remote `vt13_video/worker_client.py` remains `518628638a5fa0da0914a5ac38e0c7255e7b801817eb7314a915f149da887279`, matching commit `fdd74b3`; local `cad4fe2ae0d476b37f36fb45e7e5e9aed7b77001681a854acbee7f19addcd2d2` is diagnostic/env plumbing and was not deployed.
+- **Next**: deploy the worker-client changes separately only if wanted; otherwise keep the remote baseline. P128 production behavior is unchanged.
+
 ## 2026-11-16 18:57 HKT — P128 deployed as production default; A fallback preserved and tested
 
 - **User decision**: P128 is now the intended production default; A remains a selectable fallback. No kernel, DTB, bootloader, ca46, eMMC partition, or USB-transport change was made; no commit was created.

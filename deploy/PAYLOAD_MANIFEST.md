@@ -1,7 +1,22 @@
 # CM311 eMMC minimal runtime payload manifest
 
-Status: **G3 final minimal payload audited; G5 PASS on 2026-11-12 23:19 HKT; eMMC-only cold boot PASS; G6 PASS with user-confirmed HDMI output, physical hotplug, cold start, and reboot; display 180° rotation deployed as a software fallback but visually unconfirmed; atomic KMS worker deployed at ~49.7 FPS with program-side p50 79.7 ms / p95 109.2 ms (not glass-to-glass); P128 parallel tiled worker is now the production default (59.45 FPS 30-minute soak), with the A staging worker/config preserved as a tested fallback; formal G8 still pending.**
-Updated: 2026-11-16 18:57 HKT.
+Status: **G3 final minimal payload audited; G5 PASS on 2026-11-12 23:19 HKT; eMMC-only cold boot PASS; G6 PASS with user-confirmed HDMI output, physical hotplug, cold start, and reboot; display 180° rotation deployed as a software fallback but visually unconfirmed; atomic KMS worker deployed at ~49.7 FPS with program-side p50 79.7 ms / p95 109.2 ms (not glass-to-glass); P128 parallel tiled worker is now the production default (59.45 FPS 30-minute soak), with the A staging worker/config preserved as a tested fallback; exact P128 source/build provenance is committed; formal G8 still pending.**
+Updated: 2026-11-16 19:46 HKT.
+
+## P128 source/build provenance
+
+- `tools/d3_probe.c` SHA256
+  `230a26046daaed5ce04a780f2aac4773473b864c5553c6a19061cbfe8a8bc779`
+  builds `build/d3/d3_probe_p128_exact` SHA256
+  `663f75e09e021b3877ee9da70c543b00fa82742c5f108af4ad6a1e69466285dc`
+  on CM311 with GCC 13.3.0 and `-O2 -Wall -Wextra`.
+- `tools/d3_probe_instrumented.c` SHA256
+  `3a742e533fbcf557e5840feb4395c547e0b45bba6e93b9fb1a35dc72bef7d826`
+  builds the diagnostic `build/d3/d3_probe_p128_instrumented` SHA256
+  `6cdb04a327df526c84912c0ee300ae9a1e2a32bea0ed14183cec19c4b17c0217`.
+- The exact binary is unstripped and records the source basename; build from a
+  source named `d3_probe.c`. See `deploy/P128_BUILD_PROVENANCE.md` for the full
+  recipe, basename caveat, and remote source mapping.
 
 ## Exact payload measurement
 
@@ -32,8 +47,9 @@ Updated: 2026-11-16 18:57 HKT.
   `usr/lib/firmware/meson/vdec/gxl_hevc.bin`; OF modalias autoload remains
   available. The installer adds `etc/modules-load.d/vt13-vdec.conf` as an
   explicit boot-time load.
-- Native worker `home/billieguo/mobile_vt/build/d3/d3_probe` (only libc
-  dependency).
+- Native worker `home/billieguo/mobile_vt/build/d3/d3_probe` plus the P128
+  production wrapper `build/d3/d3_probe_p128` and exact worker
+  `build/d3/d3_probe_p128_exact` (only libc dependency).
 - `vt13_video` source, config, deploy/udev sources, tests and docs.
 - `etc/systemd/system/vt13-kiosk.service` (reviewed hash `3ed77408…`),
   `etc/systemd/journald@vt13-kiosk.conf`, and the actual installed udev rule

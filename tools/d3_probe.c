@@ -232,12 +232,6 @@ struct ctx {
     uint64_t trace_flip_n;
     uint64_t trace_flip_mismatch_n;
     uint64_t trace_flip_unmatched_n;
-    uint64_t kms_ebusy_n;
-    uint64_t kms_prepare_ns_sum;
-    uint64_t kms_commit_ns_sum;
-    unsigned kms_prepare_n;
-    unsigned kms_commit_n;
-    unsigned max_pending_flips;
     const char *dump_rot_dir;
     int dump_rot_frames;
     int dump_rot_count;
@@ -290,15 +284,6 @@ struct present_times {
     uint64_t rotation_end_ns;
     uint64_t kms_submit_start_ns;
     uint64_t kms_submit_end_ns;
-    uint64_t flip_wait_start_ns;
-    uint64_t flip_wait_end_ns;
-    uint64_t kms_prepare_start_ns;
-    uint64_t kms_prepare_end_ns;
-    uint64_t kms_commit_start_ns;
-    uint64_t kms_commit_end_ns;
-    int kms_commit_rc;
-    int kms_ebusy;
-    unsigned pending_flip_depth;
     uint32_t source_fb;
     uint32_t presented_fb;
     int flip_pending;
@@ -331,11 +316,7 @@ static void trace_header(FILE *fp) {
             "t_dmabuf_sync_end_end_ns,t_copy_start_ns,t_copy_end_ns,"
             "t_rotation_start_ns,t_rotation_end_ns,t_kms_submit_start_ns,"
             "t_kms_submit_end_ns,t_kms_flip_event_ns,kms_flip_sequence,"
-            "kms_flip_tv_ns,dma_sync_supported,flip_pending,flip_matched,"
-            "t_flip_slot_wait_start_ns,t_flip_slot_wait_end_ns,"
-            "t_kms_prepare_start_ns,t_kms_prepare_end_ns,"
-            "t_kms_commit_start_ns,t_kms_commit_end_ns,"
-            "kms_commit_rc,kms_ebusy,pending_flip_depth\n");
+            "kms_flip_tv_ns,dma_sync_supported,flip_pending,flip_matched\n");
 }
 
 static void trace_present(struct ctx *c, const struct fed_au *fed,
@@ -348,8 +329,7 @@ static void trace_present(struct ctx *c, const struct fed_au *fed,
     fprintf(c->trace_fp,
             "present,%llu,%u,%d,%u,%u,%u,%u,%u,%d,%d,%d,%u,"
             "%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,"
-            "%llu,%llu,-1,-1,-1,%d,%d,0,"
-            "%llu,%llu,%llu,%llu,%llu,%llu,%d,%d,%u\n",
+            "%llu,%llu,-1,-1,-1,%d,%d,0\n",
             (unsigned long long)frame,
             fed ? fed->seq : 0u,
             session,
@@ -377,16 +357,7 @@ static void trace_present(struct ctx *c, const struct fed_au *fed,
             (unsigned long long)pt->kms_submit_start_ns,
             (unsigned long long)pt->kms_submit_end_ns,
             pt->dmabuf_sync_supported,
-            pt->flip_pending,
-            (unsigned long long)pt->flip_wait_start_ns,
-            (unsigned long long)pt->flip_wait_end_ns,
-            (unsigned long long)pt->kms_prepare_start_ns,
-            (unsigned long long)pt->kms_prepare_end_ns,
-            (unsigned long long)pt->kms_commit_start_ns,
-            (unsigned long long)pt->kms_commit_end_ns,
-            pt->kms_commit_rc,
-            pt->kms_ebusy,
-            pt->pending_flip_depth);
+            pt->flip_pending);
     (void)skipped;
     c->trace_present_n++;
 }
@@ -399,7 +370,7 @@ static void trace_flip(struct ctx *c, const struct rot_buf *rb,
     fprintf(c->trace_fp,
             "flip,%llu,%llu,%llu,%u,%u,%u,%u,%u,-1,-1,-1,-1,"
             "-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,"
-            "%llu,%llu,%llu,%u,%llu,%d,1,%d,0,0,0,0,0,0,0,0,0\n",
+            "%llu,%llu,%llu,%u,%llu,%d,1,%d\n",
             (unsigned long long)rb->pending_frame,
             (unsigned long long)rb->pending_seq,
             (unsigned long long)rb->pending_session,
@@ -808,13 +779,6 @@ static int drm_any_flip_pending(struct ctx *c) {
     return 0;
 }
 
-static unsigned drm_pending_count(struct ctx *c) {
-    unsigned count = 0;
-    for (unsigned int i = 0; i < ROT_BUFS; i++)
-        if (c->rot[i].pending) count++;
-    return count;
-}
-
 static void drm_note_flip_complete(struct ctx *c, uint64_t token,
                                    uint64_t event_read_ns,
                                    uint32_t event_sequence,
@@ -913,14 +877,12 @@ static int drm_wait_all_flips(struct ctx *c, int timeout_ms) {
     return 0;
 }
 
-static int drm_atomic_present(struct ctx *c, struct present_times *pt,
-                              uint32_t fb_id,
+static int drm_atomic_present(struct ctx *c, uint32_t fb_id,
                               uint32_t crtc_w, uint32_t crtc_h,
                               unsigned int slot, uint64_t frame,
                               uint64_t seq, uint64_t session,
                               unsigned int rot_mode,
                               uint64_t submit_start_ns) {
-    pt->kms_prepare_start_ns = mono_ns();
     uint32_t objs[1] = { c->plane_id };
     uint32_t counts[1] = { 10 };
     uint32_t props[10] = {
@@ -950,21 +912,7 @@ static int drm_atomic_present(struct ctx *c, struct present_times *pt,
     at.props_ptr = (uint64_t)(uintptr_t)props;
     at.prop_values_ptr = (uint64_t)(uintptr_t)values;
     at.user_data = token;
-    pt->pending_flip_depth = drm_pending_count(c);
-    if (pt->pending_flip_depth > c->max_pending_flips)
-        c->max_pending_flips = pt->pending_flip_depth;
-    pt->kms_prepare_end_ns = mono_ns();
-    pt->kms_commit_start_ns = pt->kms_prepare_end_ns;
-    int rc = xioctl(c->card_fd, DRM_IOCTL_MODE_ATOMIC, &at);
-    pt->kms_commit_end_ns = mono_ns();
-    c->kms_prepare_ns_sum += pt->kms_prepare_end_ns - pt->kms_prepare_start_ns;
-    c->kms_prepare_n++;
-    c->kms_commit_ns_sum += pt->kms_commit_end_ns - pt->kms_commit_start_ns;
-    c->kms_commit_n++;
-    pt->kms_commit_rc = rc < 0 ? -errno : 0;
-    pt->kms_ebusy = rc < 0 && errno == EBUSY;
-    if (pt->kms_ebusy) c->kms_ebusy_n++;
-    if (rc < 0)
+    if (xioctl(c->card_fd, DRM_IOCTL_MODE_ATOMIC, &at) < 0)
         return -errno;
     c->rot[slot].pending = 1;
     c->rot[slot].pending_token = token;
@@ -1662,12 +1610,10 @@ static int drm_present(struct ctx *c, int idx, uint64_t frame, uint64_t seq,
         }
         if (c->drm_atomic) {
             if (drm_read_flip_events(c, 0) < 0) return -1;
-            pt->flip_wait_start_ns = mono_ns();
             double wait_t0 = now_ms();
             if (drm_wait_flip_slot(c, (unsigned int)rot_slot, 500) < 0)
                 return -1;
             double wait_t1 = now_ms();
-            pt->flip_wait_end_ns = mono_ns();
             c->flip_wait_ms_sum += wait_t1 - wait_t0;
             c->flip_wait_n++;
         }
@@ -1746,12 +1692,12 @@ static int drm_present(struct ctx *c, int idx, uint64_t frame, uint64_t seq,
     int committed = 0;
     pt->kms_submit_start_ns = mono_ns();
     if (c->drm_atomic && rot_slot >= 0) {
-        int rc = drm_atomic_present(c, pt, present_fb, crtc_w, crtc_h,
+        int rc = drm_atomic_present(c, present_fb, crtc_w, crtc_h,
                                     (unsigned int)rot_slot, frame, seq, session,
                                     c->rotation_mode, pt->kms_submit_start_ns);
         if (rc == -EBUSY) {
             if (drm_wait_all_flips(c, 500) < 0) return -1;
-            rc = drm_atomic_present(c, pt, present_fb, crtc_w, crtc_h,
+            rc = drm_atomic_present(c, present_fb, crtc_w, crtc_h,
                                     (unsigned int)rot_slot, frame, seq, session,
                                     c->rotation_mode, pt->kms_submit_start_ns);
         }
@@ -1783,15 +1729,10 @@ static int drm_present(struct ctx *c, int idx, uint64_t frame, uint64_t seq,
         sp.src_w = c->video_w << 16;
         sp.src_h = c->video_h << 16;
         /* Blocking commit: on return the previous scanout buffer is released. */
-        pt->kms_commit_start_ns = mono_ns();
         if (xioctl(c->card_fd, DRM_IOCTL_MODE_SETPLANE, &sp) < 0) {
-            pt->kms_commit_end_ns = mono_ns();
-            pt->kms_commit_rc = -errno;
             perror("SETPLANE");
             return -1;
         }
-        pt->kms_commit_end_ns = mono_ns();
-        pt->kms_commit_rc = 0;
     }
     pt->kms_submit_end_ns = mono_ns();
     c->setplane_ms_sum += (double)(pt->kms_submit_end_ns - pt->kms_submit_start_ns) / 1e6;
@@ -1816,9 +1757,7 @@ static void report_worker_timing(struct ctx *c) {
     printf("worker_timing stage_copy_avg_ms=%.2f rot_copy_avg_ms=%.2f "
            "setplane_avg_ms=%.2f flip_wait_avg_ms=%.2f atomic=%d "
            "samples=%u/%u/%u/%u trace_present=%llu trace_flip=%llu "
-           "flip_unmatched=%llu flip_mismatch=%llu dmabuf_sync=%d "
-           "kms_prepare_avg_ms=%.3f kms_commit_avg_ms=%.3f "
-           "kms_ebusy=%llu pending_max=%u\n",
+           "flip_unmatched=%llu flip_mismatch=%llu dmabuf_sync=%d\n",
            c->stage_copy_n ? c->stage_copy_ms_sum / c->stage_copy_n : 0.0,
            c->rot_copy_n ? c->rot_copy_ms_sum / c->rot_copy_n : 0.0,
            c->setplane_n ? c->setplane_ms_sum / c->setplane_n : 0.0,
@@ -1829,11 +1768,7 @@ static void report_worker_timing(struct ctx *c) {
            (unsigned long long)c->trace_flip_n,
            (unsigned long long)c->trace_flip_unmatched_n,
            (unsigned long long)c->trace_flip_mismatch_n,
-           c->dmabuf_sync,
-           c->kms_prepare_n ? (double)c->kms_prepare_ns_sum / c->kms_prepare_n / 1e6 : 0.0,
-           c->kms_commit_n ? (double)c->kms_commit_ns_sum / c->kms_commit_n / 1e6 : 0.0,
-           (unsigned long long)c->kms_ebusy_n,
-           c->max_pending_flips);
+           c->dmabuf_sync);
     c->stage_copy_ms_sum = 0;
     c->stage_copy_n = 0;
     c->rot_copy_ms_sum = 0;
@@ -1842,12 +1777,6 @@ static void report_worker_timing(struct ctx *c) {
     c->setplane_n = 0;
     c->flip_wait_ms_sum = 0;
     c->flip_wait_n = 0;
-    c->kms_prepare_ns_sum = 0;
-    c->kms_prepare_n = 0;
-    c->kms_commit_ns_sum = 0;
-    c->kms_commit_n = 0;
-    c->kms_ebusy_n = 0;
-    c->max_pending_flips = 0;
 }
 
 /* ---------------- V4L2 ---------------- */

@@ -71,6 +71,21 @@ VT03 camera -> wireless link -> VT13 -> USB Bulk IN 0x81
 | `vt13_video/pipeline.py` | Background read/decode loop, recovery, control hooks, stall watchdog, recording, state and statistics |
 | `vt13_video/cli.py` | `devices`, `inspect`, `stream`, `replay`, `doctor`, and `config` commands |
 
+## Native P128 worker build
+
+The canonical production worker source is `tools/d3_probe.c`. The instrumented
+diagnostic variant is preserved separately as `tools/d3_probe_instrumented.c`.
+Build on the CM311 target:
+
+```bash
+make exact        # build/d3/d3_probe_p128_exact, production
+make instrumented # build/d3/d3_probe_p128_instrumented, diagnostics
+```
+
+The exact binary is unstripped and records the source basename, so production
+must be built from a file named `d3_probe.c`; `make exact` handles this. See
+`deploy/P128_BUILD_PROVENANCE.md` for the verified hashes and build recipe.
+
 ## Further documentation
 
 - [Development flow, debugging, tuning, and latency](archive/DEVELOPMENT_FLOW_AND_LATENCY.md)

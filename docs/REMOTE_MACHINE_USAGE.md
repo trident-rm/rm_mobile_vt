@@ -36,6 +36,44 @@
   hotplug, resolution transition, content-dependent `0xf`, 80°C/DVFS, EBUSY
   wait, and glass-to-glass latency. `K3 ACCEPTED_WITH_LIMITATION` is unchanged.
 
+## P128 source provenance and reproducible build — VERIFIED (2026-11-16 19:46 HKT)
+
+> The production source is now the canonical `tools/d3_probe.c`; the remote
+> source tree was updated to match it. No service restart or binary replacement
+> occurred.
+
+- **Production source**: `tools/d3_probe.c` SHA256
+  `230a26046daaed5ce04a780f2aac4773473b864c5553c6a19061cbfe8a8bc779`;
+  exact worker `build/d3/d3_probe_p128_exact` SHA256
+  `663f75e09e021b3877ee9da70c543b00fa82742c5f108af4ad6a1e69466285dc`.
+- **Build recipe**: CM311 `billieguo@10.42.0.253`, GCC 13.3.0,
+  `gcc -O2 -Wall -Wextra -o build/d3/d3_probe_p128_exact tools/d3_probe.c`,
+  or `make exact`.
+- **Reproducibility**: rebuilding `230a2604…` produced `663f75e0…`
+  byte-for-byte. The binary is unstripped and records the source basename;
+  compiling the same content as `d3_exact.c` produced
+  `1a091b6a0a4aea9d14a7d4ca50fd4114f75b5ea543afc961b3b7113d77f6a53a`.
+  Always build from a source named `d3_probe.c`.
+- **Remote source update**: `~/mobile_vt/tools/d3_probe.c` was changed from
+  `fa9e5d07d4c7b81d36df2ed81f5275d2631206c084f4e59b24f18789621263a2` to
+  `230a2604…`; backup is
+  `~/mobile_vt/.codex_tmp/backup_d3_source_20261116_20261116_194545/d3_probe.c`
+  (`fa9e5d07…`). Remote rebuild produced `663f75e0…`.
+- **Diagnostic variant**: `tools/d3_probe_instrumented.c` SHA256
+  `3a742e533fbcf557e5840feb4395c547e0b45bba6e93b9fb1a35dc72bef7d826`;
+  `make instrumented` produces
+  `6cdb04a327df526c84912c0ee300ae9a1e2a32bea0ed14183cec19c4b17c0217`
+  on CM311. It is diagnostic only, not the production default.
+- **Remote build check**: `make exact` and `make instrumented` with
+  `BUILD_DIR=/tmp/d3_build_check` produced both expected hashes; the running
+  service and production binary were untouched.
+- **Worker client**: remote `vt13_video/worker_client.py` remains
+  `518628638a5fa0da0914a5ac38e0c7255e7b801817eb7314a915f149da887279`
+  (commit `fdd74b3`); local `cad4fe2a…` is diagnostic/env plumbing and was not
+  deployed.
+- **Manifest**: `deploy/P128_BUILD_PROVENANCE.md` records the build command,
+  compiler, source/binary hashes, basename caveat, and remote source mapping.
+
 ## exact P128 deployment candidate live validation — PASS (2026-11-16 18:10 HKT; production A restored, not switched)
 
 > The exact deployment binary, not the instrumented binary, was tested against
