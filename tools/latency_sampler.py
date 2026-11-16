@@ -24,6 +24,27 @@ def proc_ticks(pid: int) -> tuple[int, int, int]:
         return (-1, -1, -1)
 
 
+def proc_rss_kb(pid: int) -> int:
+    try:
+        for line in Path(f"/proc/{pid}/status").read_text().splitlines():
+            if line.startswith("VmRSS:"):
+                return int(line.split()[1])
+    except (OSError, IndexError, ValueError):
+        pass
+    return -1
+
+
+def resolve_worker_pid(pid: int) -> int:
+    """The benchmark wraps the worker in timeout(1); sample its child."""
+    try:
+        children = Path(f"/proc/{pid}/task/{pid}/children").read_text().split()
+        if children:
+            return int(children[0])
+    except (OSError, ValueError):
+        pass
+    return pid
+
+
 def irq_counts() -> tuple[int, int, int]:
     totals = [0, 0, 0]
     try:
@@ -53,6 +74,13 @@ def temp_mc() -> int:
         return -1
 
 
+def cpu_freq_khz(path: str) -> int:
+    try:
+        return int(Path(path).read_text().strip())
+    except (OSError, ValueError):
+        return -1
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--pid", type=int, required=True, help="pipeline python pid")
@@ -69,14 +97,15 @@ def main() -> int:
         [
             "t_mono", "cpu_busy_pct", "cpu_iowait_pct", "load1",
             "py_utime_ms", "py_stime_ms", "py_threads",
-            "wk_utime_ms", "wk_stime_ms", "wk_threads",
+            "py_rss_kb", "wk_utime_ms", "wk_stime_ms", "wk_threads", "wk_rss_kb",
             "mem_avail_kb", "temp_mc",
             "irq_vdec", "irq_esparser", "irq_xhci",
+            "cpu_freq_khz", "cpu_max_freq_khz",
         ]
     )
     prev = cpu_totals()
     prev_py = proc_ticks(args.pid)
-    prev_wk = proc_ticks(args.worker_pid) if args.worker_pid else (-1, -1, -1)
+    prev_wk = proc_ticks(resolve_worker_pid(args.worker_pid)) if args.worker_pid else (-1, -1, -1)
     t0 = time.monotonic()
     try:
         while True:
@@ -88,7 +117,7 @@ def main() -> int:
             iowait = 100.0 * delta[4] / total
             prev = cur
             py = proc_ticks(args.pid)
-            wk = proc_ticks(args.worker_pid) if args.worker_pid else (-1, -1, -1)
+            wk = proc_ticks(resolve_worker_pid(args.worker_pid)) if args.worker_pid else (-1, -1, -1)
             irq = irq_counts()
             load1 = float(Path("/proc/loadavg").read_text().split()[0])
             writer.writerow(
@@ -100,12 +129,16 @@ def main() -> int:
                     -1 if py[0] < 0 else py[0] * 1000 // CLK,
                     -1 if py[1] < 0 else py[1] * 1000 // CLK,
                     py[2],
+                    proc_rss_kb(args.pid),
                     -1 if wk[0] < 0 else wk[0] * 1000 // CLK,
                     -1 if wk[1] < 0 else wk[1] * 1000 // CLK,
                     wk[2],
+                    proc_rss_kb(resolve_worker_pid(args.worker_pid)) if args.worker_pid else -1,
                     mem_available_kb(),
                     temp_mc(),
                     *irq,
+                    cpu_freq_khz("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq"),
+                    cpu_freq_khz("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq"),
                 ]
             )
             fh.flush()

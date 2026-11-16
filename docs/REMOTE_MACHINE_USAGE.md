@@ -1,5 +1,155 @@
 # Remote Machine Usage Reference
 
+## P128 production default — PASS (2026-11-16 18:57 HKT; A fallback preserved and tested)
+
+> User approved P128 as the production default. The kiosk config now points to
+> the P128 wrapper; the original A binary and an A fallback config are preserved.
+> No reboot, kernel/module change, permanent A overwrite, or commit occurred.
+
+- **Default**: `config/vt13_video.kiosk.yaml` SHA256
+  `919a30323370a2077201feda0991d40c99f931330df787f59441074aa1b5d7ec`;
+  `decoder.worker_path` is
+  `/home/billieguo/mobile_vt/build/d3/d3_probe_p128`. Wrapper SHA256
+  `92d9c17c38de3263e4e2ef778be0df1bc51dac73d0c219dcb61d5158336b7685`;
+  exact worker SHA256
+  `663f75e09e021b3877ee9da70c543b00fa82742c5f108af4ad6a1e69466285dc`.
+- **A fallback**: `config/vt13_video.kiosk.a.yaml` SHA256
+  `d4d155f2c683ccb93870baea1ca1790e2f60bb228ff644378874c990448ebaa1`;
+  A worker `build/d3/d3_probe` SHA256
+  `9d610808d309d0fa6a2fb19f15558ffad2505b6410f7ca3600779b7b35055d01`
+  is unchanged. Fallback: copy the A config over the kiosk config and restart
+  `vt13-kiosk.service`; restore P128 from `vt13_video.kiosk.p128.yaml`.
+- **P128 check**: service active/enabled, `MainPID=1334328`, worker `1334378`,
+  `NRestarts=0`; `/dev/video0` and `/dev/dri/card0` owned only by the P128
+  worker; worker flags `--rotation-mode P --dmabuf-sync 1 --source-hold 2`;
+  four scratch framebuffers; `CAPTURE G_FMT 1920x1080 NM12`; source 59.9 FPS;
+  worker cumulative 58.5 FPS; `corrupt=0`; backlog 0; `dmabuf_sync=1`;
+  `atomic=1`.
+- **Fallback check**: A was started with the fallback config and verified at
+  worker SHA256 `9d610808…5d01`, exclusive device ownership, source 60 FPS,
+  `corrupt=0`, `stage_copy_avg_ms≈16.2`, `rot_copy_avg_ms≈2.8`; P128 was then
+  restored and is the final active worker.
+- **Evidence**: `.codex_tmp/p128_default_20261116/` logs and
+  `SHA256SUMS` SHA256
+  `a699563a75970a1b4a40d42ab6fcdaee5fb64c8aa32fc571f32f76d5ae7b62d9`.
+  Limitations remain physical HDMI visual/orientation/tearing, physical USB
+  hotplug, resolution transition, content-dependent `0xf`, 80°C/DVFS, EBUSY
+  wait, and glass-to-glass latency. `K3 ACCEPTED_WITH_LIMITATION` is unchanged.
+
+## exact P128 deployment candidate live validation — PASS (2026-11-16 18:10 HKT; production A restored, not switched)
+
+> The exact deployment binary, not the instrumented binary, was tested against
+> the real DJI source. The kiosk was stopped for exclusive V4L2/KMS access and
+> restored by the script trap. No reboot, module reload, permanent switch, or
+> commit occurred.
+
+- **Host/state**: CM311 `billieguo@10.42.0.253`; eMMC root
+  `/dev/mmcblk2p2`, boot `/dev/mmcblk2p1`; real DJI USB and HDMI/KMS.
+- **Candidate**: `build/d3/d3_probe_p128_exact` SHA256
+  `663f75e09e021b3877ee9da70c543b00fa82742c5f108af4ad6a1e69466285dc`;
+  short config `95d39679…8b58b8`, soak config `2e357a8d…d5f3d`,
+  script `4dd26941…e3449d`. All runs returned `py_rc=0 worker_rc=0`.
+- **Short (3×65 s)**: 59.95 completed-flip FPS median; transform
+  p50/p95/p99/max `8.669/11.329/12.571/16.262 ms`; receive→vblank
+  `58.272/68.410 ms`; 2 resets/5 sessions; 0 corrupt; 78°C max.
+- **5 minutes**: 59.27 FPS; transform `8.741/11.733/13.843/19.42 ms`;
+  receive→vblank `62.077/86.244 ms`; 14 resets/15 sessions; 0 corrupt;
+  80°C max.
+- **30-minute soak**: 59.45 FPS; decoded 59.42; submitted 59.45;
+  transform `8.709/11.603/13.318/24.993 ms`; receive→vblank
+  `59.442/79.827 ms`; 62 resets/63 sessions; 0 corrupt; 0 flip
+  mismatch/unmatched; DMA-BUF sync supported; USB errors/recoveries 0;
+  CPU 138.58%; 80°C max; RSS max 1,684 KB; available memory min
+  1,356,416 KB.
+- **KMS**: exact submit p95 `6.888/8.144/7.673 ms` (short/5-minute/soak).
+  Exact trace lacks commit split; the instrumented Phase D attribution
+  remains: actual atomic commit p95 `0.124/0.128 ms`, pre-commit EBUSY/retry
+  gap p95 `8.117/8.042 ms`. Keep synchronization/retry safeguards.
+- **Throttling**: soak CPU frequency was below maximum in 1,446/1,779 samples
+  (mean 1.69 GHz, p50 1.752 GHz); no thermal shutdown observed. Continue
+  monitoring 80°C/DVFS.
+- **`0xf` caveat**: exact short had 2 resets total, 5-minute 14, soak 62/63
+  sessions. The soak dmesg `status_0xf=0` is a ring-buffer/window artifact;
+  worker resets are authoritative. Recovery was automatic and no corrupt
+  frames were counted.
+- **Production restore**: service active, `MainPID=1314877`, worker
+  `1314878`, `NRestarts=0`; A worker `9d610808…5d01` unchanged; devices
+  owned only by A; `CAPTURE G_FMT 1920x1080`.
+- **Evidence**: `.codex_tmp/p128_live_20261116/phase_b/exact_*/`,
+  `aggregate_exact_short.json`, `run_exact_20261116_172807.log`,
+  `configs/P128_exact*.yaml`, `scripts/run_exact_validation.sh`.
+  `SHA256SUMS_exact.txt` SHA256
+  `efeb2663f9e9f61e6b561316b5cdfcdab92b3b57fb45d21b1ce871a1edcea01b`;
+  local/remote verification 150/150 OK.
+- **Recommendation**: remain **`P128_ACCEPTED_WITH_LIMITATION`**. Exact
+  candidate now passes automated live short/5-minute/30-minute validation;
+  physical HDMI/hotplug, resolution transition, `0xf`, 80°C/DVFS, EBUSY wait,
+  and glass-to-glass measurement remain open. `K3 ACCEPTED_WITH_LIMITATION`
+  is unchanged. Do not switch the default without separate approval.
+
+## P128 live validation and deployment candidate — PASS_WITH_LIMITATION (2026-11-16 16:35 HKT; production A restored, not switched)
+
+> Controlled kiosk interruption was used for the live A/B. The original A
+> worker, config, service, and client were preserved and restored after every
+> run. No reboot, module reload, kernel/DTB/ca46/eMMC/USB-transport change, or
+> permanent worker switch occurred.
+
+- **Host/state**: CM311 `billieguo@10.42.0.253`; root `/dev/mmcblk2p2`, boot
+  `/dev/mmcblk2p1` (eMMC-only). Real DJI USB source and HDMI/KMS were used.
+- **Phase A rollback**: `phase_a_rollback_test.sh` stopped
+  `vt13-kiosk.service`, confirmed `/dev/video0` and `/dev/dri/card0` were free,
+  restarted A, verified the worker path/hash, and observed
+  `CAPTURE G_FMT 1920x1080 NM12`; `ROLLBACK_TEST=PASS`. A worker
+  `9d610808d309d0fa6a2fb19f15558ffad2505b6410f7ca3600779b7b35055d01`;
+  service `adcd98ff…7ec57`; config `d4d155f2…baa1`; client `51862863…7279`.
+- **Live source**: 1920x1080, 59.7–59.9 AU/s. A production: 50.0
+  completed-flip FPS (3×60 s), 51.0 FPS (5 min), 0 corrupt, 77°C max.
+- **P128**: 58.88 FPS short median, 56.4 FPS (5 min), 59.0 FPS (30 min soak).
+  Short transform p50/p95/p99/max `8.787/11.635/14.497/25.085 ms`; soak
+  `8.741/11.465/13.292/24.379 ms`. Short receive→vblank
+  `62.745/85.117 ms`; soak `60.805/87.439 ms`. 0 corrupt, 0 flip
+  mismatch/unmatched, pending depth 1, CPU 138.22%, 78°C max, RSS max
+  1.684 MB with no growth.
+- **KMS investigation**: reported submit p95 `8.199/8.126 ms` is pre-commit
+  EBUSY/retry waiting. Actual atomic commit p95 `0.124/0.128 ms`; 6,637 EBUSY
+  retries in short runs and 52,917 in the soak. Keep synchronization/retry
+  safeguards.
+- **Phase E**: 30-minute soak RC=0. Simulated USB `1-1` unbind/bind recovered
+  in 3.998 s (reopen) / 4.825 s (stream resume), 1 recovery, 60.0 setplane FPS
+  after recovery. Physical hotplug, HDMI visual/orientation/tearing, and
+  glass-to-glass latency remain human/pending. The
+  1832×1032→1920×1080 transition was not reproduced.
+- **`0xf` caveat**: summary `status_0xf=0` is a limited dmesg-window artifact.
+  Worker logs show 4–7 aborts per short run, 59 in 5 minutes, and 108
+  resets/109 sessions in the soak. Content-dependent `0xf` remains open.
+- **Candidate artifacts (not installed as default)**: exact binary
+  `663f75e09e021b3877ee9da70c543b00fa82742c5f108af4ad6a1e69466285dc`;
+  wrapper `92d9c17c38de3263e4e2ef778be0df1bc51dac73d0c219dcb61d5158336b7685`;
+  config `919a30323370a2077201feda0991d40c99f931330df787f59441074aa1b5d7ec`.
+  Wrapper flags: `--rotation-mode P --dmabuf-sync 1 --source-hold 2`.
+  Instrumented live binary `6cdb04a3…0217`; exact source `230a2604…bc779`;
+  instrumented source `3a742e53…d826`; diff `22a27c99…0effc`; build
+  `gcc 13.3.0 -O2 -Wall -Wextra`.
+- **Final production check**: service active, `MainPID=747451`, worker
+  `747452`, `NRestarts=0`, A hash unchanged, both devices owned only by the
+  worker, capture 1920x1080. P128 is not yet the default.
+- **Local regression**: non-sandbox `pytest` returned 53 passed, 38 skipped,
+  9 subtests passed; `git diff --check` clean. The sandboxed AF_UNIX
+  `socketpair` restriction produced 2 false `test_latency.py` failures.
+- **Evidence**: `.codex_tmp/p128_live_20261116/phase_a/`,
+  `.codex_tmp/p128_live_20261116/phase_b/`,
+  `.codex_tmp/p128_live_20261116/phase_f/`,
+  `.codex_tmp/p128_live_20261116/p128_build/`, and
+  `.codex_tmp/p128_live_20261116/scripts/`. Final summary
+  `f41b409df7a41297178ffaae39c8050c8dcecbda9ffba05e1fbe9a213d5d28df`;
+  manifest `dc4627435d8b7a89f29e6a6162e81a46731d264556d6810fb66a4a32cce0a20e`;
+  local archive verified 32/32.
+- **Recommendation**: **`P128_ACCEPTED_WITH_LIMITATION`**. Automated live
+  A/B and soak pass; P128 is faster than A, but physical HDMI/hotplug,
+  resolution transition, `0xf`, EBUSY wait, and glass-to-glass measurement
+  remain limitations. `K3 ACCEPTED_WITH_LIMITATION` is unchanged. Stop before
+  permanently switching the default worker.
+
 ## eMMC-only cold boot / G6 — PASS_WITH_LIMITATION (2026-11-13 02:03 HKT; HDMI visual and physical hotplug pending)
 
 > G6 was authorized and executed. No reboot, module reload, or golden-data
@@ -75,6 +225,20 @@
   SHA256 `bd7893fe700936a62ad103b85d49fd78cf415621fd43903ef551fd73e11d54eb`;
   remote hash check OK.
 
+## Remote temp cleanup (2026-11-13 20:40 HKT)
+
+- User requested cleanup of all temporary data/files/recordings on CM311. Removed `~/mobile_vt/.codex_tmp/{l2_20261113,emmc_deploy_20261112,kiosk_20261110}`; remote `.codex_tmp` dropped from 1.8 GiB to 4 KiB.
+- Preserved the active `vt13-kiosk.service` socket `~/mobile_vt/.codex_tmp/d3_worker.sock`; service stayed active with PIDs 143052/143053, and the socket remained LISTEN/CONNECTED.
+- Root `/dev/mmcblk2p2` changed from 4.6 GiB used / 75% (1.6 GiB free) to 2.8 GiB used / 46% (3.4 GiB free).
+- `~/.codex_tmp`, `captures/`, `live_runs/`, and `.codex_runs/` were absent; `/tmp`, `/dev/shm`, and `/var/tmp` had no material data. Local PC mirrors under `mobile_vt/.codex_tmp/` retain the removed evidence; earlier remote `.codex_tmp` paths in this document are historical.
+
+## Sync audit vs local PC (2026-11-16 10:03 HKT)
+
+- Read-only `rsync -nac` comparison found the trees are **not synchronized**: 8 common files differ in content, CM311 has 13 local-absent legacy scripts/docs, and local has 14 remote-absent deployment/docs/tools files.
+- CM311 remains the production deployment machine: `vt13-kiosk.service` is active, worker PID 143053 is running, and `build/d3/d3_probe` is the verified production binary `9d610808…`. The remote tree is 1.9 MiB and is not a valid Git repository.
+- Local HEAD is `fdd74b3`; local `tools/d3_probe.c` (`230a2604…`) and `vt13_video/worker_client.py` (`43755fc2…`) are newer development versions. Local `build/` has no ARM `build/d3/d3_probe`.
+- Treat CM311 as authoritative for deployed runtime and the local tree as the newer development source. Do not blanket-overwrite either side; details are in `docs/INTERSESSION_TRANSFER.md`.
+
 ## Current development stage (2026-11-13 12:37 HKT — G5 PASS; eMMC cold boot PASS; G6 user-confirmed HDMI/hotplug/cold start/reboot; rotation deployed but visually unconfirmed; ~29.7 FPS)
 
 > G6's previously pending HDMI output and physical hotplug were confirmed by the
@@ -141,6 +305,63 @@ must not be inserted when validating eMMC-only boot.
 - Evidence: `.codex_tmp/emmc_deploy_20261112/g7_rotation_stage_20261113_1226/`
   with `SHA256SUMS` 29/29 OK locally and remotely; manifest SHA256
   `e337cce734d09715d8642ab54e1534dc834f8d19d56619210bed1c8ed70be69a`.
+
+## L2 offline benchmark snapshot (2026-11-13 19:58 HKT; no live USB/HDMI)
+
+- **Target and paths**: CM311 is currently at the dynamic DHCP address
+  `billieguo@10.42.0.253`; remote project root is `~/mobile_vt`. Offline
+  benchmark staging is `~/mobile_vt/.codex_tmp/l2_20261113/` with
+  `staging/` scripts, `source/` HEVC inputs, `build/` test workers, and
+  timestamped run directories. The old `10.42.0.11` address must not be assumed.
+- **Production state**: `vt13-kiosk.service` is active after the benchmark with
+  `MainPID=143052` and `NRestarts=0`. The production worker is still
+  `build/d3/d3_probe` SHA256
+  `9d610808d309d0fa6a2fb19f15558ffad2505b6410f7ca3600779b7b35055d01`; the
+  offline candidates were not copied over it.
+- **Source**: `source/live_run09_clean_2322_3600.h265` SHA256
+  `b1b1af54390a82e07491ba1614190043d754dfacab9221e898b94b39ef6e8034`,
+  3600 AU, 1920x1080@60, one IRAP at the start. `source/live_run09_clean_2322_600x6.h265`
+  SHA256 `c2059df0...` has periodic IRAPs and was used for preflight only.
+  `segment3_x2_ps.h265` is not a steady-state source (POC16 `0xf`, sessions=2).
+- **Benchmark command shape** (remote, while kiosk is stopped):
+  `bash staging/l2_benchmark.sh --run-dir RUN --worker build/d3_probe_l2_p128
+  --source source/live_run09_clean_2322_3600.h265 --duration 60 --repeats 3
+  --modes P --source-hold 2 --warmup 5`. Stop/restart the kiosk with the
+  documented runtime password extraction and a remote `trap` so a failed run
+  cannot leave DRM master stopped.
+- **Pooled offline results (3×60 s per candidate, warm-up 5 s)**:
+
+| Candidate | Completed flip FPS | Fused transform p50/p95/p99/max (ms) | Notes |
+|---|---:|---:|---|
+| A staged copy | 50.01 | 19.16 / 20.98 / 22.082 / 28.678 | Original baseline; 4 NV12 passes; worker ~99% of one core |
+| B reverse read | 33.90 | 28.552 / 36.295 / 37.049 / 41.76 | Direct reverse source read, forward scratch write |
+| C forward read | 33.96 | 27.94 / 36.22 / 36.949 / 38.784 | Direct forward source read, rotated scratch write |
+| T128 tiled | 52.74 | 18.025 / 19.849 / 20.046 / 22.62 | Tiled C, 128x128 Y / 64 UV-pair tiles |
+| **P128 parallel** | **60.00** | **9.081 / 11.433 / 13.671 / 23.13** | 4 pthreads; p95 below 12 ms target; best offline candidate |
+
+- **Correctness**: all long runs had `corrupt=0`, `0xf=0`, `abort=0`,
+  `sessions=1`, flip unmatched/mismatch=0, atomic fallback=0, and DMA-BUF sync
+  supported=1. The same-run source-NV12 + rotated-scratch test verified A/T/P
+  each 20/20 frames: Y bytes and UV pair ordering exactly matched the expected
+  180-degree transform. Cross-run same-seq dumps differ on some frames because
+  the hardware decoder output is not bit-identical across runs; use the
+  same-run source/rot comparison for transform correctness.
+- **Resource measurements**: P128 worker CPU was about 134.7% (4 threads),
+  system CPU busy p50/p95 40.6/45.8%, temperature max 64 C, available memory
+  min 1,317,492 kB. A/T single-thread worker CPU was about 99.17/98.99% of one
+  core. Logical NV12 bandwidth (derived, not DRAM-controller measured):
+  A≈622.2, B≈210.9, C≈211.3, T≈328.1, P≈373.25 MB/s.
+- **Artifacts/hashes**: `build/d3_probe_l2_p128` SHA256
+  `0cb20aadaf5d3899528dfce30fa9e733b2cf338eb2fc1b7538349c1d459114f4`;
+  source `tools/d3_probe.c` SHA256
+  `230a26046daaed5ce04a780f2aac4773473b864c5553c6a19061cbfe8a8bc779`.
+  Final run: `bench_p128_final_20261113_195746/`; aggregate:
+  `l2_aggregate_p128_final.json`; transform proof:
+  `transform_verify.txt`; same-run dumps: `dump_transform2_20261113_195344/`.
+- **Scope boundary**: this is offline replay only. No real USB capture, HDMI
+  visual acceptance, 30-minute soak, or glass-to-glass measurement was done.
+  P128 is the recommended offline candidate; T128 remains the fallback, and A
+  remains the original baseline. Do not switch production automatically.
 
 ## G2 backup verification — PASS (2026-11-12 14:59 HKT)
 
@@ -1154,7 +1375,7 @@ USB Burning Tool; the USB filesystem itself is untouched by the installer.
 - Do not treat the volatile `vt13-kiosk` journal as persistent evidence.
 - Do not overwrite `captures/` golden data during migration.
 
-## Kiosk state (2026-11-10 01:30 HKT)
+## Kiosk state (historical 2026-11-10 01:30 HKT)
 
 - `lightdm` stopped; enable symlink removed (unit static); default target
   `multi-user.target`. HDMI shows the text console when no renderer runs; SSH
@@ -1167,6 +1388,30 @@ USB Burning Tool; the USB filesystem itself is untouched by the installer.
 - Live KMS result: 659 frames/60.9 s = 10.8 fps, 15 `0xf`, AU 48.5/s with
   display cap 25 + 50% GOP shed; regression KMS3: 625 frames/10.4 fps/14.
   ffplay same config: 529 frames/8.7 fps/17.
+
+## Kiosk state (2026-11-13 14:35 HKT)
+
+- SSH target is `billieguo@10.42.0.253` (dynamic DHCP). The board is running
+  from eMMC only; `uptime -s` is `2026-11-13 10:55:30 HKT`.
+- `vt13-kiosk.service` is active/running since 14:03:51 HKT with
+  `MainPID=24013`, worker PID 24015, and `NRestarts=0`. Deployed worker:
+  `build/d3/d3_probe 9d610808d309d0fa6a2fb19f15558ffad2505b6410f7ca3600779b7b35055d01`;
+  source: `tools/d3_probe.c fa9e5d07d4c7b81d36df2ed81f5275d2631206c084f4e59b24f18789621263a2`.
+- KMS uses DRM atomic commits (`DRM_IOCTL_MODE_ATOMIC`, nonblocking page-flip
+  events) for the overlay plane, with legacy `SETPLANE` fallback if atomic
+  setup fails. Overlay plane 42 still has no hardware `rotation` property, so
+  the 180° rotation is performed in software before KMS.
+- The 34-second steady observation was 49.7 FPS with `corrupt=0` and
+  `sessions=1`. Sender AU timestamp to program-side present: p50 **79.7 ms**,
+  p95 **109.2 ms**, max **187.5 ms**. Local stages: staging 16.5 ms, rotation
+  2.9 ms, atomic submit 0.10 ms, flip wait 0. This is not glass-to-glass.
+- Evidence: `.codex_tmp/emmc_deploy_20261112/g7_atomic_20261113_1340/`;
+  `SHA256SUMS` **20/20 OK** locally and remotely; manifest SHA256
+  `268c1c5b8630cce1f77fabac13f4e9ab20075fc68f23dcc0fb3589a2b3a8921f`;
+  plot `delay_flow.png`.
+- Rotation direction remains **visually unconfirmed**. A fresh 30-minute soak
+  and the formal G8 cold-boot/soft-reboot matrix remain pending. No reboot or
+  `meson_vdec` reload was performed for this record.
 
 ## Audit deliverables (archived 2026-11-10; backup under `.codex_tmp/docs_backup_20261110/`)
 

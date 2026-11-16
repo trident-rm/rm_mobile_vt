@@ -11,6 +11,7 @@ control:
 decoder:
   codec: hevc_v4l2m2m
   backend: worker
+  worker_path: /home/billieguo/mobile_vt/build/d3/d3_probe_p128
   ffmpeg_codec: hevc_v4l2m2m
   convert_bgr: false
   display: none

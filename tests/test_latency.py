@@ -53,10 +53,11 @@ class LatencyCsvTests(unittest.TestCase):
             lines = path.read_text().splitlines()
             self.assertEqual(lines[0].split("\t"), [
                 "kind", "seq", "mono_ns", "completed_ns", "flags", "bytes",
+                "received_ns", "au_start_ns", "sender_ns",
             ])
             au = lines[1].split("\t")
             self.assertEqual(au[:3], ["au", "7", "2000"])
-            self.assertEqual(au[3:], ["1000", "1", "21000"])
+            self.assertEqual(au[3:], ["1000", "1", "21000", "-1", "-1", "-1"])
             rec = lines[2].split("\t")
             self.assertEqual(rec[:3], ["rec", "7", "3000"])
             self.assertEqual(rec[5], "4")

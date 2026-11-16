@@ -1,7 +1,7 @@
 # CM311 eMMC minimal runtime payload manifest
 
-Status: **G3 final minimal payload audited; G5 PASS on 2026-11-12 23:19 HKT; eMMC-only cold boot PASS; G6 PASS with user-confirmed HDMI output, physical hotplug, cold start, and reboot; display 180° rotation deployed as a software fallback but visually unconfirmed; current live rate ~29.7 FPS; formal G8 still pending.**
-Updated: 2026-11-13 12:40 HKT.
+Status: **G3 final minimal payload audited; G5 PASS on 2026-11-12 23:19 HKT; eMMC-only cold boot PASS; G6 PASS with user-confirmed HDMI output, physical hotplug, cold start, and reboot; display 180° rotation deployed as a software fallback but visually unconfirmed; atomic KMS worker deployed at ~49.7 FPS with program-side p50 79.7 ms / p95 109.2 ms (not glass-to-glass); P128 parallel tiled worker is now the production default (59.45 FPS 30-minute soak), with the A staging worker/config preserved as a tested fallback; formal G8 still pending.**
+Updated: 2026-11-16 18:57 HKT.
 
 ## Exact payload measurement
 
@@ -179,10 +179,46 @@ Updated: 2026-11-13 12:40 HKT.
 - The user reported that the live VT view is rotated 180°.
 - Meson overlay plane 42 has no DRM `rotation` property; standard KMS plane rotation is unavailable. The worker therefore uses a software fallback with four NV12 scratch dumb framebuffers, a cached staging copy, and NEON Y-row/UV-pair reversal.
 - `vt13_video/worker_client.py` reads `VT13_WORKER_ROTATION`; the deployed service sets it to `180`. No bitstream, decoder, kernel, or module change was made.
-- Deployed worker: `build/d3/d3_probe d1257c49a45c2858346a517dcf1c445a2187962bce3e62b64154d7320c08a715`; source: `tools/d3_probe.c 6838cd3e1b22ceae831ea99f46252907b5a6525792e19ede5af9c6f732ae2e95`; service `MainPID=15994`, worker 15996, `NRestarts=0`, active/running. DRM scans scratch `fb=49`, `imported=no`.
-- 30-second observation: about **29.7 FPS**, `corrupt=0`, 0 errors/recoveries, `stage_copy_avg_ms≈17.2–17.7`, `rot_copy_avg_ms≈2.8–2.9`, `setplane_avg_ms≈12.2–12.7`. This is a performance regression from the previous unrotated ~60 FPS path; the bottlenecks are uncached V4L2 dmabuf reads and blocking `SETPLANE` waits.
+- Rotation-only baseline worker: `build/d3/d3_probe d1257c49a45c2858346a517dcf1c445a2187962bce3e62b64154d7320c08a715`; source: `tools/d3_probe.c 6838cd3e1b22ceae831ea99f46252907b5a6525792e19ede5af9c6f732ae2e95`; service `MainPID=15994`, worker 15996, `NRestarts=0`, active/running. DRM scans scratch `fb=49`, `imported=no`.
+- 30-second observation before the atomic optimization: about **29.7 FPS**, `corrupt=0`, 0 errors/recoveries, `stage_copy_avg_ms≈17.2–17.7`, `rot_copy_avg_ms≈2.8–2.9`, `setplane_avg_ms≈12.2–12.7`. This was a performance regression from the previous unrotated ~60 FPS path; the bottlenecks were uncached V4L2 dmabuf reads and blocking `SETPLANE` waits. The current atomic worker supersedes this baseline; see the next section.
 - **Visual direction is still unconfirmed.** Do not record the rotation as visually fixed until the user confirms the picture is upright and unmirrored. If it is still wrong, distinguish 180° rotation from vertical-only or horizontal-only flip.
 - Evidence: `.codex_tmp/emmc_deploy_20261112/g7_rotation_stage_20261113_1226/`; `SHA256SUMS` **29/29 OK** locally and remotely, manifest SHA256 `e337cce734d09715d8642ab54e1534dc834f8d19d56619210bed1c8ed70be69a`.
+
+## Atomic KMS optimization and delay baseline (2026-11-13 14:03-14:06 HKT)
+
+- `tools/d3_probe.c` now enables `DRM_CLIENT_CAP_ATOMIC`, submits overlay-plane
+  updates with `DRM_IOCTL_MODE_ATOMIC` (`NONBLOCK | PAGE_FLIP_EVENT`), tracks
+  `DRM_EVENT_FLIP_COMPLETE`, and waits for the matching flip before reusing a
+  scratch framebuffer. If atomic setup or property validation fails, it falls
+  back to legacy `SETPLANE`; pending flips are drained during cleanup.
+- Deployed worker: `build/d3/d3_probe 9d610808d309d0fa6a2fb19f15558ffad2505b6410f7ca3600779b7b35055d01`;
+  source: `tools/d3_probe.c fa9e5d07d4c7b81d36df2ed81f5275d2631206c084f4e59b24f18789621263a2`.
+  Service `MainPID=24013`, worker PID 24015, `NRestarts=0`, active/running
+  since 14:03:51 HKT. The 180° rotation remains software before KMS because
+  plane 42 has no DRM `rotation` property.
+- Offline smoke on the 1920x1080 60 fps sample `staging/vt13_idr_03.h265`:
+  60 decoded frames, RC=0, 50.74 FPS, `corrupt=0`; atomic submit about
+  0.10 ms.
+- 34-second steady window: 49.7 FPS, `corrupt=0`, `sessions=1`; no RECOVER,
+  atomic fallback, flip-wait timeout, or `0xf` in the sampled window. Local
+  stage medians: staging copy 16.545 ms (p95 17.442), rotation 2.855 ms
+  (p95 3.026), KMS atomic submit 0.10 ms (p95 0.1135), flip wait 0.00 ms.
+- Sender AU timestamp to program-side present: p50 **79.7 ms**, p95
+  **109.2 ms**, max observed **187.5 ms**. Subtracting measured local stages
+  yields upstream wireless/USB/AU receive + decoder queue p50 **60.2 ms**,
+  p95 **88.6 ms** (derived, not split per frame). This is **not
+  glass-to-glass**; HDMI scanout/panel response is not included.
+- The previous rotation-only worker was ~29.7 FPS with
+  `setplane_avg_ms≈12.5`; the atomic worker is ~49.7 FPS with
+  `setplane_avg_ms≈0.10`. The largest remaining local cost is the 16.5 ms
+  staging copy, followed by the 2.9 ms software rotation.
+- **Visual direction is still unconfirmed.** Do not record the rotation as
+  visually fixed until the user confirms the picture is upright and
+  unmirrored.
+- Evidence: `.codex_tmp/emmc_deploy_20261112/g7_atomic_20261113_1340/`;
+  `SHA256SUMS` **20/20 OK** locally and remotely; manifest SHA256
+  `268c1c5b8630cce1f77fabac13f4e9ab20075fc68f23dcc0fb3589a2b3a8921f`;
+  plot `delay_flow.png` and summary `delay_flow_summary.json`.
 
 ## Residual risks
 
@@ -191,13 +227,16 @@ Updated: 2026-11-13 12:40 HKT.
   reboot. Formal G8 still requires three independent cold boots plus one
   supervised soft reboot. Residual content-dependent `0xf` and the startup burst
   are not closed by eMMC migration.
-- The 180° rotation is implemented but **visually unconfirmed**, and the software
-  path reduces the live rate to about 29.7 FPS. Blocking `SETPLANE` waits and
-  uncached dmabuf reads remain the main optimization targets.
+- The 180° rotation is implemented but **visually unconfirmed**. Atomic KMS
+  removes blocking `SETPLANE` waits and raises the live rate to about 49.7 FPS;
+  the largest remaining local cost is the 16.5 ms NV12 staging copy, followed
+  by the 2.9 ms software rotation. KMS plane 42 still has no hardware rotation
+  property.
 - A failed eMMC boot may require physical reset or Amlogic USB Burning Tool;
   the SG USB remains the verified fallback but is not a byte-for-byte disk image.
 - The content-dependent `0xf` abort, recovery freeze (~217–283 ms), occasional
   boot `0xf` burst, one historical soft-reboot hang, and unmeasured
   glass-to-glass latency remain open; eMMC migration does not close them.
-- The fresh 30-minute soak for the current `d1257c49` rotation worker + ca46
+  Program-side p50 79.7 ms / p95 109.2 ms is not a glass-to-glass measurement.
+- The fresh 30-minute soak for the current `9d610808` atomic worker + ca46
   combination is still required in G7/G8.

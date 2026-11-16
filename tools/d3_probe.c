@@ -21,8 +21,10 @@
  */
 #include <errno.h>
 #include <fcntl.h>
+#include <linux/dma-buf.h>
 #include <linux/videodev2.h>
 #include <poll.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -55,6 +57,14 @@
 #define AU_MAGIC 0x44574155u /* "DWAU" */
 #define AU_FLAG_IRAP 1u
 #define AU_FLAG_EOS 2u
+
+enum rot_mode {
+    ROT_MODE_A_STAGED = 0,
+    ROT_MODE_B_REVERSE_READ = 1,
+    ROT_MODE_C_FORWARD_READ = 2,
+    ROT_MODE_C_TILED = 3,
+    ROT_MODE_P_PARALLEL = 4,
+};
 
 struct au_hdr {
     uint32_t magic;
@@ -93,8 +103,11 @@ static uint64_t mono_ns(void) {
 
 struct fed_au {
     uint32_t seq;
+    uint32_t flags;
+    uint32_t bytes;
     uint64_t send_ns;
     uint64_t recv_ns;
+    uint64_t enqueue_ns;
 };
 
 struct out_buf {
@@ -130,6 +143,15 @@ struct rot_buf {
     void *map[2];
     size_t maplen[2];
     uint32_t pitch[2];
+    int pending;
+    uint64_t pending_token;
+    uint64_t pending_frame;
+    uint64_t pending_seq;
+    uint64_t pending_session;
+    uint64_t pending_submit_start_ns;
+    uint64_t pending_submit_end_ns;
+    uint64_t pending_fb_id;
+    unsigned pending_rot_mode;
 };
 
 struct ctx {
@@ -175,6 +197,21 @@ struct ctx {
     int primary_hidden;
     unsigned rotation_deg;
     int rotation_sw;
+    unsigned rotation_mode;
+    int dmabuf_sync;
+    int dmabuf_sync_supported;
+    int drm_atomic;
+    uint64_t drm_atomic_seq;
+    uint32_t prop_fb_id;
+    uint32_t prop_crtc_id;
+    uint32_t prop_src_x;
+    uint32_t prop_src_y;
+    uint32_t prop_src_w;
+    uint32_t prop_src_h;
+    uint32_t prop_crtc_x;
+    uint32_t prop_crtc_y;
+    uint32_t prop_crtc_w;
+    uint32_t prop_crtc_h;
     struct rot_buf rot[ROT_BUFS];
     unsigned rot_next;
     uint8_t *stage_y;
@@ -188,8 +225,25 @@ struct ctx {
     unsigned rot_copy_n;
     double setplane_ms_sum;
     unsigned setplane_n;
+    double flip_wait_ms_sum;
+    unsigned flip_wait_n;
+    FILE *trace_fp;
+    uint64_t trace_present_n;
+    uint64_t trace_flip_n;
+    uint64_t trace_flip_mismatch_n;
+    uint64_t trace_flip_unmatched_n;
+    uint64_t kms_ebusy_n;
+    uint64_t kms_prepare_ns_sum;
+    uint64_t kms_commit_ns_sum;
+    unsigned kms_prepare_n;
+    unsigned kms_commit_n;
+    unsigned max_pending_flips;
+    const char *dump_rot_dir;
+    int dump_rot_frames;
+    int dump_rot_count;
     int recover_sleep_ms;
     int recv_buf_kb;
+    int source_hold;
     int start_gate;
     int gate_frames;
     int gate_open;
@@ -224,6 +278,32 @@ struct ctx {
     int prev_idx;
 };
 
+struct present_times {
+    int dmabuf_sync_supported;
+    uint64_t dmabuf_sync_begin_start_ns;
+    uint64_t dmabuf_sync_begin_end_ns;
+    uint64_t dmabuf_sync_end_start_ns;
+    uint64_t dmabuf_sync_end_end_ns;
+    uint64_t copy_start_ns;
+    uint64_t copy_end_ns;
+    uint64_t rotation_start_ns;
+    uint64_t rotation_end_ns;
+    uint64_t kms_submit_start_ns;
+    uint64_t kms_submit_end_ns;
+    uint64_t flip_wait_start_ns;
+    uint64_t flip_wait_end_ns;
+    uint64_t kms_prepare_start_ns;
+    uint64_t kms_prepare_end_ns;
+    uint64_t kms_commit_start_ns;
+    uint64_t kms_commit_end_ns;
+    int kms_commit_rc;
+    int kms_ebusy;
+    unsigned pending_flip_depth;
+    uint32_t source_fb;
+    uint32_t presented_fb;
+    int flip_pending;
+};
+
 static void ctx_init(struct ctx *c) {
     memset(c, 0, sizeof(*c));
     c->video_fd = -1;
@@ -241,7 +321,137 @@ static void ctx_init(struct ctx *c) {
         c->held[i].dmabuf[0] = c->held[i].dmabuf[1] = -1;
 }
 
+static void trace_header(FILE *fp) {
+    fprintf(fp,
+            "kind,frame,seq,session,au_flags,au_bytes,rot_mode,source_fb,"
+            "presented_fb,au_queue_depth,input_inflight,backlog,seq_gaps,"
+            "t_pipeline_send_ns,t_worker_recv_ns,t_decoder_enqueue_ns,"
+            "t_decoder_dequeue_ns,t_dmabuf_sync_begin_start_ns,"
+            "t_dmabuf_sync_begin_end_ns,t_dmabuf_sync_end_start_ns,"
+            "t_dmabuf_sync_end_end_ns,t_copy_start_ns,t_copy_end_ns,"
+            "t_rotation_start_ns,t_rotation_end_ns,t_kms_submit_start_ns,"
+            "t_kms_submit_end_ns,t_kms_flip_event_ns,kms_flip_sequence,"
+            "kms_flip_tv_ns,dma_sync_supported,flip_pending,flip_matched,"
+            "t_flip_slot_wait_start_ns,t_flip_slot_wait_end_ns,"
+            "t_kms_prepare_start_ns,t_kms_prepare_end_ns,"
+            "t_kms_commit_start_ns,t_kms_commit_end_ns,"
+            "kms_commit_rc,kms_ebusy,pending_flip_depth\n");
+}
+
+static void trace_present(struct ctx *c, const struct fed_au *fed,
+                          uint64_t frame, int session, int backlog,
+                          int skipped, uint64_t dequeue_ns,
+                          const struct present_times *pt) {
+    if (!c->trace_fp) return;
+    int au_queue_depth = c->fed_head - c->fed_tail;
+    int input_inflight = (int)c->num_out - c->n_out_free;
+    fprintf(c->trace_fp,
+            "present,%llu,%u,%d,%u,%u,%u,%u,%u,%d,%d,%d,%u,"
+            "%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,"
+            "%llu,%llu,-1,-1,-1,%d,%d,0,"
+            "%llu,%llu,%llu,%llu,%llu,%llu,%d,%d,%u\n",
+            (unsigned long long)frame,
+            fed ? fed->seq : 0u,
+            session,
+            fed ? fed->flags : 0u,
+            fed ? fed->bytes : 0u,
+            c->rotation_mode,
+            pt->source_fb,
+            pt->presented_fb,
+            au_queue_depth,
+            input_inflight,
+            backlog,
+            c->seq_gaps,
+            (unsigned long long)(fed ? fed->send_ns : 0),
+            (unsigned long long)(fed ? fed->recv_ns : 0),
+            (unsigned long long)(fed ? fed->enqueue_ns : 0),
+            (unsigned long long)dequeue_ns,
+            (unsigned long long)pt->dmabuf_sync_begin_start_ns,
+            (unsigned long long)pt->dmabuf_sync_begin_end_ns,
+            (unsigned long long)pt->dmabuf_sync_end_start_ns,
+            (unsigned long long)pt->dmabuf_sync_end_end_ns,
+            (unsigned long long)pt->copy_start_ns,
+            (unsigned long long)pt->copy_end_ns,
+            (unsigned long long)pt->rotation_start_ns,
+            (unsigned long long)pt->rotation_end_ns,
+            (unsigned long long)pt->kms_submit_start_ns,
+            (unsigned long long)pt->kms_submit_end_ns,
+            pt->dmabuf_sync_supported,
+            pt->flip_pending,
+            (unsigned long long)pt->flip_wait_start_ns,
+            (unsigned long long)pt->flip_wait_end_ns,
+            (unsigned long long)pt->kms_prepare_start_ns,
+            (unsigned long long)pt->kms_prepare_end_ns,
+            (unsigned long long)pt->kms_commit_start_ns,
+            (unsigned long long)pt->kms_commit_end_ns,
+            pt->kms_commit_rc,
+            pt->kms_ebusy,
+            pt->pending_flip_depth);
+    (void)skipped;
+    c->trace_present_n++;
+}
+
+static void trace_flip(struct ctx *c, const struct rot_buf *rb,
+                       uint64_t event_read_ns, uint32_t event_sequence,
+                       uint64_t event_tv_ns) {
+    if (!c->trace_fp || !rb->pending) return;
+    int matched = rb->pending_fb_id == rb->fb_id;
+    fprintf(c->trace_fp,
+            "flip,%llu,%llu,%llu,%u,%u,%u,%u,%u,-1,-1,-1,-1,"
+            "-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,"
+            "%llu,%llu,%llu,%u,%llu,%d,1,%d,0,0,0,0,0,0,0,0,0\n",
+            (unsigned long long)rb->pending_frame,
+            (unsigned long long)rb->pending_seq,
+            (unsigned long long)rb->pending_session,
+            0u, 0u, rb->pending_rot_mode, rb->fb_id, rb->fb_id,
+            (unsigned long long)rb->pending_submit_start_ns,
+            (unsigned long long)rb->pending_submit_end_ns,
+            (unsigned long long)event_read_ns,
+            event_sequence,
+            (unsigned long long)event_tv_ns,
+            c->dmabuf_sync_supported,
+            matched);
+    c->trace_flip_n++;
+    if (!matched) c->trace_flip_mismatch_n++;
+}
+
 /* ---------------- read-only inventory ---------------- */
+
+static void inventory_print_plane_props(int fd, uint32_t plane_id) {
+    struct drm_mode_obj_get_properties op;
+    memset(&op, 0, sizeof(op));
+    op.obj_id = plane_id;
+    op.obj_type = DRM_MODE_OBJECT_PLANE;
+    if (xioctl(fd, DRM_IOCTL_MODE_OBJ_GETPROPERTIES, &op) < 0) return;
+    uint32_t nprops = op.count_props;
+    uint32_t *props = calloc(nprops ? nprops : 1, sizeof(*props));
+    uint64_t *values = calloc(nprops ? nprops : 1, sizeof(*values));
+    if (!props || !values) {
+        free(props);
+        free(values);
+        return;
+    }
+    op.props_ptr = (uint64_t)(uintptr_t)props;
+    op.prop_values_ptr = (uint64_t)(uintptr_t)values;
+    op.count_props = nprops;
+    if (xioctl(fd, DRM_IOCTL_MODE_OBJ_GETPROPERTIES, &op) < 0) {
+        free(props);
+        free(values);
+        return;
+    }
+    printf("  props:");
+    for (uint32_t i = 0; i < nprops; i++) {
+        struct drm_mode_get_property gp;
+        memset(&gp, 0, sizeof(gp));
+        gp.prop_id = props[i];
+        if (xioctl(fd, DRM_IOCTL_MODE_GETPROPERTY, &gp) == 0)
+            printf(" %s=%u/%llu", gp.name, props[i],
+                   (unsigned long long)values[i]);
+    }
+    printf("\n");
+    free(props);
+    free(values);
+}
 
 static void inventory(void) {
     char path[64];
@@ -290,10 +500,13 @@ static void inventory(void) {
         close(fd);
     }
 
-    int dfd = open("/dev/dri/card0", O_RDWR);
+    int dfd = open("/dev/dri/card0", O_RDWR | O_NONBLOCK);
     if (dfd < 0) { perror("open /dev/dri/card0"); return; }
     struct drm_set_client_cap cap = { .capability = DRM_CLIENT_CAP_UNIVERSAL_PLANES, .value = 1 };
     xioctl(dfd, DRM_IOCTL_SET_CLIENT_CAP, &cap);
+    struct drm_set_client_cap atomic_cap = { .capability = DRM_CLIENT_CAP_ATOMIC, .value = 1 };
+    int atomic_ok = xioctl(dfd, DRM_IOCTL_SET_CLIENT_CAP, &atomic_cap) == 0;
+    printf("atomic=%s\n", atomic_ok ? "yes" : "no");
     struct drm_mode_card_res res;
     memset(&res, 0, sizeof(res));
     if (xioctl(dfd, DRM_IOCTL_MODE_GETRESOURCES, &res) < 0) { perror("GETRESOURCES"); close(dfd); return; }
@@ -358,6 +571,8 @@ static void inventory(void) {
             for (uint32_t k = 0; k < nf; k++)
                 printf(" %.4s", (const char *)&fmts[k]);
             printf("\n");
+            if (atomic_ok)
+                inventory_print_plane_props(dfd, planes[i]);
         }
         free(fmts);
     }
@@ -499,7 +714,273 @@ static int drm_set_rotation(struct ctx *c, uint32_t plane_id, unsigned deg) {
     return 0;
 }
 
+static int drm_find_plane_props(struct ctx *c) {
+    struct drm_mode_obj_get_properties op;
+    memset(&op, 0, sizeof(op));
+    op.obj_id = c->plane_id;
+    op.obj_type = DRM_MODE_OBJECT_PLANE;
+    if (xioctl(c->card_fd, DRM_IOCTL_MODE_OBJ_GETPROPERTIES, &op) < 0) {
+        perror("OBJ_GETPROPERTIES(plane count)");
+        return -1;
+    }
+    uint32_t nprops = op.count_props;
+    if (!nprops) {
+        fprintf(stderr, "atomic: plane %u has no properties\n", c->plane_id);
+        return -1;
+    }
+    uint32_t *props = calloc(nprops, sizeof(*props));
+    uint64_t *values = calloc(nprops, sizeof(*values));
+    if (!props || !values) {
+        free(props);
+        free(values);
+        fprintf(stderr, "atomic: property allocation failed\n");
+        return -1;
+    }
+    op.props_ptr = (uint64_t)(uintptr_t)props;
+    op.prop_values_ptr = (uint64_t)(uintptr_t)values;
+    op.count_props = nprops;
+    if (xioctl(c->card_fd, DRM_IOCTL_MODE_OBJ_GETPROPERTIES, &op) < 0) {
+        perror("OBJ_GETPROPERTIES(plane values)");
+        free(props);
+        free(values);
+        return -1;
+    }
+
+    struct wanted_prop {
+        const char *name;
+        uint32_t *slot;
+    } wanted[] = {
+        { "FB_ID", &c->prop_fb_id },
+        { "CRTC_ID", &c->prop_crtc_id },
+        { "SRC_X", &c->prop_src_x },
+        { "SRC_Y", &c->prop_src_y },
+        { "SRC_W", &c->prop_src_w },
+        { "SRC_H", &c->prop_src_h },
+        { "CRTC_X", &c->prop_crtc_x },
+        { "CRTC_Y", &c->prop_crtc_y },
+        { "CRTC_W", &c->prop_crtc_w },
+        { "CRTC_H", &c->prop_crtc_h },
+    };
+    const size_t nwanted = sizeof(wanted) / sizeof(wanted[0]);
+    int found = 0;
+    for (uint32_t i = 0; i < nprops; i++) {
+        struct drm_mode_get_property gp;
+        memset(&gp, 0, sizeof(gp));
+        gp.prop_id = props[i];
+        if (xioctl(c->card_fd, DRM_IOCTL_MODE_GETPROPERTY, &gp) < 0)
+            continue;
+        for (size_t k = 0; k < nwanted; k++) {
+            if (!strcmp(gp.name, wanted[k].name)) {
+                *wanted[k].slot = props[i];
+                found++;
+                break;
+            }
+        }
+    }
+    free(props);
+    free(values);
+    if ((size_t)found != nwanted) {
+        fprintf(stderr, "atomic: plane %u is missing required properties (%d/%zu)\n",
+                c->plane_id, found, nwanted);
+        return -1;
+    }
+    return 0;
+}
+
+static int drm_atomic_init(struct ctx *c) {
+    if (!c->drm_atomic) return -1;
+    if (drm_find_plane_props(c) < 0) {
+        c->drm_atomic = 0;
+        return -1;
+    }
+    printf("atomic: enabled plane=%u FB_ID=%u CRTC_ID=%u "
+           "SRC_X=%u SRC_Y=%u SRC_W=%u SRC_H=%u "
+           "CRTC_X=%u CRTC_Y=%u CRTC_W=%u CRTC_H=%u\n",
+           c->plane_id, c->prop_fb_id, c->prop_crtc_id,
+           c->prop_src_x, c->prop_src_y, c->prop_src_w, c->prop_src_h,
+           c->prop_crtc_x, c->prop_crtc_y, c->prop_crtc_w, c->prop_crtc_h);
+    return 0;
+}
+
+static int drm_any_flip_pending(struct ctx *c) {
+    for (unsigned int i = 0; i < ROT_BUFS; i++)
+        if (c->rot[i].pending) return 1;
+    return 0;
+}
+
+static unsigned drm_pending_count(struct ctx *c) {
+    unsigned count = 0;
+    for (unsigned int i = 0; i < ROT_BUFS; i++)
+        if (c->rot[i].pending) count++;
+    return count;
+}
+
+static void drm_note_flip_complete(struct ctx *c, uint64_t token,
+                                   uint64_t event_read_ns,
+                                   uint32_t event_sequence,
+                                   uint64_t event_tv_ns) {
+    int matched = 0;
+    for (unsigned int i = 0; i < ROT_BUFS; i++) {
+        if (c->rot[i].pending && c->rot[i].pending_token == token) {
+            trace_flip(c, &c->rot[i], event_read_ns, event_sequence, event_tv_ns);
+            c->rot[i].pending = 0;
+            matched = 1;
+            break;
+        }
+    }
+    if (!matched) c->trace_flip_unmatched_n++;
+}
+
+static int drm_read_flip_events(struct ctx *c, int timeout_ms) {
+    struct pollfd pfd = { .fd = c->card_fd, .events = POLLIN };
+    int pr = poll(&pfd, 1, timeout_ms);
+    if (pr < 0) {
+        if (errno == EINTR) return 0;
+        perror("poll(DRM events)");
+        return -1;
+    }
+    if (pr == 0) return 0;
+    if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+        fprintf(stderr, "DRM event poll error revents=0x%x\n", pfd.revents);
+        return -1;
+    }
+
+    for (;;) {
+        unsigned char buf[4096];
+        uint64_t event_read_ns = mono_ns();
+        ssize_t n = read(c->card_fd, buf, sizeof(buf));
+        if (n < 0) {
+            if (errno == EAGAIN || errno == EINTR) break;
+            perror("read(DRM events)");
+            return -1;
+        }
+        if (n == 0) break;
+        size_t off = 0;
+        while (off + sizeof(struct drm_event) <= (size_t)n) {
+            struct drm_event *ev = (struct drm_event *)(buf + off);
+            if (ev->length < sizeof(struct drm_event) ||
+                off + ev->length > (size_t)n)
+                break;
+            if (ev->type == DRM_EVENT_FLIP_COMPLETE &&
+                ev->length >= sizeof(struct drm_event_vblank)) {
+                struct drm_event_vblank *vb = (struct drm_event_vblank *)ev;
+                uint64_t event_tv_ns = (uint64_t)vb->tv_sec * 1000000000ull +
+                                       (uint64_t)vb->tv_usec * 1000ull;
+                drm_note_flip_complete(c, vb->user_data, event_read_ns,
+                                       vb->sequence, event_tv_ns);
+            }
+            off += ev->length;
+        }
+    }
+    return 1;
+}
+
+static int drm_wait_flip_slot(struct ctx *c, unsigned int slot, int timeout_ms) {
+    double deadline = now_ms() + timeout_ms;
+    while (c->rot[slot].pending && !g_stop) {
+        int left = (int)(deadline - now_ms());
+        if (left <= 0) break;
+        int r = drm_read_flip_events(c, left);
+        if (r < 0) return -1;
+        if (r == 0) break;
+    }
+    if (c->rot[slot].pending) {
+        fprintf(stderr, "DRM flip wait timeout slot=%u token=%llu\n",
+                slot, (unsigned long long)c->rot[slot].pending_token);
+        return -1;
+    }
+    return 0;
+}
+
+static int drm_wait_all_flips(struct ctx *c, int timeout_ms) {
+    double deadline = now_ms() + timeout_ms;
+    while (drm_any_flip_pending(c) && !g_stop) {
+        int left = (int)(deadline - now_ms());
+        if (left <= 0) break;
+        int r = drm_read_flip_events(c, left);
+        if (r < 0) return -1;
+        if (r == 0) break;
+    }
+    if (drm_any_flip_pending(c)) {
+        fprintf(stderr, "DRM flip wait timeout; pending:");
+        for (unsigned int i = 0; i < ROT_BUFS; i++)
+            if (c->rot[i].pending)
+                fprintf(stderr, " slot%u=%llu", i,
+                        (unsigned long long)c->rot[i].pending_token);
+        fprintf(stderr, "\n");
+        return -1;
+    }
+    return 0;
+}
+
+static int drm_atomic_present(struct ctx *c, struct present_times *pt,
+                              uint32_t fb_id,
+                              uint32_t crtc_w, uint32_t crtc_h,
+                              unsigned int slot, uint64_t frame,
+                              uint64_t seq, uint64_t session,
+                              unsigned int rot_mode,
+                              uint64_t submit_start_ns) {
+    pt->kms_prepare_start_ns = mono_ns();
+    uint32_t objs[1] = { c->plane_id };
+    uint32_t counts[1] = { 10 };
+    uint32_t props[10] = {
+        c->prop_fb_id, c->prop_crtc_id,
+        c->prop_src_x, c->prop_src_y, c->prop_src_w, c->prop_src_h,
+        c->prop_crtc_x, c->prop_crtc_y, c->prop_crtc_w, c->prop_crtc_h,
+    };
+    uint64_t values[10] = {
+        fb_id,
+        c->crtc_id,
+        0,
+        0,
+        (uint64_t)c->video_w << 16,
+        (uint64_t)c->video_h << 16,
+        0,
+        0,
+        crtc_w,
+        crtc_h,
+    };
+    uint64_t token = ((++c->drm_atomic_seq) << 8) | (uint64_t)(slot & 0xffu);
+    struct drm_mode_atomic at;
+    memset(&at, 0, sizeof(at));
+    at.flags = DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT;
+    at.count_objs = 1;
+    at.objs_ptr = (uint64_t)(uintptr_t)objs;
+    at.count_props_ptr = (uint64_t)(uintptr_t)counts;
+    at.props_ptr = (uint64_t)(uintptr_t)props;
+    at.prop_values_ptr = (uint64_t)(uintptr_t)values;
+    at.user_data = token;
+    pt->pending_flip_depth = drm_pending_count(c);
+    if (pt->pending_flip_depth > c->max_pending_flips)
+        c->max_pending_flips = pt->pending_flip_depth;
+    pt->kms_prepare_end_ns = mono_ns();
+    pt->kms_commit_start_ns = pt->kms_prepare_end_ns;
+    int rc = xioctl(c->card_fd, DRM_IOCTL_MODE_ATOMIC, &at);
+    pt->kms_commit_end_ns = mono_ns();
+    c->kms_prepare_ns_sum += pt->kms_prepare_end_ns - pt->kms_prepare_start_ns;
+    c->kms_prepare_n++;
+    c->kms_commit_ns_sum += pt->kms_commit_end_ns - pt->kms_commit_start_ns;
+    c->kms_commit_n++;
+    pt->kms_commit_rc = rc < 0 ? -errno : 0;
+    pt->kms_ebusy = rc < 0 && errno == EBUSY;
+    if (pt->kms_ebusy) c->kms_ebusy_n++;
+    if (rc < 0)
+        return -errno;
+    c->rot[slot].pending = 1;
+    c->rot[slot].pending_token = token;
+    c->rot[slot].pending_frame = frame;
+    c->rot[slot].pending_seq = seq;
+    c->rot[slot].pending_session = session;
+    c->rot[slot].pending_rot_mode = rot_mode;
+    c->rot[slot].pending_submit_start_ns = submit_start_ns;
+    c->rot[slot].pending_submit_end_ns = mono_ns();
+    c->rot[slot].pending_fb_id = fb_id;
+    return 0;
+}
+
 static void drm_free_rot_buffers(struct ctx *c) {
+    if (c->drm_atomic)
+        drm_wait_all_flips(c, 1000);
     for (unsigned int i = 0; i < ROT_BUFS; i++) {
         struct rot_buf *rb = &c->rot[i];
         if (rb->fb_id && c->card_fd >= 0) {
@@ -522,6 +1003,15 @@ static void drm_free_rot_buffers(struct ctx *c) {
             rb->maplen[p] = 0;
             rb->pitch[p] = 0;
         }
+        rb->pending = 0;
+        rb->pending_token = 0;
+        rb->pending_frame = 0;
+        rb->pending_seq = 0;
+        rb->pending_session = 0;
+        rb->pending_submit_start_ns = 0;
+        rb->pending_submit_end_ns = 0;
+        rb->pending_fb_id = 0;
+        rb->pending_rot_mode = 0;
     }
     c->rot_next = 0;
     free(c->stage_y);
@@ -711,8 +1201,207 @@ static void rotate_nv12_180(struct rot_buf *rb,
                          src_uv + (size_t)y * src_uv_pitch, uw);
 }
 
+/* B: read the DMA-BUF in reverse order and write the scratch framebuffer in
+ * forward order.  This keeps destination writes sequential but makes source
+ * reads descend by row and reverse within each row. */
+static void rotate_nv12_180_reverse_read(struct rot_buf *rb,
+                                         const uint8_t *src_y,
+                                         uint32_t src_y_pitch,
+                                         const uint8_t *src_uv,
+                                         uint32_t src_uv_pitch,
+                                         uint32_t w, uint32_t h) {
+    uint32_t uw = (w + 1) / 2;
+    uint32_t uh = (h + 1) / 2;
+    for (uint32_t y = 0; y < h; y++)
+        reverse_bytes_row((uint8_t *)rb->map[0] + (size_t)y * rb->pitch[0],
+                          src_y + (size_t)(h - 1 - y) * src_y_pitch, w);
+    for (uint32_t y = 0; y < uh; y++)
+        reverse_uv_pairs((uint8_t *)rb->map[1] + (size_t)y * rb->pitch[1],
+                         src_uv + (size_t)(uh - 1 - y) * src_uv_pitch, uw);
+}
+
+/* C-tiled: read small source tiles into a cache-resident scratch tile, then
+ * write the rotated tile into the scanout buffer.  This keeps the expensive
+ * uncached DMA-BUF read and scanout write, but avoids the full-frame staging
+ * copy used by A.  Tile dimensions are deliberately small enough for L1. */
+static void copy_bytes_fast(uint8_t *dst, const uint8_t *src, size_t n);
+
+#ifndef ROT_TILE_Y
+#define ROT_TILE_Y 64u
+#endif
+#ifndef ROT_TILE_UV_PAIRS
+#define ROT_TILE_UV_PAIRS 32u
+#endif
+#ifndef ROT_TILE_UV_ROWS
+#define ROT_TILE_UV_ROWS 32u
+#endif
+
+static void rotate_nv12_180_tiled(struct rot_buf *rb,
+                                  const uint8_t *src_y, uint32_t src_y_pitch,
+                                  const uint8_t *src_uv, uint32_t src_uv_pitch,
+                                  uint32_t w, uint32_t h) {
+    uint32_t uw = (w + 1u) / 2u;
+    uint32_t uh = (h + 1u) / 2u;
+    uint8_t tile_y[ROT_TILE_Y * ROT_TILE_Y];
+    uint8_t tile_uv[ROT_TILE_UV_PAIRS * ROT_TILE_UV_ROWS * 2u];
+
+    for (uint32_t sy = 0; sy < h; sy += ROT_TILE_Y) {
+        uint32_t th = h - sy < ROT_TILE_Y ? h - sy : ROT_TILE_Y;
+        for (uint32_t sx = 0; sx < w; sx += ROT_TILE_Y) {
+            uint32_t tw = w - sx < ROT_TILE_Y ? w - sx : ROT_TILE_Y;
+            for (uint32_t ty = 0; ty < th; ty++)
+                copy_bytes_fast(tile_y + (size_t)ty * ROT_TILE_Y,
+                                src_y + (size_t)(sy + ty) * src_y_pitch + sx, tw);
+            for (uint32_t dy = 0; dy < th; dy++) {
+                uint8_t *dst = (uint8_t *)rb->map[0]
+                    + (size_t)(h - sy - th + dy) * rb->pitch[0]
+                    + (w - sx - tw);
+                reverse_bytes_row(dst, tile_y + (size_t)(th - 1u - dy) * ROT_TILE_Y, tw);
+            }
+        }
+    }
+
+    for (uint32_t sy = 0; sy < uh; sy += ROT_TILE_UV_ROWS) {
+        uint32_t th = uh - sy < ROT_TILE_UV_ROWS ? uh - sy : ROT_TILE_UV_ROWS;
+        for (uint32_t sx = 0; sx < uw; sx += ROT_TILE_UV_PAIRS) {
+            uint32_t tw = uw - sx < ROT_TILE_UV_PAIRS ? uw - sx : ROT_TILE_UV_PAIRS;
+            for (uint32_t ty = 0; ty < th; ty++)
+                copy_bytes_fast(tile_uv + (size_t)ty * ROT_TILE_UV_PAIRS * 2u,
+                                src_uv + (size_t)(sy + ty) * src_uv_pitch + (size_t)sx * 2u,
+                                (size_t)tw * 2u);
+            for (uint32_t dy = 0; dy < th; dy++) {
+                uint8_t *dst = (uint8_t *)rb->map[1]
+                    + (size_t)(uh - sy - th + dy) * rb->pitch[1]
+                    + (size_t)(uw - sx - tw) * 2u;
+                reverse_uv_pairs(dst, tile_uv + (size_t)(th - 1u - dy) * ROT_TILE_UV_PAIRS * 2u, tw);
+            }
+        }
+    }
+}
+
+struct rot_thread_arg {
+    struct rot_buf *rb;
+    const uint8_t *src_y;
+    uint32_t src_y_pitch;
+    const uint8_t *src_uv;
+    uint32_t src_uv_pitch;
+    uint32_t w;
+    uint32_t h;
+    uint32_t uw;
+    uint32_t uh;
+    uint32_t y_start;
+    uint32_t y_end;
+    uint32_t uv_start;
+    uint32_t uv_end;
+    int do_y;
+    int do_uv;
+};
+
+static void rotate_y_range(const struct rot_thread_arg *a) {
+    for (uint32_t sy = a->y_start; sy < a->y_end; sy += ROT_TILE_Y) {
+        uint32_t th = a->y_end - sy < ROT_TILE_Y ? a->y_end - sy : ROT_TILE_Y;
+        for (uint32_t sx = 0; sx < a->w; sx += ROT_TILE_Y) {
+            uint32_t tw = a->w - sx < ROT_TILE_Y ? a->w - sx : ROT_TILE_Y;
+            uint8_t tile_y[ROT_TILE_Y * ROT_TILE_Y];
+            for (uint32_t ty = 0; ty < th; ty++)
+                copy_bytes_fast(tile_y + (size_t)ty * ROT_TILE_Y,
+                                a->src_y + (size_t)(sy + ty) * a->src_y_pitch + sx, tw);
+            for (uint32_t dy = 0; dy < th; dy++) {
+                uint8_t *dst = (uint8_t *)a->rb->map[0]
+                    + (size_t)(a->h - sy - th + dy) * a->rb->pitch[0]
+                    + (a->w - sx - tw);
+                reverse_bytes_row(dst, tile_y + (size_t)(th - 1u - dy) * ROT_TILE_Y, tw);
+            }
+        }
+    }
+}
+
+static void rotate_uv_range(const struct rot_thread_arg *a) {
+    for (uint32_t sy = a->uv_start; sy < a->uv_end; sy += ROT_TILE_UV_ROWS) {
+        uint32_t th = a->uv_end - sy < ROT_TILE_UV_ROWS ? a->uv_end - sy : ROT_TILE_UV_ROWS;
+        for (uint32_t sx = 0; sx < a->uw; sx += ROT_TILE_UV_PAIRS) {
+            uint32_t tw = a->uw - sx < ROT_TILE_UV_PAIRS ? a->uw - sx : ROT_TILE_UV_PAIRS;
+            uint8_t tile_uv[ROT_TILE_UV_PAIRS * ROT_TILE_UV_ROWS * 2u];
+            for (uint32_t ty = 0; ty < th; ty++)
+                copy_bytes_fast(tile_uv + (size_t)ty * ROT_TILE_UV_PAIRS * 2u,
+                                a->src_uv + (size_t)(sy + ty) * a->src_uv_pitch + (size_t)sx * 2u,
+                                (size_t)tw * 2u);
+            for (uint32_t dy = 0; dy < th; dy++) {
+                uint8_t *dst = (uint8_t *)a->rb->map[1]
+                    + (size_t)(a->uh - sy - th + dy) * a->rb->pitch[1]
+                    + (size_t)(a->uw - sx - tw) * 2u;
+                reverse_uv_pairs(dst, tile_uv + (size_t)(th - 1u - dy) * ROT_TILE_UV_PAIRS * 2u, tw);
+            }
+        }
+    }
+}
+
+static void *rotate_thread_main(void *opaque) {
+    struct rot_thread_arg *a = opaque;
+    if (a->do_y) rotate_y_range(a);
+    if (a->do_uv) rotate_uv_range(a);
+    return NULL;
+}
+
+/* Four independent row ranges: two for Y and two for UV.  The ranges write
+ * disjoint scanout rows, so the threads need no locking after DMA-BUF sync. */
+static int rotate_nv12_180_tiled_parallel(struct rot_buf *rb,
+                                          const uint8_t *src_y, uint32_t src_y_pitch,
+                                          const uint8_t *src_uv, uint32_t src_uv_pitch,
+                                          uint32_t w, uint32_t h) {
+    uint32_t uw = (w + 1u) / 2u;
+    uint32_t uh = (h + 1u) / 2u;
+    uint32_t y_mid = h / 2u;
+    uint32_t uv_mid = uh / 2u;
+    struct rot_thread_arg args[4] = {
+        { rb, src_y, src_y_pitch, src_uv, src_uv_pitch, w, h, uw, uh, 0, y_mid, 0, 0, 1, 0 },
+        { rb, src_y, src_y_pitch, src_uv, src_uv_pitch, w, h, uw, uh, y_mid, h, 0, 0, 1, 0 },
+        { rb, src_y, src_y_pitch, src_uv, src_uv_pitch, w, h, uw, uh, 0, 0, 0, uv_mid, 0, 1 },
+        { rb, src_y, src_y_pitch, src_uv, src_uv_pitch, w, h, uw, uh, 0, 0, uv_mid, uh, 0, 1 },
+    };
+    pthread_t threads[4];
+    int created = 0;
+    for (int i = 0; i < 4; i++) {
+        if (pthread_create(&threads[i], NULL, rotate_thread_main, &args[i]) != 0)
+            break;
+        created++;
+    }
+    for (int i = 0; i < created; i++)
+        pthread_join(threads[i], NULL);
+    if (created != 4) {
+        rotate_nv12_180_tiled(rb, src_y, src_y_pitch, src_uv, src_uv_pitch, w, h);
+    }
+    return 0;
+}
+
+static int dmabuf_sync_ioctl(struct ctx *c, int idx, unsigned int flags) {
+    if (!c->dmabuf_sync || c->dmabuf_sync_supported == 0) return 0;
+    for (unsigned int p = 0; p < 2; p++) {
+        int fd = c->cap[idx].dmabuf[p];
+        if (fd < 0) continue;
+        struct dma_buf_sync sync;
+        memset(&sync, 0, sizeof(sync));
+        sync.flags = flags;
+        if (ioctl(fd, DMA_BUF_IOCTL_SYNC, &sync) < 0) {
+            if (errno == ENOTTY || errno == EINVAL || errno == ENOSYS) {
+                if (c->dmabuf_sync_supported != 0)
+                    printf("DMA_BUF_IOCTL_SYNC unsupported (%s); continuing without explicit sync\n",
+                           strerror(errno));
+                c->dmabuf_sync_supported = 0;
+                return 0;
+            }
+            perror("DMA_BUF_IOCTL_SYNC");
+            return -1;
+        }
+    }
+    c->dmabuf_sync_supported = 1;
+    return 0;
+}
+
 static void copy_bytes_fast(uint8_t *dst, const uint8_t *src, size_t n) {
-#if HAVE_NEON
+#if defined(USE_MEMCPY_COPY)
+    memcpy(dst, src, n);
+#elif HAVE_NEON
     size_t i = 0;
     for (; i + 128 <= n; i += 128) {
         if (i + 256 < n) __builtin_prefetch(src + i + 256, 0, 3);
@@ -772,7 +1461,7 @@ static int copy_nv12_to_stage(struct ctx *c, int idx) {
 }
 
 static int drm_setup(struct ctx *c) {
-    c->card_fd = open("/dev/dri/card0", O_RDWR);
+    c->card_fd = open("/dev/dri/card0", O_RDWR | O_NONBLOCK);
     if (c->card_fd < 0) { perror("open /dev/dri/card0"); return -1; }
     for (int i = 0; i < 20; i++) {
         if (xioctl(c->card_fd, DRM_IOCTL_SET_MASTER, 0) == 0) { c->master = 1; break; }
@@ -782,6 +1471,16 @@ static int drm_setup(struct ctx *c) {
 
     struct drm_set_client_cap cap = { .capability = DRM_CLIENT_CAP_UNIVERSAL_PLANES, .value = 1 };
     if (xioctl(c->card_fd, DRM_IOCTL_SET_CLIENT_CAP, &cap) < 0) { perror("SET_CLIENT_CAP"); return -1; }
+
+    c->drm_atomic = 0;
+    struct drm_set_client_cap atomic_cap = { .capability = DRM_CLIENT_CAP_ATOMIC, .value = 1 };
+    if (xioctl(c->card_fd, DRM_IOCTL_SET_CLIENT_CAP, &atomic_cap) == 0) {
+        c->drm_atomic = 1;
+        printf("atomic: client capability enabled\n");
+    } else {
+        printf("atomic: client capability unavailable (%s); using legacy SETPLANE\n",
+               strerror(errno));
+    }
 
     c->plane_id = find_nv12_plane(c->card_fd, &c->primary_id);
     if (!c->plane_id) { fprintf(stderr, "no NV12 DRM plane\n"); return -1; }
@@ -912,6 +1611,12 @@ static int drm_setup(struct ctx *c) {
         fprintf(stderr, "software rotation disabled; continuing with default orientation\n");
         c->rotation_sw = 0;
     }
+    if (c->rotation_sw && c->drm_atomic) {
+        if (drm_atomic_init(c) < 0) {
+            printf("atomic: disabled; using legacy SETPLANE\n");
+            c->drm_atomic = 0;
+        }
+    }
     printf("drm: crtc=%u plane=%u primary=%u display=%ux%u primary_fb=%u\n",
            c->crtc_id, c->plane_id, c->primary_id, c->disp_w, c->disp_h, c->primary_fb_id);
     return 0;
@@ -933,39 +1638,93 @@ static void drm_hide_primary(struct ctx *c) {
 static void held_release(struct ctx *c);
 static int dump_planes(const char *path, const uint8_t *y, const uint8_t *uv,
                        uint32_t w, uint32_t h, uint32_t bpl0, uint32_t bpl1);
+static int dump_rot_frame(struct ctx *c, const struct rot_buf *rb,
+                          uint64_t frame);
+static int dump_frame(struct ctx *c, unsigned int idx, unsigned int seq);
 
-static int drm_present(struct ctx *c, int idx) {
+static int drm_present(struct ctx *c, int idx, uint64_t frame, uint64_t seq,
+                       uint64_t session, struct present_times *pt) {
+    memset(pt, 0, sizeof(*pt));
+    pt->dmabuf_sync_supported = -1;
     if (!c->cap[idx].fb_id) return -1;
+    if (!c->rotation_sw && c->dump_dir &&
+        dump_frame(c, idx, (unsigned int)frame) < 0) return -1;
     uint32_t present_fb = c->cap[idx].fb_id;
+    pt->source_fb = present_fb;
+    int rot_slot = -1;
     if (c->rotation_sw) {
-        struct rot_buf *rb = &c->rot[c->rot_next];
+        rot_slot = (int)c->rot_next;
+        struct rot_buf *rb = &c->rot[rot_slot];
         if (!rb->map[0] || !rb->map[1] ||
             !c->cap[idx].map[0] || !c->cap[idx].map[1]) {
             fprintf(stderr, "rotation buffers unavailable (idx=%d)\n", idx);
             return -1;
         }
+        if (c->drm_atomic) {
+            if (drm_read_flip_events(c, 0) < 0) return -1;
+            pt->flip_wait_start_ns = mono_ns();
+            double wait_t0 = now_ms();
+            if (drm_wait_flip_slot(c, (unsigned int)rot_slot, 500) < 0)
+                return -1;
+            double wait_t1 = now_ms();
+            pt->flip_wait_end_ns = mono_ns();
+            c->flip_wait_ms_sum += wait_t1 - wait_t0;
+            c->flip_wait_n++;
+        }
+        if (c->dmabuf_sync) {
+            pt->dmabuf_sync_begin_start_ns = mono_ns();
+            if (dmabuf_sync_ioctl(c, idx, DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ) < 0)
+                return -1;
+            pt->dmabuf_sync_begin_end_ns = mono_ns();
+            pt->dmabuf_sync_supported = c->dmabuf_sync_supported;
+        }
+        if (c->dump_dir && dump_frame(c, idx, (unsigned int)frame) < 0) return -1;
         int staged = 0;
-        if (c->stage_y && c->stage_uv) {
-            double copy_t0 = now_ms();
+        if (c->rotation_mode == ROT_MODE_A_STAGED && c->stage_y && c->stage_uv) {
+            pt->copy_start_ns = mono_ns();
             staged = copy_nv12_to_stage(c, idx) == 0;
-            double copy_t1 = now_ms();
+            pt->copy_end_ns = mono_ns();
             if (staged) {
-                c->stage_copy_ms_sum += copy_t1 - copy_t0;
+                c->stage_copy_ms_sum += (double)(pt->copy_end_ns - pt->copy_start_ns) / 1e6;
                 c->stage_copy_n++;
             }
         }
-        double rot_t0 = now_ms();
-        if (staged)
+        pt->rotation_start_ns = mono_ns();
+        if (c->rotation_mode == ROT_MODE_B_REVERSE_READ) {
+            rotate_nv12_180_reverse_read(rb, c->cap[idx].map[0], c->bpl[0],
+                                         c->cap[idx].map[1], c->bpl[1],
+                                         c->video_w, c->video_h);
+        } else if (c->rotation_mode == ROT_MODE_C_TILED) {
+            rotate_nv12_180_tiled(rb, c->cap[idx].map[0], c->bpl[0],
+                                  c->cap[idx].map[1], c->bpl[1],
+                                  c->video_w, c->video_h);
+        } else if (c->rotation_mode == ROT_MODE_P_PARALLEL) {
+            rotate_nv12_180_tiled_parallel(rb, c->cap[idx].map[0], c->bpl[0],
+                                           c->cap[idx].map[1], c->bpl[1],
+                                           c->video_w, c->video_h);
+        } else if (staged) {
             rotate_nv12_180(rb, c->stage_y, c->stage_pitch,
                             c->stage_uv, c->stage_pitch,
                             c->video_w, c->video_h);
-        else
+        } else {
             rotate_nv12_180(rb, c->cap[idx].map[0], c->bpl[0],
                             c->cap[idx].map[1], c->bpl[1],
                             c->video_w, c->video_h);
-        double rot_t1 = now_ms();
-        c->rot_copy_ms_sum += rot_t1 - rot_t0;
+        }
+        pt->rotation_end_ns = mono_ns();
+        c->rot_copy_ms_sum += (double)(pt->rotation_end_ns - pt->rotation_start_ns) / 1e6;
         c->rot_copy_n++;
+        if (c->dmabuf_sync) {
+            pt->dmabuf_sync_end_start_ns = mono_ns();
+            if (dmabuf_sync_ioctl(c, idx, DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ) < 0)
+                return -1;
+            pt->dmabuf_sync_end_end_ns = mono_ns();
+            pt->dmabuf_sync_supported = c->dmabuf_sync_supported;
+        }
+        if (c->dump_rot_dir && c->dump_rot_count < c->dump_rot_frames) {
+            if (dump_rot_frame(c, rb, frame) < 0) return -1;
+            c->dump_rot_count++;
+        }
         present_fb = rb->fb_id;
         c->rot_next = (c->rot_next + 1) % ROT_BUFS;
     }
@@ -982,25 +1741,62 @@ static int drm_present(struct ctx *c, int idx) {
     if (c->held_n > 0 && c->held_release_countdown > 0) {
         if (--c->held_release_countdown == 0) held_release(c);
     }
-    struct drm_mode_set_plane sp;
-    memset(&sp, 0, sizeof(sp));
-    sp.plane_id = c->plane_id;
-    sp.crtc_id = c->crtc_id;
-    sp.fb_id = present_fb;
-    sp.crtc_x = 0;
-    sp.crtc_y = 0;
-    sp.crtc_w = c->video_w <= c->disp_w ? c->video_w : c->disp_w;
-    sp.crtc_h = c->video_h <= c->disp_h ? c->video_h : c->disp_h;
-    sp.src_x = 0;
-    sp.src_y = 0;
-    sp.src_w = c->video_w << 16;
-    sp.src_h = c->video_h << 16;
-    /* Blocking commit: on return the previous scanout buffer is released. */
-    double plane_t0 = now_ms();
-    if (xioctl(c->card_fd, DRM_IOCTL_MODE_SETPLANE, &sp) < 0) { perror("SETPLANE"); return -1; }
-    double plane_t1 = now_ms();
-    c->setplane_ms_sum += plane_t1 - plane_t0;
+    uint32_t crtc_w = c->video_w <= c->disp_w ? c->video_w : c->disp_w;
+    uint32_t crtc_h = c->video_h <= c->disp_h ? c->video_h : c->disp_h;
+    int committed = 0;
+    pt->kms_submit_start_ns = mono_ns();
+    if (c->drm_atomic && rot_slot >= 0) {
+        int rc = drm_atomic_present(c, pt, present_fb, crtc_w, crtc_h,
+                                    (unsigned int)rot_slot, frame, seq, session,
+                                    c->rotation_mode, pt->kms_submit_start_ns);
+        if (rc == -EBUSY) {
+            if (drm_wait_all_flips(c, 500) < 0) return -1;
+            rc = drm_atomic_present(c, pt, present_fb, crtc_w, crtc_h,
+                                    (unsigned int)rot_slot, frame, seq, session,
+                                    c->rotation_mode, pt->kms_submit_start_ns);
+        }
+        if (rc == -EINVAL || rc == -ENOSYS) {
+            fprintf(stderr, "atomic commit failed (%s); falling back to legacy SETPLANE\n",
+                    strerror(-rc));
+            if (drm_wait_all_flips(c, 500) < 0) return -1;
+            c->drm_atomic = 0;
+        } else if (rc < 0) {
+            fprintf(stderr, "atomic commit failed (%s)\n", strerror(-rc));
+            return -1;
+        } else {
+            committed = 1;
+            pt->flip_pending = 1;
+        }
+    }
+    if (!committed) {
+        struct drm_mode_set_plane sp;
+        memset(&sp, 0, sizeof(sp));
+        sp.plane_id = c->plane_id;
+        sp.crtc_id = c->crtc_id;
+        sp.fb_id = present_fb;
+        sp.crtc_x = 0;
+        sp.crtc_y = 0;
+        sp.crtc_w = crtc_w;
+        sp.crtc_h = crtc_h;
+        sp.src_x = 0;
+        sp.src_y = 0;
+        sp.src_w = c->video_w << 16;
+        sp.src_h = c->video_h << 16;
+        /* Blocking commit: on return the previous scanout buffer is released. */
+        pt->kms_commit_start_ns = mono_ns();
+        if (xioctl(c->card_fd, DRM_IOCTL_MODE_SETPLANE, &sp) < 0) {
+            pt->kms_commit_end_ns = mono_ns();
+            pt->kms_commit_rc = -errno;
+            perror("SETPLANE");
+            return -1;
+        }
+        pt->kms_commit_end_ns = mono_ns();
+        pt->kms_commit_rc = 0;
+    }
+    pt->kms_submit_end_ns = mono_ns();
+    c->setplane_ms_sum += (double)(pt->kms_submit_end_ns - pt->kms_submit_start_ns) / 1e6;
     c->setplane_n++;
+    pt->presented_fb = present_fb;
     if (c->dump_recover_dir && c->have_recover_last_present && c->held_n > 0 &&
         !c->held_dumped && c->held[0].map[0] && c->held[0].map[1]) {
         char path[512];
@@ -1016,19 +1812,42 @@ static int drm_present(struct ctx *c, int idx) {
 }
 
 static void report_worker_timing(struct ctx *c) {
-    if (!c->stage_copy_n && !c->rot_copy_n && !c->setplane_n) return;
+    if (!c->stage_copy_n && !c->rot_copy_n && !c->setplane_n && !c->flip_wait_n) return;
     printf("worker_timing stage_copy_avg_ms=%.2f rot_copy_avg_ms=%.2f "
-           "setplane_avg_ms=%.2f samples=%u/%u/%u\n",
+           "setplane_avg_ms=%.2f flip_wait_avg_ms=%.2f atomic=%d "
+           "samples=%u/%u/%u/%u trace_present=%llu trace_flip=%llu "
+           "flip_unmatched=%llu flip_mismatch=%llu dmabuf_sync=%d "
+           "kms_prepare_avg_ms=%.3f kms_commit_avg_ms=%.3f "
+           "kms_ebusy=%llu pending_max=%u\n",
            c->stage_copy_n ? c->stage_copy_ms_sum / c->stage_copy_n : 0.0,
            c->rot_copy_n ? c->rot_copy_ms_sum / c->rot_copy_n : 0.0,
            c->setplane_n ? c->setplane_ms_sum / c->setplane_n : 0.0,
-           c->stage_copy_n, c->rot_copy_n, c->setplane_n);
+           c->flip_wait_n ? c->flip_wait_ms_sum / c->flip_wait_n : 0.0,
+           c->drm_atomic,
+           c->stage_copy_n, c->rot_copy_n, c->setplane_n, c->flip_wait_n,
+           (unsigned long long)c->trace_present_n,
+           (unsigned long long)c->trace_flip_n,
+           (unsigned long long)c->trace_flip_unmatched_n,
+           (unsigned long long)c->trace_flip_mismatch_n,
+           c->dmabuf_sync,
+           c->kms_prepare_n ? (double)c->kms_prepare_ns_sum / c->kms_prepare_n / 1e6 : 0.0,
+           c->kms_commit_n ? (double)c->kms_commit_ns_sum / c->kms_commit_n / 1e6 : 0.0,
+           (unsigned long long)c->kms_ebusy_n,
+           c->max_pending_flips);
     c->stage_copy_ms_sum = 0;
     c->stage_copy_n = 0;
     c->rot_copy_ms_sum = 0;
     c->rot_copy_n = 0;
     c->setplane_ms_sum = 0;
     c->setplane_n = 0;
+    c->flip_wait_ms_sum = 0;
+    c->flip_wait_n = 0;
+    c->kms_prepare_ns_sum = 0;
+    c->kms_prepare_n = 0;
+    c->kms_commit_ns_sum = 0;
+    c->kms_commit_n = 0;
+    c->kms_ebusy_n = 0;
+    c->max_pending_flips = 0;
 }
 
 /* ---------------- V4L2 ---------------- */
@@ -1164,12 +1983,16 @@ static int out_alloc(struct ctx *c, unsigned int *idx) {
     return 1;
 }
 
-static void fed_push(struct ctx *c, uint32_t seq, uint64_t send_ns, uint64_t recv_ns) {
+static void fed_push(struct ctx *c, uint32_t seq, uint32_t flags, uint32_t bytes,
+                     uint64_t send_ns, uint64_t recv_ns, uint64_t enqueue_ns) {
     if (c->fed_head - c->fed_tail >= MAX_FED) c->fed_tail++;
     struct fed_au *f = &c->fed[c->fed_head % MAX_FED];
     f->seq = seq;
+    f->flags = flags;
+    f->bytes = bytes;
     f->send_ns = send_ns;
     f->recv_ns = recv_ns;
+    f->enqueue_ns = enqueue_ns;
     c->fed_head++;
 }
 
@@ -1180,7 +2003,8 @@ static int fed_pop(struct ctx *c, struct fed_au *out) {
     return 1;
 }
 
-static int out_fill_data(struct ctx *c, unsigned int idx, const void *data, size_t n) {
+static int out_fill_data(struct ctx *c, unsigned int idx, const void *data,
+                         size_t n, uint64_t *enqueue_ns) {
     if (n > c->out[idx].len) {
         fprintf(stderr, "AU len %zu exceeds OUTPUT buffer %zu\n", n, c->out[idx].len);
         return -1;
@@ -1197,6 +2021,7 @@ static int out_fill_data(struct ctx *c, unsigned int idx, const void *data, size
     b.m.planes = planes;
     planes[0].bytesused = (uint32_t)n;
     if (xioctl(c->video_fd, VIDIOC_QBUF, &b) < 0) { perror("QBUF OUTPUT"); return -1; }
+    if (enqueue_ns) *enqueue_ns = mono_ns();
     return 1;
 }
 
@@ -1204,7 +2029,7 @@ static int out_fill(struct ctx *c, unsigned int idx) {
     if (c->next_chunk >= c->n_chunks) return 0;
     size_t off = c->chunk_off[c->next_chunk];
     size_t n = c->chunk_len[c->next_chunk];
-    int r = out_fill_data(c, idx, c->in_data + off, n);
+    int r = out_fill_data(c, idx, c->in_data + off, n, NULL);
     if (r < 0) return -1;
     c->next_chunk++;
     return 1;
@@ -1521,6 +2346,17 @@ static int dump_planes(const char *path, const uint8_t *y, const uint8_t *uv,
     return 0;
 }
 
+static int dump_rot_frame(struct ctx *c, const struct rot_buf *rb,
+                          uint64_t frame) {
+    if (!c->dump_rot_dir || !rb->map[0] || !rb->map[1]) return 0;
+    char path[512];
+    snprintf(path, sizeof(path), "%s/rot_%04llu_%ux%u.yuv",
+             c->dump_rot_dir, (unsigned long long)frame,
+             c->video_w, c->video_h);
+    return dump_planes(path, rb->map[0], rb->map[1], c->video_w, c->video_h,
+                       rb->pitch[0], rb->pitch[1]);
+}
+
 static int dump_frame(struct ctx *c, unsigned int idx, unsigned int seq) {
     if (!c->dump_dir || (int)seq >= c->dump_frames) return 0;
     char path[512];
@@ -1633,7 +2469,11 @@ static int run_decode(struct ctx *c, int max_frames, int no_display) {
         if (dump_frame(c, idx, (unsigned int)frames) < 0) return -1;
 
         if (!no_display) {
-            if (drm_present(c, (int)idx) < 0) return -1;
+            struct present_times pt;
+            if (drm_present(c, (int)idx, (uint64_t)frames, (uint64_t)frames,
+                            1, &pt) < 0)
+                return -1;
+            trace_present(c, NULL, (uint64_t)frames, 1, 0, 0, mono_ns(), &pt);
             /* Blocking SETPLANE returned after the previous flip completed. */
             if (c->last_idx >= 0 && !c->cap[c->last_idx].queued) {
                 if (cap_requeue(c, (unsigned int)c->last_idx) < 0) return -1;
@@ -1761,7 +2601,6 @@ static int cap_present_one(struct ctx *c, int no_display, int *frames, int *corr
         }
     }
 
-    if (c->dump_dir && dump_frame(c, idx, (unsigned int)*frames) < 0) return -1;
     if (dump_first_frame(c, idx) < 0) return -1;
     if (dump_recover_frame(c, idx) < 0) return -1;
     /* Startup gate: keep the console until the stream has survived N decoded
@@ -1777,22 +2616,41 @@ static int cap_present_one(struct ctx *c, int no_display, int *frames, int *corr
         printf("START_GATE open after %d frames t=%.1f\n", c->gate_frames, now_ms());
     }
     if (!no_display) {
-        if (drm_present(c, (int)idx) < 0) return -1;
+        struct present_times pt;
+        if (drm_present(c, (int)idx, (uint64_t)*frames,
+                        have_fed ? fed.seq : 0u, (uint64_t)session, &pt) < 0)
+            return -1;
+        trace_present(c, have_fed ? &fed : NULL, (uint64_t)*frames, session,
+                      skipped, skipped, dq_ns, &pt);
+        if (c->rotation_sw && c->source_hold == 0) {
+            /* The source dmabuf is no longer scanned: only the scratch fb is.
+             * It was fully consumed by the transform above, so return it to
+             * V4L2 immediately instead of waiting for two more presents. */
+            if (cap_requeue(c, idx) < 0) {
+                mark_recovering(c, "QBUF CAPTURE");
+                return -1;
+            }
+            c->last_idx = -1;
+            c->prev_idx = -1;
+            c->last_fb = pt.presented_fb;
+        }
     }
     uint64_t done_ns = mono_ns();
     if (!no_display) {
         /* Return the buffer from two presents ago: the meson flip can still be
          * scanning the previous one, and requeueing it lets the decoder write
          * over a frame that is on screen (partial black/tearing). */
-        if (c->prev_idx >= 0 && !c->cap[c->prev_idx].queued) {
-            if (cap_requeue(c, (unsigned int)c->prev_idx) < 0) {
-                mark_recovering(c, "QBUF CAPTURE");
-                return -1;
+        if (!(c->rotation_sw && c->source_hold == 0)) {
+            if (c->prev_idx >= 0 && !c->cap[c->prev_idx].queued) {
+                if (cap_requeue(c, (unsigned int)c->prev_idx) < 0) {
+                    mark_recovering(c, "QBUF CAPTURE");
+                    return -1;
+                }
             }
+            c->prev_idx = c->last_idx;
+            c->last_idx = (int)idx;
+            c->last_fb = c->cap[idx].fb_id;
         }
-        c->prev_idx = c->last_idx;
-        c->last_idx = (int)idx;
-        c->last_fb = c->cap[idx].fb_id;
         c->have_last_present = 1;
         c->last_present_ms = (double)done_ns / 1e6;
     } else {
@@ -1929,7 +2787,8 @@ static void session_teardown(struct ctx *c, int keep_fd) {
     for (unsigned int i = 0; i < c->num_cap; i++) {
         /* Keep the frame that is currently on screen alive so the overlay
          * keeps scanning it during the V4L2 rebuild (no black flash). */
-        if (((int)i == c->last_idx || (int)i == c->prev_idx) && held_add(c, i))
+        if (!c->rotation_sw &&
+            ((int)i == c->last_idx || (int)i == c->prev_idx) && held_add(c, i))
             continue;
         for (unsigned int p = 0; p < 2; p++) {
             if (c->cap[i].map[p]) { munmap(c->cap[i].map[p], c->cap[i].maplen[p]); c->cap[i].map[p] = NULL; }
@@ -2041,8 +2900,11 @@ static int run_socket(struct ctx *c, int frames_limit) {
         unsigned int idx;
         if (!out_alloc(c, &idx)) { session_close(c); break; }
         uint64_t recv_ns = mono_ns();
-        if (out_fill_data(c, idx, msg + sizeof(h), (size_t)n) < 0) { session_close(c); break; }
-        fed_push(c, h.seq, h.ts_ns, recv_ns);
+        uint64_t enqueue_ns = 0;
+        if (out_fill_data(c, idx, msg + sizeof(h), (size_t)n, &enqueue_ns) < 0) {
+            session_close(c); break;
+        }
+        fed_push(c, h.seq, h.flags, (uint32_t)n, h.ts_ns, recv_ns, enqueue_ns);
         printf("t=%.1f first AU seq=%u len=%d flags=0x%x\n", now_ms(), h.seq, n, h.flags);
 
         uint32_t type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
@@ -2135,11 +2997,12 @@ static int run_socket(struct ctx *c, int frames_limit) {
             recv_ns = mono_ns();
             unsigned int oi;
             if (out_alloc(c, &oi)) {
-                if (out_fill_data(c, oi, msg + sizeof(h), (size_t)m) < 0) {
+                uint64_t enqueue_ns = 0;
+                if (out_fill_data(c, oi, msg + sizeof(h), (size_t)m, &enqueue_ns) < 0) {
                     mark_recovering(c, "QBUF OUTPUT");
                     recovered = 1; break;
                 }
-                fed_push(c, h.seq, h.ts_ns, recv_ns);
+                fed_push(c, h.seq, h.flags, (uint32_t)m, h.ts_ns, recv_ns, enqueue_ns);
             }
 
             double now = now_ms();
@@ -2174,6 +3037,8 @@ static int run_socket(struct ctx *c, int frames_limit) {
 
 static void cleanup(struct ctx *c) {
     if (c->card_fd >= 0 && c->master) {
+        if (c->drm_atomic)
+            drm_wait_all_flips(c, 1000);
         struct drm_mode_set_plane sp;
         memset(&sp, 0, sizeof(sp));
         sp.plane_id = c->plane_id;
@@ -2202,6 +3067,7 @@ static void cleanup(struct ctx *c) {
     if (c->sock_fd >= 0) close(c->sock_fd);
     if (c->card_fd >= 0) close(c->card_fd);
     if (c->lat_fp) { fclose(c->lat_fp); c->lat_fp = NULL; }
+    if (c->trace_fp) { fclose(c->trace_fp); c->trace_fp = NULL; }
 }
 
 static void usage(const char *argv0) {
@@ -2209,10 +3075,13 @@ static void usage(const char *argv0) {
             "usage: %s --inventory\n"
             "       %s --file PATH [--bytes N] [--frames N] [--hold S] [--dump DIR]\n"
             "          [--dump-frames N] [--no-display] [--hide-primary] [--video WxH]\n"
-            "          [--rotation 0|90|180|270]\n"
+            "          [--rotation 0|90|180|270] [--rotation-mode A|B|C|T|P]\n"
+            "          [--dmabuf-sync 0|1] [--trace-csv PATH] [--dump-rot DIR]\n"
+            "          [--dump-rot-frames N] [--source-hold 0|2]\n"
             "          [--cap-bufs N]\n"
             "       %s --socket PATH [--frames N] [--hide-primary] [--cap-bufs N] [--mode WxH@Hz]\n"
-            "          [--rotation 0|90|180|270]\n"
+            "          [--rotation 0|90|180|270] [--rotation-mode A|B|C|T|P]\n"
+            "          [--dmabuf-sync 0|1] [--trace-csv PATH]\n"
             "          [--lat-csv PATH] [--dump-recover DIR] [--dump-first DIR] [--start-gate N]\n"
             "          [--recv-buf-kb N]\n",
             argv0, argv0, argv0);
@@ -2226,10 +3095,14 @@ int main(int argc, char **argv) {
     size_t limit = 0, filelen = 0;
     unsigned char *data = NULL;
     int inv = 0, no_display = 0, hide_primary = 0, frames = 1, hold_ms = 0, frames_set = 0;
-    const char *lat_csv = NULL;
+    const char *lat_csv = NULL, *trace_csv = NULL;
     c.dump_frames = 1;
+    c.dump_rot_frames = 10;
+    c.source_hold = 2;
     c.start_gate = 60;
     c.recover_sleep_ms = 0;
+    c.rotation_mode = ROT_MODE_A_STAGED;
+    c.dmabuf_sync_supported = -1;
 
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--inventory")) inv = 1;
@@ -2244,6 +3117,29 @@ int main(int argc, char **argv) {
             }
             c.rotation_deg = (unsigned)deg;
         }
+        else if (!strcmp(argv[i], "--rotation-mode") && i + 1 < argc) {
+            const char *m = argv[++i];
+            if (!strcmp(m, "A") || !strcmp(m, "a") || !strcmp(m, "0"))
+                c.rotation_mode = ROT_MODE_A_STAGED;
+            else if (!strcmp(m, "B") || !strcmp(m, "b") || !strcmp(m, "1"))
+                c.rotation_mode = ROT_MODE_B_REVERSE_READ;
+            else if (!strcmp(m, "C") || !strcmp(m, "c") || !strcmp(m, "2"))
+                c.rotation_mode = ROT_MODE_C_FORWARD_READ;
+            else if (!strcmp(m, "T") || !strcmp(m, "t") || !strcmp(m, "3"))
+                c.rotation_mode = ROT_MODE_C_TILED;
+            else if (!strcmp(m, "P") || !strcmp(m, "p") || !strcmp(m, "4"))
+                c.rotation_mode = ROT_MODE_P_PARALLEL;
+            else { usage(argv[0]); return 2; }
+        }
+        else if (!strcmp(argv[i], "--dmabuf-sync") && i + 1 < argc) {
+            c.dmabuf_sync = atoi(argv[++i]) != 0;
+        }
+        else if (!strcmp(argv[i], "--trace-csv") && i + 1 < argc) trace_csv = argv[++i];
+        else if (!strcmp(argv[i], "--dump-rot") && i + 1 < argc) c.dump_rot_dir = argv[++i];
+        else if (!strcmp(argv[i], "--dump-rot-frames") && i + 1 < argc)
+            c.dump_rot_frames = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "--source-hold") && i + 1 < argc)
+            c.source_hold = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--file") && i + 1 < argc) file = argv[++i];
         else if (!strcmp(argv[i], "--socket") && i + 1 < argc) sock_path = argv[++i];
         else if (!strcmp(argv[i], "--lat-csv") && i + 1 < argc) lat_csv = argv[++i];
@@ -2284,6 +3180,12 @@ int main(int argc, char **argv) {
         if (ftell(c.lat_fp) == 0)
             fprintf(c.lat_fp,
                     "frame,seq,present_mono_ns,age_ms,decode_ms,wait_ms,backlog,session\n");
+    }
+    if (trace_csv) {
+        c.trace_fp = fopen(trace_csv, "w");
+        if (!c.trace_fp) { perror(trace_csv); return 2; }
+        setvbuf(c.trace_fp, NULL, _IOLBF, 0);
+        trace_header(c.trace_fp);
     }
 
     signal(SIGINT, on_signal);

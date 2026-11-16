@@ -5,15 +5,17 @@ pipeline reads raw HEVC Annex-B data from Bulk IN `0x81`, assembles access
 units, waits for a decodable random-access point, and exposes decoded frames as
 OpenCV-compatible BGR `numpy.ndarray` images.
 
-> **Current deployment (2026-11-13)**: CM311 runs the K3 native C worker plus
+> **Current deployment (2026-11-16)**: CM311 runs the P128 parallel tiled native
+> C worker as the production default, plus
 > the `vt13-kiosk.service` KMS kiosk, not the PyAV software path described
 > below. See `docs/REMOTE_MACHINE_USAGE.md` for the current stage summary and
 > the full system + application deployment runbook.
 >
 > The kiosk service sets `VT13_WORKER_ROTATION=180` for the mounted VT camera.
 > The meson overlay plane has no DRM rotation property, so the worker uses a
-> software NV12 180° fallback; current live rate is about 29.7 FPS and the
-> orientation is pending user visual confirmation.
+> software NV12 180° path; P128 is the production default (59.45 FPS 30-minute
+> soak), with the original A staging worker/config preserved as a tested
+> fallback. Orientation and HDMI visual quality still require user confirmation.
 
 ```text
 VT03 camera -> wireless link -> VT13 -> USB Bulk IN 0x81

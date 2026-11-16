@@ -1,0 +1,23 @@
+recovery:
+  kernel_abort_watch: true
+control:
+  enabled: true
+  port: null
+  iframe_on_connect: true
+  iframe_on_recovery: true
+  iframe_retry_s: 2.0
+  min_iframe_interval_s: 0.5
+  pairing_poll_s: 1.0
+decoder:
+  codec: hevc_v4l2m2m
+  backend: worker
+  worker_path: /home/billieguo/mobile_vt/build/d3/d3_probe_p128
+  ffmpeg_codec: hevc_v4l2m2m
+  convert_bgr: false
+  display: none
+  display_width: 1024
+  display_height: 576
+  stall_restart_s: 0
+output:
+  preview: false
+  log_level: INFO
