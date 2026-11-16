@@ -1,5 +1,14 @@
 # Intersession Transfer: VT13 / CM311
 
+## 2026-11-16 19:58 HKT — Worker client canonicalized; production client restored and diagnostic variant synced
+
+- **Decision**: the remote production client `51862863…` (matching `fdd74b3`) is canonical; the local `cad4fe2a…` version is diagnostic only.
+- **Repository changes**: restored `vt13_video/worker_client.py` to SHA256 `518628638a5fa0da0914a5ac38e0c7255e7b801817eb7314a915f149da887279`; preserved the diagnostic version as `vt13_video/worker_client_instrumented.py` SHA256 `cad4fe2ae0d476b37f36fb45e7e5e9aed7b77001681a854acbee7f19addcd2d2`; updated `tests/test_latency.py` to test the production 6-column CSV schema and the diagnostic 9-column schema.
+- **Local verification**: `PYTHONPATH= python3 -m pytest -q` returned **54 passed, 38 skipped, 9 subtests passed** in 2.01 s; `py_compile` passed for both client files and the test module.
+- **Remote sync**: `~/mobile_vt/vt13_video/worker_client.py` SHA256 `51862863…` and `~/mobile_vt/vt13_video/worker_client_instrumented.py` SHA256 `cad4fe2a…`; remote `py_compile` passed. No service restart, binary replacement, or kiosk config change.
+- **Runtime state**: `vt13-kiosk.service` remains active; worker PID `1334378` still runs `build/d3/d3_probe_p128_exact`.
+- **Next**: use canonical `worker_client.py` by default; use `worker_client_instrumented.py` only when the extra latency/trace fields and worker environment plumbing are needed.
+
 ## 2026-11-16 19:46 HKT — P128 source provenance fixed; exact source canonical and remote tree updated
 
 - **Problem**: local HEAD `6167ce6` contained instrumented `tools/d3_probe.c` (`3a742e53…`), while the deployed exact worker `663f75e0…` was built from exact source `230a2604…` that existed only under `.codex_tmp`. Remote `~/mobile_vt/tools/d3_probe.c` was stale at `fa9e5d07…`.

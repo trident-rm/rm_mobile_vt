@@ -9,6 +9,7 @@ from pathlib import Path
 
 from vt13_video.nal import AccessUnit, AccessUnitAssembler, parse_nal
 from vt13_video.worker_client import FLAG_IRAP, MAGIC, LatencyCsv, WorkerDecoder
+from vt13_video.worker_client_instrumented import LatencyCsv as InstrumentedLatencyCsv
 
 from .helpers import make_nal
 
@@ -53,14 +54,37 @@ class LatencyCsvTests(unittest.TestCase):
             lines = path.read_text().splitlines()
             self.assertEqual(lines[0].split("\t"), [
                 "kind", "seq", "mono_ns", "completed_ns", "flags", "bytes",
+            ])
+            au = lines[1].split("\t")
+            self.assertEqual(au[:3], ["au", "7", "2000"])
+            self.assertEqual(au[3:], ["1000", "1", "21000"])
+            rec = lines[2].split("\t")
+            self.assertEqual(rec[:3], ["rec", "7", "3000"])
+            self.assertEqual(rec[5], "4")
+
+
+class InstrumentedLatencyCsvTests(unittest.TestCase):
+    def test_rows_include_diagnostic_timestamps(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "lat.csv"
+            csv = InstrumentedLatencyCsv(str(path))
+            csv.au(
+                7,
+                1_000,
+                2_000,
+                FLAG_IRAP,
+                21_000,
+                received_ns=123,
+            )
+            csv.close()
+            lines = path.read_text().splitlines()
+            self.assertEqual(lines[0].split("\t"), [
+                "kind", "seq", "mono_ns", "completed_ns", "flags", "bytes",
                 "received_ns", "au_start_ns", "sender_ns",
             ])
             au = lines[1].split("\t")
             self.assertEqual(au[:3], ["au", "7", "2000"])
-            self.assertEqual(au[3:], ["1000", "1", "21000", "-1", "-1", "-1"])
-            rec = lines[2].split("\t")
-            self.assertEqual(rec[:3], ["rec", "7", "3000"])
-            self.assertEqual(rec[5], "4")
+            self.assertEqual(au[3:], ["1000", "1", "21000", "123", "123", "-1"])
 
 
 class _FakeWorker:

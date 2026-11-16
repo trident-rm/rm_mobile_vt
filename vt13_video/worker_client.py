@@ -36,27 +36,13 @@ class LatencyCsv:
         target = Path(path).expanduser()
         target.parent.mkdir(parents=True, exist_ok=True)
         self._fh = target.open("w", encoding="utf-8", buffering=1)
-        self._fh.write(
-            "kind\tseq\tmono_ns\tcompleted_ns\tflags\tbytes\t"
-            "received_ns\tau_start_ns\tsender_ns\n"
-        )
+        self._fh.write("kind\tseq\tmono_ns\tcompleted_ns\tflags\tbytes\n")
 
-    def au(
-        self,
-        seq: int,
-        completed_ns: int,
-        send_ns: int,
-        flags: int,
-        nbytes: int,
-        received_ns: int = -1,
-    ) -> None:
-        self._fh.write(
-            f"au\t{seq}\t{send_ns}\t{completed_ns}\t{flags}\t{nbytes}\t"
-            f"{received_ns}\t{received_ns}\t-1\n"
-        )
+    def au(self, seq: int, completed_ns: int, send_ns: int, flags: int, nbytes: int) -> None:
+        self._fh.write(f"au\t{seq}\t{send_ns}\t{completed_ns}\t{flags}\t{nbytes}\n")
 
     def event(self, kind: str, seq: int, mono_ns: int, dropped: int) -> None:
-        self._fh.write(f"{kind}\t{seq}\t{mono_ns}\t-1\t-1\t{dropped}\t-1\t-1\t-1\n")
+        self._fh.write(f"{kind}\t{seq}\t{mono_ns}\t-1\t-1\t{dropped}\n")
 
     def close(self) -> None:
         try:
@@ -130,36 +116,12 @@ class WorkerDecoder:
         rotation = os.environ.get("VT13_WORKER_ROTATION")
         if rotation:
             args += ["--rotation", rotation]
-        rotation_mode = os.environ.get("VT13_WORKER_ROTATION_MODE")
-        if rotation_mode:
-            args += ["--rotation-mode", rotation_mode]
-        dmabuf_sync = os.environ.get("VT13_WORKER_DMABUF_SYNC")
-        if dmabuf_sync:
-            args += ["--dmabuf-sync", dmabuf_sync]
-        source_hold = os.environ.get("VT13_WORKER_SOURCE_HOLD")
-        if source_hold:
-            args += ["--source-hold", source_hold]
         worker_lat = os.environ.get("VT13_WORKER_LAT_CSV")
         if worker_lat:
             args += ["--lat-csv", os.path.expanduser(worker_lat)]
-        worker_trace = os.environ.get("VT13_WORKER_TRACE_CSV")
-        if worker_trace:
-            args += ["--trace-csv", os.path.expanduser(worker_trace)]
         worker_dump = os.environ.get("VT13_WORKER_DUMP_RECOVER")
         if worker_dump:
             args += ["--dump-recover", os.path.expanduser(worker_dump)]
-        worker_dump_src = os.environ.get("VT13_WORKER_DUMP")
-        if worker_dump_src:
-            args += ["--dump", os.path.expanduser(worker_dump_src)]
-        worker_dump_frames = os.environ.get("VT13_WORKER_DUMP_FRAMES")
-        if worker_dump_frames:
-            args += ["--dump-frames", worker_dump_frames]
-        worker_dump_rot = os.environ.get("VT13_WORKER_DUMP_ROT")
-        if worker_dump_rot:
-            args += ["--dump-rot", os.path.expanduser(worker_dump_rot)]
-        worker_dump_rot_frames = os.environ.get("VT13_WORKER_DUMP_ROT_FRAMES")
-        if worker_dump_rot_frames:
-            args += ["--dump-rot-frames", worker_dump_rot_frames]
         worker_first = os.environ.get("VT13_WORKER_DUMP_FIRST")
         if worker_first:
             args += ["--dump-first", os.path.expanduser(worker_first)]
@@ -280,14 +242,7 @@ class WorkerDecoder:
         try:
             send_ns = self._send(payload, FLAG_IRAP if irap else 0)
             if self._lat is not None:
-                self._lat.au(
-                    seq,
-                    completed_ns,
-                    send_ns,
-                    FLAG_IRAP if irap else 0,
-                    len(payload),
-                    received_ns=int(au.received_at * 1e9),
-                )
+                self._lat.au(seq, completed_ns, send_ns, FLAG_IRAP if irap else 0, len(payload))
         except TimeoutError:
             # Worker is behind (socket buffer full). Drop this and all
             # following non-IRAP AUs until the next IRAP; do NOT restart.

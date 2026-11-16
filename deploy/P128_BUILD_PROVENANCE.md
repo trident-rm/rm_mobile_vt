@@ -48,9 +48,13 @@ verified on CM311: `230a2604...` source produced `663f75e0...` binary.
 
 ## Worker client
 
-- Remote `vt13_video/worker_client.py` remains
+- Production canonical: `vt13_video/worker_client.py` SHA256
   `518628638a5fa0da0914a5ac38e0c7255e7b801817eb7314a915f149da887279`,
   matching commit `fdd74b3`.
-- Local `cad4fe2ae0d476b37f36fb45e7e5e9aed7b77001681a854acbee7f19addcd2d2`
-  adds diagnostic CSV fields and worker environment plumbing; it is not required
-  for the P128 wrapper and should be deployed only after separate testing.
+- Diagnostic variant: `vt13_video/worker_client_instrumented.py` SHA256
+  `cad4fe2ae0d476b37f36fb45e7e5e9aed7b77001681a854acbee7f19addcd2d2`.
+  It adds 9-column latency CSV fields and worker environment plumbing; it is
+  not imported by the production pipeline by default.
+- Both files were synced to CM311 and passed `py_compile`; the running service
+  was not restarted. `tests/test_latency.py` covers the production 6-column and
+  diagnostic 9-column schemas.

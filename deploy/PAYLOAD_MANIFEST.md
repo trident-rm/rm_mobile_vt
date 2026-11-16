@@ -14,6 +14,11 @@ Updated: 2026-11-16 19:46 HKT.
   `3a742e533fbcf557e5840feb4395c547e0b45bba6e93b9fb1a35dc72bef7d826`
   builds the diagnostic `build/d3/d3_probe_p128_instrumented` SHA256
   `6cdb04a327df526c84912c0ee300ae9a1e2a32bea0ed14183cec19c4b17c0217`.
+- Production client `vt13_video/worker_client.py` SHA256
+  `518628638a5fa0da0914a5ac38e0c7255e7b801817eb7314a915f149da887279`
+  (commit `fdd74b3`); diagnostic variant
+  `vt13_video/worker_client_instrumented.py` SHA256
+  `cad4fe2ae0d476b37f36fb45e7e5e9aed7b77001681a854acbee7f19addcd2d2`.
 - The exact binary is unstripped and records the source basename; build from a
   source named `d3_probe.c`. See `deploy/P128_BUILD_PROVENANCE.md` for the full
   recipe, basename caveat, and remote source mapping.

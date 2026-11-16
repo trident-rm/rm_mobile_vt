@@ -67,12 +67,16 @@
 - **Remote build check**: `make exact` and `make instrumented` with
   `BUILD_DIR=/tmp/d3_build_check` produced both expected hashes; the running
   service and production binary were untouched.
-- **Worker client**: remote `vt13_video/worker_client.py` remains
+- **Worker client**: production canonical `vt13_video/worker_client.py` SHA256
   `518628638a5fa0da0914a5ac38e0c7255e7b801817eb7314a915f149da887279`
-  (commit `fdd74b3`); local `cad4fe2a…` is diagnostic/env plumbing and was not
-  deployed.
+  (commit `fdd74b3`); diagnostic variant
+  `vt13_video/worker_client_instrumented.py` SHA256
+  `cad4fe2ae0d476b37f36fb45e7e5e9aed7b77001681a854acbee7f19addcd2d2`.
+  Both were synced to CM311; remote `py_compile` passed. The production client
+  is used by the pipeline; the diagnostic variant is not imported by default.
 - **Manifest**: `deploy/P128_BUILD_PROVENANCE.md` records the build command,
-  compiler, source/binary hashes, basename caveat, and remote source mapping.
+  compiler, source/binary hashes, basename caveat, worker-client variants, and
+  remote source mapping.
 
 ## exact P128 deployment candidate live validation — PASS (2026-11-16 18:10 HKT; production A restored, not switched)
 

@@ -86,6 +86,10 @@ The exact binary is unstripped and records the source basename, so production
 must be built from a file named `d3_probe.c`; `make exact` handles this. See
 `deploy/P128_BUILD_PROVENANCE.md` for the verified hashes and build recipe.
 
+The production client is `vt13_video/worker_client.py`;
+`vt13_video/worker_client_instrumented.py` preserves the diagnostic CSV and
+worker-environment variant and is not imported by the default pipeline.
+
 ## Further documentation
 
 - [Development flow, debugging, tuning, and latency](archive/DEVELOPMENT_FLOW_AND_LATENCY.md)
@@ -94,7 +98,7 @@ must be built from a file named `d3_probe.c`; `make exact` handles this. See
   C++/Rust rewrite is or is not justified.
 - [Remote machine usage reference](docs/REMOTE_MACHINE_USAGE.md)
   covers SSH access, PTY and sudo behavior, system details, tool paths, and
-  common HEVC decode/debug commands for the `10.42.0.11` Armbian test machine.
+  common HEVC decode/debug commands for the `10.42.0.253` Armbian test machine.
 - [CM311 eMMC deployment runbook](plans/CM311_eMMC_Deployment_Runbook.md)
   covers the G0-G8 gates, the final selective payload, and the approved-only
   G5 install command.
