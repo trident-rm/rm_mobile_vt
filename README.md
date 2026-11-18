@@ -1,137 +1,122 @@
 # VT13 USB HEVC Receiver
 
-Read-only Linux receiver for the VT13 (`2ca3:1020`) USB video endpoint. The
-pipeline reads raw HEVC Annex-B data from Bulk IN `0x81`, assembles access
-units, waits for a decodable random-access point, and exposes decoded frames as
+A read-only Linux receiver for the VT13 USB video endpoint (`2ca3:1020`). It
+reads raw HEVC Annex-B data from Bulk IN `0x81`, assembles access units, waits
+for a decodable random-access point, and exposes decoded frames as
 OpenCV-compatible BGR `numpy.ndarray` images.
 
-> **Current deployment (2026-11-16)**: CM311 runs the P128 parallel tiled native
-> C worker as the production default, plus
-> the `vt13-kiosk.service` KMS kiosk, not the PyAV software path described
-> below. See `docs/REMOTE_MACHINE_USAGE.md` for the current stage summary and
-> the full system + application deployment runbook.
->
-> The kiosk service sets `VT13_WORKER_ROTATION=180` for the mounted VT camera.
-> The meson overlay plane has no DRM rotation property, so the worker uses a
-> software NV12 180° path; P128 is the production default (59.45 FPS 30-minute
-> soak), with the original A staging worker/config preserved as a tested
-> fallback. Orientation and HDMI visual quality still require user confirmation.
+The verified production target is a CM311-1S running the native P128 worker and
+a KMS kiosk. The PyAV software path remains available for development,
+diagnostics, and offline replay.
 
-```text
-VT03 camera -> wireless link -> VT13 -> USB Bulk IN 0x81
-    -> Annex-B parser -> access-unit assembler -> PyAV HEVC decoder -> BGR frame
-```
+## Features
 
-## Status
+- Live USB capture from VT13, plus offline replay of recorded captures.
+- Annex-B parsing, access-unit assembly, parameter-set caching, and IRAP gating.
+- Bounded recovery for USB stalls, endpoint halts, and disconnects.
+- Optional DUML control-channel I-frame requests.
+- Raw recording with timestamp and event sidecars.
+- Native C worker for CM311 hardware decode and KMS presentation.
+- Python API and CLI for development, replay, and diagnostics.
 
-- Offline golden replay is verified: `captures/cold_start/bulk_if0_ep81.bin`
-  decodes 105 frames with zero decoder errors.
-- Live USB streaming is verified: a 145.968 s headless session decoded 5,537
-  frames at 60.59 FPS and 1920x1080, with zero decoder errors, corrupt frames,
-  or dropped frames. The 43 USB recoveries occurred before the first frame
-  while VT03 was intentionally disconnected; there were no USB errors after
-  reconnect. Offline replay produced the same 5,537 clean frames.
-- A second live session (`live_run10`) decoded 6,342 clean frames at 60.6 FPS
-  over 130.6 s. It had 47 in-place USB recoveries during one early 11.6 s link
-  interruption (9.832-21.386 s) and no USB errors afterward. The 407
-  decoder-marked corrupt frames were suppressed and confined to the early
-  segment; a late full-resolution frame was clean.
-- `live_run11` reproduced the readiness edge directly: 7.78 MiB of video bytes
-  arrived with 0 decoded frames before VT03 was power-cycled a second time.
-  After the fresh parameter sets and IRAP, the live session decoded 970 frames;
-  offline replay decoded 974 frames with 0 errors. USB byte flow alone is
-  therefore not treated as video readiness.
-- The first frame in both the golden replay and the live run is 1832x1032;
-  later frames reach 1920x1080, so callers must not assume one fixed resolution.
-- The default `read.read_size` is 2048 bytes. In 30 s probes, 512 B through
-  2 KiB produced 0-2 USB errors, while 4 KiB produced 19-29 errors and 16 KiB
-  produced 38 errors. This is an empirical transport mitigation, not a proven
-  root-cause fix for EIO.
-- PyAV is configured to produce frames marked corrupt so USB damage does not
-  silently stall decoding, but those frames are suppressed from the frame queue
-  by default. Set `decoder.emit_corrupt_frames=true` only for diagnostics.
-- `device.status_drain` performs a read-only drain of `0x82`. It is enabled in
-  the example configuration but remains experimental and optional; testing did
-  not establish that it is required for video stability.
-- The pipeline never issues vendor-specific USB OUT transfers. It can optionally
-  write DUML control frames to the CDC port (`control.enabled`) to request an
-  I-frame and poll pairing status; the video endpoint is unaffected. Recovery is
-  still limited to clearing a stalled endpoint and optional USB device reset.
+## Hardware BOM
+
+The following bill of materials describes the verified deployment. A Linux PC
+can run the software path without the CM311, but live USB access still requires
+the VT13 receiver.
+
+| Component | Qty | Notes |
+|---|---:|---|
+| CM311-1S TV box | 1 | Amlogic S905L3B, four cores, about 1.7 GiB RAM, internal eMMC; verified Armbian target. |
+| DJI VT13 USB receiver | 1 | USB ID `2ca3:1020`; video endpoint Bulk IN `0x81`; optional CDC control interfaces. |
+| DJI C5 / VT03 wireless camera and transmitter | 1 | Observed HEVC source; the receiver does not control the wireless link. |
+| HDMI display and cable | 1 | 1080p60-capable display for the CM311 kiosk or local preview. |
+| USB-A cable for VT13 | 1 | Connect the receiver to the CM311 or development PC. |
+| CM311-1S DC power adapter | 1 | Use the supplied adapter; verify voltage/current on its label. |
+| Ubuntu PC | 1 | Development, testing, deployment, and offline analysis host. |
+| Network connection | 1 | SSH between the Ubuntu PC and CM311; the CM311 address is DHCP-assigned. |
+| USB boot/recovery drive | Optional | Recommended fallback for the CM311 eMMC deployment. |
+| USB-UART adapter | Optional | Serial console for recovery when SSH or HDMI is unavailable. |
+| Keyboard and mouse | Optional | Direct CM311 access for recovery and HDMI checks. |
 
 ## Architecture
 
-| Module | Responsibility |
-|---|---|
-| `vt13_video/nal.py` | Incremental Annex-B parsing, AU assembly, parameter-set cache, IRAP detection |
-| `vt13_video/device.py` | sysfs and PyUSB discovery, endpoint validation, actionable permission errors |
-| `vt13_video/sources.py` | Read-only USB source and offline capture replay |
-| `vt13_video/recovery.py` | Backoff, jitter, healthy-read tracking, reset policy |
-| `vt13_video/control.py` | Optional DUML v1 control channel: I-frame requests, pairing poll, downlink decode |
-| `vt13_video/decoder.py` | PyAV HEVC decoding, keyframe gating, decoder reset, bounded frame queue |
-| `vt13_video/pipeline.py` | Background read/decode loop, recovery, control hooks, stall watchdog, recording, state and statistics |
-| `vt13_video/cli.py` | `devices`, `inspect`, `stream`, `replay`, `doctor`, and `config` commands |
-
-## Native P128 worker build
-
-The canonical production worker source is `tools/d3_probe.c`. The instrumented
-diagnostic variant is preserved separately as `tools/d3_probe_instrumented.c`.
-Build on the CM311 target:
-
-```bash
-make exact        # build/d3/d3_probe_p128_exact, production
-make instrumented # build/d3/d3_probe_p128_instrumented, diagnostics
+```text
+VT03/C5 camera -> wireless link -> VT13 USB receiver
+    -> USB Bulk IN 0x81 -> Annex-B parser -> access-unit assembler
+    -> PyAV HEVC decoder or native CM311 worker -> BGR frame / KMS display
 ```
 
-The exact binary is unstripped and records the source basename, so production
-must be built from a file named `d3_probe.c`; `make exact` handles this. See
-`deploy/P128_BUILD_PROVENANCE.md` for the verified hashes and build recipe.
+| Module | Responsibility |
+|---|---|
+| `vt13_video/nal.py` | Annex-B parsing, AU assembly, parameter-set cache, IRAP detection |
+| `vt13_video/device.py` | USB discovery, endpoint validation, permission diagnostics |
+| `vt13_video/sources.py` | Live USB source and offline capture replay |
+| `vt13_video/recovery.py` | Backoff, jitter, healthy-read tracking, reset policy |
+| `vt13_video/control.py` | Optional DUML v1 control channel and I-frame requests |
+| `vt13_video/decoder.py` | PyAV HEVC decoding, keyframe gating, decoder reset, bounded queue |
+| `vt13_video/pipeline.py` | Read/decode loop, recovery, control hooks, recording, statistics |
+| `vt13_video/cli.py` | `devices`, `inspect`, `stream`, `replay`, `doctor`, and `config` commands |
+| `tools/d3_probe.c` | Canonical native P128 worker source |
+| `tools/d3_probe_instrumented.c` | Diagnostic native worker variant |
 
-The production client is `vt13_video/worker_client.py`;
-`vt13_video/worker_client_instrumented.py` preserves the diagnostic CSV and
-worker-environment variant and is not imported by the default pipeline.
+## Repository layout
 
-## Further documentation
-
-- [Development flow, debugging, tuning, and latency](archive/DEVELOPMENT_FLOW_AND_LATENCY.md)
-  explains how the receiver was built, the failure modes and fixes, the debug
-  playbook, tuning defaults, measured receiver-side latency, and when a
-  C++/Rust rewrite is or is not justified.
-- [Remote machine usage reference](docs/REMOTE_MACHINE_USAGE.md)
-  covers SSH access, PTY and sudo behavior, system details, tool paths, and
-  common HEVC decode/debug commands for the `10.42.0.253` Armbian test machine.
-- [CM311 eMMC deployment runbook](plans/CM311_eMMC_Deployment_Runbook.md)
-  covers the G0-G8 gates, the final selective payload, and the approved-only
-  G5 install command.
-- [Minimal eMMC payload manifest](deploy/PAYLOAD_MANIFEST.md) records the final
-  include/exclude policy, runtime dependencies, capacity budget, and hashes.
+```text
+vt13_video/        Python package and CLI
+tools/             Native worker, replay, benchmark, and analysis tools
+config/            Example, kiosk, P128, and fallback configurations
+deploy/            systemd, udev, eMMC, and provenance references
+udev/              USB permission rule
+tests/             Regression suite
+examples/          Python API example
+live_runs/         Compact tracked validation evidence
+captures/          Golden capture and local-only captures
+archive/           Historical plans and development notes
+docs/              Concise operational and handoff documents
+```
 
 ## Requirements
 
-- Linux with USB sysfs and usbfs (`/dev/bus/usb`)
-- Python 3.10 or newer
-- `libusb-1.0` and `ffmpeg` available to PyAV/libusb
-- PyUSB, PyAV, NumPy, OpenCV, and PyYAML (see `requirements.txt`)
+### Development host
 
-On Ubuntu, system packages can be installed with:
+- Linux with USB sysfs and usbfs (`/dev/bus/usb`).
+- Python 3.10 or newer.
+- `libusb-1.0` and `ffmpeg` available to PyUSB/PyAV.
+- PyUSB, PyAV, NumPy, OpenCV, and PyYAML.
+- A display server only if you want the OpenCV preview window.
+
+### CM311 target
+
+- CM311-1S or compatible Amlogic S905L3B board with Armbian aarch64.
+- Kernel `6.18.59-ophub` in the verified deployment.
+- Custom `meson-vdec` (ca46) and `gxl_hevc.bin` for the native hardware path.
+- `gcc` for the native worker; the worker itself depends only on libc.
+- systemd for the `vt13-kiosk.service` kiosk deployment.
+
+## Installation
+
+On Ubuntu, install the system dependencies:
 
 ```bash
-sudo apt install libusb-1.0-0 ffmpeg
+sudo apt-get install -y libusb-1.0-0 ffmpeg
 ```
 
-Install the Python package from this directory:
+Create a virtual environment and install the Python package from the repository
+root:
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
 python -m pip install -e .
 ```
 
-Or install the runtime dependencies directly:
+Alternatively, install the runtime dependencies directly:
 
 ```bash
 python -m pip install -r requirements.txt
 ```
-
-The project has been tested with the Conda `rm` environment at
-`/home/billieguo/miniconda3/envs/rm/bin/python`.
 
 ## USB permissions
 
@@ -143,180 +128,101 @@ sudo udevadm control --reload-rules
 sudo udevadm trigger
 ```
 
-The rule uses `TAG+="uaccess"` so the active desktop session can access the
-device without running as root. For headless services, use an appropriate
-group/mode rule or a dedicated service account with access to `/dev/bus/usb`.
-`uaccess` only applies to active local seats; it may not grant access over SSH.
-For SSH/headless access, replace the rule with an owner/group rule, for example:
+The rule grants the active local desktop session access through `uaccess` and
+also uses `GROUP="plugdev"` for headless use. `uaccess` may not apply over SSH;
+ensure your SSH user is in `plugdev` or replace the rule with an owner/group
+rule for your service account.
 
-```udev
-SUBSYSTEM=="usb", ATTR{idVendor}=="2ca3", ATTR{idProduct}=="1020", OWNER="youruser", GROUP="yourgroup", MODE="0660"
+## Development quickstart
+
+From the repository root, after completing Installation. USB permissions are
+only needed for the live USB steps below.
+
+Start with an offline check so that USB permissions and hardware are not
+required:
+
+```bash
+python -m vt13_video replay \
+  --file captures/cold_start/bulk_if0_ep81.bin \
+  --headless \
+  --save-first /tmp/vt13_first.png \
+  --json-stats
 ```
 
-Check the environment before a live run:
+Run the regression suite:
+
+```bash
+python -m unittest discover -s tests -t . -v
+```
+
+Check the live hardware path:
 
 ```bash
 python -m vt13_video doctor
 python -m vt13_video devices --json
+python -m vt13_video inspect
 ```
 
-`doctor` exits nonzero when the matching device node or usbfs is unavailable.
-
-## Configuration
-
-The example configuration is `config/vt13_video.yaml`. All keys are validated,
-unknown keys are rejected, and relative paths such as `record`, `save_first`,
-`parameter_sets_file`, and `save_parameter_sets` are resolved against the YAML
-file's directory rather than the current working directory.
-
-Generate a fresh default file with:
-
-```bash
-python -m vt13_video config --write-default config/vt13_video.yaml
-```
-
-Important recovery settings:
-
-- `read.read_size`: default `2048`. Larger reads were associated with frequent
-  EIO on the VT13 endpoint; 2 KiB was stable in the sustained live run.
-- `clear_halt_on_error`: clear a stalled endpoint after `pipe`/`stall`/`io`
-  errors. The VT13 has been observed to report a halted Bulk IN endpoint as
-  `EIO` (`errno=5`); clearing the halt restores reads.
-- `reset_after_failures`: optional device reset threshold; `0` disables reset.
-- `read.drain_reads`: number of chunks consumed immediately after opening the
-  USB endpoint. These pre-roll bytes are parsed rather than discarded, so a
-  fresh parameter set or IRAP in the first post-reconnect reads is preserved.
-  Set it to `0` to disable the pre-roll read.
-- `gap_threshold_s` / `reset_on_gap`: read-gap diagnostics. Forced resync is off
-  by default because the verified golden capture contains long read gaps but
-  remains decodable.
-- `decoder.allow_corrupt_frames` / `emit_corrupt_frames`: allow PyAV to produce
-  damaged frames, but keep them out of the frame queue by default.
-- `decoder.save_parameter_sets`: optional Annex-B output path. Each complete
-  VPS/SPS/PPS group is written atomically and unchanged groups are not rewritten.
-  The observed parameter sets are not random per power-on: the captures contain
-  two stable VPS/SPS variants mapping to 1832x1032 and 1920x1080, with one shared
-  PPS. The saver keeps the latest complete group, so it follows a resolution
-  change; capture each mode separately if both variants must be pre-saved.
-- `device.status_drain`: experimental read-only drain of the `0x82` structured
-  message endpoint; optional and not demonstrated to be required.
-
-## Commands
-
-Live streaming with preview and a saved first frame:
+Start a live preview:
 
 ```bash
 python -m vt13_video stream \
   --config config/vt13_video.yaml \
-  --save-first /tmp/vt13_live_first.png \
-  --save-parameter-sets live_runs/vt13_params.h265
+  --save-first /tmp/vt13_live_first.png
 ```
 
-The saved file contains the latest complete VPS/SPS/PPS group and can later be
-passed back with `--parameter-sets-file`. It is a bootstrap aid only: parameter
-sets do not create an IRAP or reconstruct missing reference frames.
-
-Headless live streaming for 30 seconds with raw recording:
+For a headless live run, record the stream and write JSON statistics:
 
 ```bash
 mkdir -p live_runs
 python -m vt13_video stream \
   --config config/vt13_video.yaml \
   --headless --seconds 30 \
-  --record live_runs/live_run01.bin \
+  --record live_runs/dev_run.bin \
   --json-stats
 ```
 
-Replay the verified capture:
+Live USB order matters: start the receiver first, then enable the VT03/C5
+transmitter. Wait for complete parameter sets and a fresh IRAP before expecting
+decoded frames. If no display server is available, use `--headless` and
+`--save-first`.
+
+## Usage
+
+### CLI
+
+```text
+vt13-video devices   list matching VT13/C5 USB devices
+vt13-video inspect   inspect USB descriptors and endpoints
+vt13-video doctor    check dependencies, device, and usbfs access
+vt13-video replay    decode a raw capture offline
+vt13-video stream    capture and decode live USB video
+vt13-video config    show or write configuration
+```
+
+Use `python -m vt13_video <command> --help` for all options.
+
+### Offline replay
 
 ```bash
 python -m vt13_video replay \
   --file captures/cold_start/bulk_if0_ep81.bin \
-  --headless --save-first /tmp/vt13_first.png \
+  --headless \
   --json-stats
 ```
 
-If a capture has no parameter sets, prime the cache from a known-good Annex-B
-file. Cached parameter sets can bootstrap decoding, but they cannot reconstruct
-missing reference frames:
+If a capture lacks parameter sets, prime the cache from a known-good Annex-B
+file:
 
 ```bash
 python -m vt13_video replay \
-  --file /tmp/cold_start_noparams.h265 \
+  --file /tmp/capture_without_params.h265 \
   --parameter-sets-file captures/cold_start/bulk_if0_ep81.bin \
-  --headless --json-stats
+  --headless \
+  --json-stats
 ```
 
-Run the frame-consumer example against live USB or a capture:
-
-```bash
-python examples/frame_consumer.py --config config/vt13_video.yaml --seconds 10
-python examples/frame_consumer.py --file captures/cold_start/bulk_if0_ep81.bin --seconds 10
-```
-
-`stream` and `replay` return a nonzero exit code when decoder errors occur or
-no frames are decoded.
-
-## Preview troubleshooting
-
-- Preview mode opens an OpenCV window titled `VT13 USB HEVC`. It stays blank
-  while the pipeline reports `waiting_keyframe`.
-- Periodic status now includes link readiness, for example
-  `usb=up, data=yes, params=yes, irap=no, keyframe=no`. Decoding starts only
-  after `params=yes`, `irap=yes`, and `keyframe=yes`. `data=yes` only means USB
-  bytes are arriving; it does not prove the wireless video link is decodable.
-- VT13 does not emit a periodic IRAP in the observed stream. Start the stream,
-  then disconnect and reconnect VT03 (or power-cycle the wireless link) so a
-  fresh VPS/SPS/PPS + IRAP can arrive. The window fills after the first frame.
-- The official client asks the transmitter for an I-frame over the CDC control
-  port (DUML `1/1 -> 14/0`, frame
-  `55 17 04 38 aa 0e 00 00 40 01 01 00 00 00 00 00 24 00 00 00 24 8f 06`).
-  This pipeline can send the same request with `control.enabled=true`, retries
-  it while waiting for a keyframe, and sends it after a discontinuity. The
-  request is protocol-verified against the official client, but its effect on
-  the transmitter is not yet verified on hardware. A USB reset alone still does
-  not restart the stream or create an IRAP.
-- If the current data epoch continues for 10 s without a decodable start, the
-  pipeline logs a warning with the current parameter-set and IRAP state. The
-  hint asks for fresh VPS/SPS/PPS + IRAP when parameter sets are missing, or
-  only a fresh IRAP when parameter sets are already complete. The timer restarts
-  after a reconnect or discontinuity.
-- Ctrl+C prints `Interrupted.` and stops the stream. If a GUI call wedges the
-  process, terminate it from another terminal:
-
-```bash
-pgrep -af 'python -m vt13_video stream'
-kill -TERM <PID>
-kill -KILL <PID>  # only if SIGTERM does not exit
-```
-
-## Recording and diagnostics
-
-When `output.record` (or `--record`) is set, raw bytes are written to the
-requested file and two sidecars are created:
-
-- `<stem>.times.tsv`: `elapsed_s`, `chunk_length`, `wall_time_utc`
-- `<stem>.events.tsv`: `elapsed_s`, `event`, `detail`, `wall_time_utc`
-
-`elapsed_s` is monotonic time since the pipeline started. `wall_time_utc` is an
-ISO 8601 UTC timestamp with millisecond precision, so USB events can be aligned
-with kernel logs such as `dmesg -T` after normalizing the time zone. Error event
-details include the error kind/message, `errno`, libusb backend code, successful
-read/byte counts, and time since the last data.
-
-JSON statistics include `usb.empty_reads`, `decode.corrupt_frames`, and optional
-`usb.status_drain` state plus `last_error_kind`,
-`last_error_errno`, `last_error_backend_code`, `last_error_reads`,
-`last_error_bytes`, and `last_error_since_data_s` for the most recent USB error.
-The `link` object reports `usb_open`, `data_flowing`,
-`parameter_sets_complete`, `irap_seen`, `keyframe_started`, and `streaming`.
-`irap_seen` and `keyframe_started` describe the current acquisition epoch and
-reset after a discontinuity. `parameter_sets` reports completeness, sizes,
-`saved`, and `saved_path`.
-The recording path and its parent directory must be writable; an unusable path
-causes the command to exit with an actionable error before opening USB.
-
-## Python API
+### Python API
 
 ```python
 from vt13_video import VT13Stream, load_config
@@ -325,92 +231,138 @@ config = load_config("config/vt13_video.yaml")
 config.output.preview = False
 
 with VT13Stream(config) as stream:
-    frame = stream.read_frame(timeout=1.0)  # Frame | None
+    frame = stream.read_frame(timeout=1.0)
     if frame is not None:
-        bgr = frame.image  # numpy.ndarray, uint8, BGR
-
-    latest = stream.latest_frame  # newest frame, even if the queue was drained
+        image = frame.image  # uint8 BGR numpy.ndarray
 ```
 
-For offline replay, pass `FileSource(path)` as the `source` argument to
-`VT13Stream`. `read_frame()` consumes from a bounded queue; `latest_frame` is
-intended for consumers that only need the freshest image.
+`FileSource(path)` can be passed to `VT13Stream` for offline replay. See
+`examples/frame_consumer.py` for a complete example.
 
-## Recovery semantics
+### Recording and diagnostics
 
-- USB read timeouts increment counters. A timeout becomes a stall only after
-  `read.stall_timeout_s` without data.
-- Zero-length reads increment `usb.empty_reads`; sustained no-data beyond
-  `read.stall_timeout_s` also triggers stall recovery.
-- Read failures trigger exponential backoff with jitter. `pipe`/`stall`/`io`
-  errors can optionally clear the endpoint halt before reopening.
-- If clearing a halt succeeds after an `io` error, the pipeline preserves the
-  parser, AU assembler, and decoder state and continues on the existing USB
-  handle. This is the recovery path observed for VT13's EIO/halted endpoint.
-- If clearing a halt succeeds after a `pipe` or `stall` error, the pipeline
-  continues on the existing handle but marks a discontinuity and resets the
-  parser, AU assembler, and decoder before waiting for a fresh IRAP.
-- For those error kinds it closes and reopens when the halt clear fails or a
-  configured device reset is attempted; other error kinds reopen directly.
-- A successful `open()` does **not** clear the failure streak. Recovery requires
-  sustained healthy reads (`healthy_reads` or `healthy_seconds`).
-- Repeated failures of the same kind are logged at most once per 5 s, with a
-  summary of suppressed details when reporting resumes or the stream recovers.
-  Counters and `.events.tsv` still record every failure; disconnects and failed
-  halt clears are always logged.
-- On a discontinuity, the parser, AU assembler, and decoder are reset. The
-  parameter-set cache is retained, and decoding restarts only at a fresh IRAP
-  with complete parameter sets.
-- Bytes consumed immediately after USB open are parsed, not discarded. This
-  preserves a fresh IRAP that arrives during re-enumeration.
-- The current-epoch `link.irap_seen` and `link.keyframe_started` flags reset on
-  discontinuity. Lifetime counts remain available under `stream`.
-- State reporting distinguishes `waiting_keyframe`,
-  `waiting_parameter_sets`, `streaming`, `recovering`, and terminal states.
+`--record` writes raw bytes and two sidecars:
 
-## Tests
+- `<stem>.times.tsv`: `elapsed_s`, `chunk_length`, `wall_time_utc`
+- `<stem>.events.tsv`: `elapsed_s`, `event`, `detail`, `wall_time_utc`
 
-Run the regression suite with unittest:
+The sidecars preserve timing and failure evidence without keeping large raw
+`.bin` files in Git. `--json-stats` prints link, USB, decode, and recovery
+counters. See `live_runs/README.md` for the tracked evidence set.
+
+## Native CM311 worker
+
+The canonical production worker source is `tools/d3_probe.c`; the diagnostic
+variant is `tools/d3_probe_instrumented.c`. Keep both.
+
+Build on CM311:
+
+```bash
+make exact        # build/d3/d3_probe_p128_exact, production
+make instrumented # build/d3/d3_probe_p128_instrumented, diagnostics
+```
+
+The exact worker is unstripped and records the source basename. Build it from a
+source named `d3_probe.c`; `make exact` handles this. The verified exact binary
+SHA256 is:
+
+```text
+663f75e09e021b3877ee9da70c543b00fa82742c5f108af4ad6a1e69466285dc
+```
+
+The local repository plus `Makefile` and C sources are sufficient to rebuild the
+ARM worker; a local ARM binary cache is not required. See
+`deploy/P128_BUILD_PROVENANCE.md` for the full recipe and hashes.
+
+The production client is `vt13_video/worker_client.py`;
+`vt13_video/worker_client_instrumented.py` is the diagnostic variant.
+
+## Configuration
+
+- `config/vt13_video.yaml` — development defaults.
+- `config/vt13_video.kiosk.yaml` — verified CM311 kiosk configuration.
+- `config/vt13_video.kiosk.a.yaml` — tested A-worker fallback.
+- `config/vt13_video.kiosk.p128.yaml` — P128 reference configuration.
+
+All keys are validated and unknown keys are rejected. Relative paths such as
+`record`, `save_first`, `parameter_sets_file`, and `save_parameter_sets` are
+resolved against the YAML file's directory.
+
+Important defaults:
+
+- `read.read_size: 2048` — larger reads were associated with frequent EIO on
+  the VT13 endpoint; do not increase it without testing.
+- `recovery.clear_halt_on_error: true` — clears a halted Bulk IN endpoint after
+  recoverable USB errors.
+- `decoder.emit_corrupt_frames: false` — corrupt frames are suppressed from the
+  frame queue by default.
+- `control.enabled` — optional DUML I-frame requests; not required for offline
+  replay.
+
+Generate a fresh default file with:
+
+```bash
+python -m vt13_video config --write-default config/vt13_video.yaml
+```
+
+## Testing
 
 ```bash
 python -m unittest discover -s tests -t . -v
 ```
 
-The suite currently has 50 tests and covers arbitrary parser chunk boundaries,
-AU grouping, parameter-set bootstrap and atomic saving, link readiness state,
-current-epoch readiness warning timing and wording, post-open pre-roll parsing,
-golden and stripped-stream replay, recovery/backoff/reset behavior, recovery-log
-throttling, empty-read stalls, corrupt-frame suppression, diagnostic metadata,
-recording timestamps, YAML validation, sysfs discovery, and CLI smoke paths.
+Current local result in this environment: **92 tests, 54 passed, 38 skipped**.
+Skipped tests require PyAV, USB hardware, or an environment-specific setup. The suite covers parser
+boundaries, AU grouping, parameter-set bootstrap, readiness, replay, recovery,
+recording timestamps, YAML validation, USB discovery, and CLI smoke paths.
+
+## Troubleshooting
+
+- `doctor` exits nonzero or the device is missing: check `lsusb -d 2ca3:1020`,
+  the udev rule, and `plugdev` membership.
+- USB access works locally but not over SSH: `uaccess` is seat-specific; use the
+  group rule or add the service account to `plugdev`.
+- USB bytes arrive but no frames decode: wait for complete parameter sets and a
+  fresh IRAP; power-cycle or relink the VT03/C5 transmitter if needed.
+- Preview is blank: run with `--headless --save-first` to verify capture and
+  decode independently.
+- CM311 manual run fails because the device is busy: `vt13-kiosk.service` owns
+  USB/V4L2/DRM while active; stop it only with approval before running manually.
+- Frequent EIO or kernel `0xf` aborts: keep `read.read_size: 2048`, preserve the
+  journal and capture, and consult `archive/DEVELOPMENT_FLOW_AND_LATENCY.md`.
 
 ## Known limitations
 
-- A stream with no VPS/SPS/PPS or no IRAP cannot start decoding from arbitrary
-  P-frames. Cached parameter sets alone do not create missing reference frames.
-- The verified golden stream changes resolution after the initial frames; the
-  pipeline reports the actual frame dimensions instead of enforcing one size.
-- The camera does not emit a periodic IRAP in the observed stream. A standard
-  USB device reset did not restart the video stream or create a new IRAP in
-  testing. The DUML I-frame request (`control.enabled=true`) is the candidate
-  recovery primitive but its live effect is unverified; power-cycle or relink
-  VT03 if the request is not honored.
-- Replugging the VT13 USB cable only re-enumerates the receiver. It does not
-  reset the VT03 encoder, which may resume mid-GOP without an IRAP. If the link
-  remains in `waiting_keyframe` after reconnection, power-cycle VT03.
-- Saved parameter sets can bootstrap parsing and decoding, but they are not a
-  substitute for a fresh IRAP or for the reference picture chain.
-- Reads of 4 KiB and larger were associated with frequent EIO. The 2 KiB default
-  mitigates this transport behavior, but its root cause is still unknown.
-- `status_drain` remains experimental; no test has shown it is necessary.
-- `decoder.stall_restart_s` (default 0, disabled) resets the decoder when VCL
-  access units keep arriving but no frames are produced for N seconds. It is
-  meant for a silent `0xf` session death, where the ffmpeg process stays alive
-  but stops yielding pictures; pair it with `control.enabled=true` so the reset
-  is followed by an I-frame request. The ffplay window stays open across these
-  resets; only the picture freezes for the watchdog interval. Experimental.
-- A preview window can remain blank until VT03 is relinked and a fresh IRAP is
-  received; use `--headless` plus `--save-first` to verify capture independently.
-- Sustained streaming has been verified in two sessions (145.968 s and 130.6 s),
-  including one early link interruption and in-place recovery. Repeat runs
-  across different RF conditions and repeated reconnects are still warranted.
+- Decoding cannot start from arbitrary P-frames without complete parameter sets
+  and a fresh IRAP. Cached parameter sets do not reconstruct missing references.
+- The observed stream changes resolution after startup; callers must not assume
+  a fixed frame size.
+- VT03/C5 does not emit a periodic IRAP in the observed stream. A USB reset does
+  not create one; relink or power-cycle the transmitter if recovery stalls.
+- `status_drain` and `decoder.stall_restart_s` remain experimental.
 - OpenCV preview requires a display server; use `--headless` on headless hosts.
+- The CM311 production path depends on the verified ca46 `meson-vdec` module and
+  KMS configuration; a generic kernel may use the PyAV software path instead.
+
+## Documentation
+
+- [Agent implementation protocol](AGENTS.md) — safety, approvals, workflow, and
+  verification rules.
+- [Remote machine usage](docs/REMOTE_MACHINE_USAGE.md) — CM311 access, build,
+  deployment, and diagnostics.
+- [Development handoff](docs/INTERSESSION_TRANSFER.md) — current baseline and
+  open validation.
+- [Development flow and latency](archive/DEVELOPMENT_FLOW_AND_LATENCY.md) —
+  historical debugging and performance analysis.
+- [Archived plans](archive/plans/) — execution and optimization plans.
+- [P128 build provenance](deploy/P128_BUILD_PROVENANCE.md) — exact and
+  instrumented worker hashes and recipe.
+- [CM311 payload manifest](deploy/PAYLOAD_MANIFEST.md) — eMMC deployment
+  reference.
+- [Live-run evidence index](live_runs/README.md) — tracked validation evidence.
+
+## Related projects
+
+- [rm-receiver](https://github.com/trident-rm/rm-receiver) — reverse-engineered
+  receiver implementation derived from the official client; useful for protocol
+  and control-behavior comparison.

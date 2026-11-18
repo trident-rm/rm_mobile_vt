@@ -1,5 +1,8 @@
 # P128 production build provenance
 
+**Scope:** CM311/aarch64-specific production provenance. Keep it as a reference
+for exact rebuilds; it is not required for generic local use.
+
 Recorded: 2026-11-16 19:46 HKT
 Status: exact source is canonical; instrumented source is diagnostic only.
 

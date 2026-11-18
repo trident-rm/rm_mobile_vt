@@ -1,5 +1,8 @@
 # CM311 eMMC minimal runtime payload manifest
 
+**Scope:** CM311-specific eMMC deployment reference. Keep it for repeatable
+CM311-like deployments; it is not required for local-only use.
+
 Status: **G3 final minimal payload audited; G5 PASS on 2026-11-12 23:19 HKT; eMMC-only cold boot PASS; G6 PASS with user-confirmed HDMI output, physical hotplug, cold start, and reboot; display 180° rotation deployed as a software fallback but visually unconfirmed; atomic KMS worker deployed at ~49.7 FPS with program-side p50 79.7 ms / p95 109.2 ms (not glass-to-glass); P128 parallel tiled worker is now the production default (59.45 FPS 30-minute soak), with the A staging worker/config preserved as a tested fallback; exact P128 source/build provenance is committed; formal G8 still pending.**
 Updated: 2026-11-16 19:46 HKT.
 
