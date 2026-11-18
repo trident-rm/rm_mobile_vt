@@ -60,6 +60,26 @@ VT03/C5 camera -> wireless link -> VT13 USB receiver
 | `tools/d3_probe.c` | Canonical native P128 worker source |
 | `tools/d3_probe_instrumented.c` | Diagnostic native worker variant |
 
+## Performance matrix
+
+These are historical verified measurements from the CM311-1S deployment; no new
+live run was performed solely to produce this matrix. Latency values are
+receiver/program-side, not glass-to-glass; wireless and RF conditions vary.
+Offline replay throughput is not a live capability ceiling. See
+`archive/DEVELOPMENT_FLOW_AND_LATENCY.md` for measurement methodology.
+
+| Path | Test | Output | Latency | Reliability | Status |
+|---|---|---|---|---|---|
+| PyAV software, offline replay | 7.3 s replay | 132.8 FPS replay throughput, 1920x1080 | receiver p50/p90/p99 13.5/17.0/21.8 ms | 0 decode errors, resets, corrupt, or dropped frames | Development/replay baseline |
+| PyAV software, live USB | 146 s live | 60.59 FPS, 1920x1080 | not recorded in this matrix | 0 decode/corrupt/dropped frames after initial reconnect | Development baseline |
+| Native A, rotation-only KMS | 30 s | 29.7 FPS, 1920x1080 | not recorded | 0 corrupt, 0 errors/recoveries | Superseded |
+| Native A, atomic KMS | 34 s | 49.7 FPS, 1920x1080 | program-side p50 79.7 / p95 109.2 ms | 0 corrupt; no atomic fallback or `0xf` in window | A fallback |
+| Native P128 exact, KMS | 30 min | 59.45 FPS, 1920x1080 | receive-to-vblank p50 59.4 / p95 79.8 ms; transform p50 8.7 / p95 11.6 ms | 0 corrupt, 0 USB errors/recoveries; 62 decoder resets across 63 sessions | Production default |
+
+P128 repeat runs measured 59.95 FPS median over three 65 s runs and 59.27 FPS
+over 5 minutes, with 0 corrupt frames. The 30-minute soak remains the production
+reference; glass-to-glass latency has not been measured.
+
 ## Repository layout
 
 ```text
