@@ -4,8 +4,7 @@ Status: 2026-10-31
 
 This document records how the VT13 USB HEVC receiver was developed, which
 failure modes were encountered, how they were handled, and what to check when
-debugging or tuning latency. It complements `README.md` and the Chinese project
-log (`VT13_USB视频逆向项目进度与后续计划.md`).
+debugging or tuning latency. It complements `README.md`.
 
 ## 1. Executive summary
 

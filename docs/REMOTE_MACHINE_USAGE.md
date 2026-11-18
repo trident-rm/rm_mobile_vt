@@ -1,5 +1,49 @@
 # Remote Machine Usage Reference
 
+## 2026-11-18 20:04 HKT — Rebuild sufficiency verified; cleanup committed locally
+
+- **Rebuild proof**: a CM311 temp directory `/tmp/mobile_vt_rebuild_verify` built from only the local repo's `Makefile` and `tools/d3_probe.c` produced `663f75e09e021b3877ee9da70c543b00fa82742c5f108af4ad6a1e69466285dc`, matching the deployed exact worker. `make instrumented` produced `6cdb04a327df526c84912c0ee300ae9a1e2a32bea0ed14183cec19c4b17c0217`. The temp directory was removed.
+- **Implication**: the local repo is sufficient to rebuild the ARM worker on CM311; a local cache of the ARM binaries is not required.
+- **State**: `vt13-kiosk.service` remains active with `MainPID=1334328`, `NRestarts=0`; the worker socket is live and production binaries/configs are unchanged. The cleanup commit exists locally; no remote Git push was made.
+- **Limits**: no live USB/V4L2/HDMI test and no service restart were performed.
+
+## 2026-11-17 15:20 HKT — Publish-readiness cleanup; kiosk uninterrupted
+
+> Removed verified dead/unused code, legacy scripts/docs, and test-time data from
+> both the local `mobile_vt` tree and CM311 `~/mobile_vt`. The two intentional
+> diagnostic variant pairs were retained. No service restart, binary/config
+> replacement, live USB/V4L2/HDMI run, or commit occurred.
+
+- **Remote result**: `~/mobile_vt` dropped from **193M to 1.0M**. Removed 23
+  legacy files (12 old C5 scripts/`poc`/docs, 9 top-level legacy scripts, and the
+  Chinese progress document), `p128_live_20261116/` (191M),
+  `p128_default_20261116/` (44K), three `__pycache__/` directories, and 17
+  home-level test logs/packs.
+- **Preserved**: `.codex_tmp/d3_worker.sock` (live), the source provenance
+  backup `backup_d3_source_20261116_20261116_194545/d3_probe.c` (`fa9e5d07…`),
+  all configs, and the production binaries `build/d3/d3_probe` (`9d610808…`),
+  `build/d3/d3_probe_p128` (`92d9c17c…`), and
+  `build/d3/d3_probe_p128_exact` (`663f75e0…`). The intentional variants
+  `tools/d3_probe.c` vs `tools/d3_probe_instrumented.c` and
+  `vt13_video/worker_client.py` vs `worker_client_instrumented.py` remain.
+- **Source sync**: the 8 `vt13_video/*.py` modules and `tests/helpers.py` matched
+  the local HEAD before cleanup and were updated to the cleaned versions;
+  `tests/test_pipeline.py` received only the remote-specific `close_count`
+  patch. `docs/DEVELOPMENT_FLOW_AND_LATENCY.md` was replaced by
+  `archive/DEVELOPMENT_FLOW_AND_LATENCY.md` (`1730e159…`) and the README link
+  was updated.
+- **Verification**: `vt13-kiosk.service` is active with `MainPID=1334328`,
+  `NRestarts=0`, worker PID `1334378`; the worker socket remains LISTEN/ESTAB;
+  remote `compileall` and runtime imports returned RC=0. Remote pytest is not
+  installed. The worker binary hashes are unchanged.
+- **Historical evidence note**: the remote `p128_live_20261116/` and
+  `p128_default_20261116/` directories no longer exist on CM311. Their local
+  mirrors remain under `.codex_tmp/` (169M and 52K respectively), so older
+  evidence paths in this document should be read as local-copy references.
+- **Limits**: no live USB/V4L2/HDMI test and no service restart were performed.
+  The running process still uses the modules loaded before the cleanup; the
+  cleaned remote sources take effect on the next service start.
+
 ## P128 production default — PASS (2026-11-16 18:57 HKT; A fallback preserved and tested)
 
 > User approved P128 as the production default. The kiosk config now points to

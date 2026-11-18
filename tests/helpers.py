@@ -11,8 +11,6 @@ from vt13_video.sources import FileSource
 
 ROOT = Path(__file__).resolve().parents[1]
 GOLDEN_CAPTURE = ROOT / "captures" / "cold_start" / "bulk_if0_ep81.bin"
-GOLDEN_TIMES = ROOT / "captures" / "cold_start" / "bulk_if0_ep81.times.tsv"
-NEGATIVE_CAPTURE = ROOT / "captures" / "vt13_live_raw.h265"
 
 _LOGGER = logging.getLogger("vt13_video.tests")
 _LOGGER.addHandler(logging.NullHandler())

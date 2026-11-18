@@ -59,7 +59,6 @@ class _ScriptedSource:
     def __init__(self, script: list[ReadResult | BaseException]) -> None:
         self.script = list(script)
         self.open_count = 0
-        self.close_count = 0
         self.clear_halt_count = 0
         self.reset_count = 0
 
@@ -73,7 +72,7 @@ class _ScriptedSource:
         return item
 
     def close(self) -> None:
-        self.close_count += 1
+        pass
 
     def drain(self, count: int) -> bytes:
         return b""

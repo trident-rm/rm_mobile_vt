@@ -84,7 +84,6 @@ class FfmpegPipeDecoder(HevcDecoder):
         binary = self.config.ffmpeg_path or shutil.which("ffmpeg")
         if not binary:
             raise DependencyError("ffmpeg-pipe backend requires an ffmpeg binary (decoder.ffmpeg_path)")
-        self._binary = binary
         self._frame_q = queue.Queue(maxsize=256)
         self._reader_error = None
         self._terminated = False

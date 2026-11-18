@@ -24,9 +24,7 @@ from .device import (
     DEFAULT_VID,
     DeviceError,
     discover_devices,
-    sysfs_devices,
     udev_rule_text,
-    usbfs_device_node,
 )
 from .pipeline import RecordingError, VT13Stream
 from .sources import FileSource, SourceError

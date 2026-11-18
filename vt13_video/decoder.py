@@ -30,19 +30,6 @@ class Frame:
     latency_s: float
     corrupt: bool = False
 
-    def to_metadata(self) -> dict[str, Any]:
-        return {
-            "sequence": self.sequence,
-            "width": self.width,
-            "height": self.height,
-            "pts": self.pts,
-            "keyframe": self.keyframe,
-            "au_index": self.au_index,
-            "latency_s": round(self.latency_s, 6),
-            "corrupt": self.corrupt,
-        }
-
-
 class FrameQueue:
     """Bounded frame queue that prefers fresh frames over backlog."""
 

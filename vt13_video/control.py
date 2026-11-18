@@ -118,10 +118,6 @@ def request_iframe_frame() -> bytes:
     return encode_frame(1, 1, special_ctrl(True))
 
 
-def cancel_iframe_frame() -> bytes:
-    return encode_frame(1, 1, special_ctrl(False))
-
-
 def pairing_query_frame() -> bytes:
     return encode_frame(9, 85, b"\x00\x02")
 
@@ -322,7 +318,7 @@ class ControlLink:
         self.start()
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> None:
+    def __exit__(self, _exc_type, _exc, _tb) -> None:
         self.close()
 
     # ------------------------------------------------------------------ public API

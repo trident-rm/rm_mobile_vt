@@ -10,7 +10,7 @@ Discovery deliberately has two layers:
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 import os
 import re
@@ -28,10 +28,6 @@ class DeviceError(RuntimeError):
 
 
 class DeviceNotFound(DeviceError):
-    pass
-
-
-class DeviceBusy(DeviceError):
     pass
 
 
@@ -470,7 +466,3 @@ def udev_rule_text(vid: int = DEFAULT_VID, pid: int = DEFAULT_PID) -> str:
         f'SUBSYSTEM=="usb", ATTR{{idVendor}}=="{vid:04x}", '
         f'ATTR{{idProduct}}=="{pid:04x}", TAG+="uaccess"\n'
     )
-
-
-def usbfs_device_node(info: UsbDeviceInfo) -> Path | None:
-    return info.usbfs_path

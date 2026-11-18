@@ -121,7 +121,6 @@ class _FakeWorker:
     def recv_header(self) -> tuple[tuple[int, ...], bytes]:
         msg = self.peer.recv(64 * 1024)
         magic, length, seq, flags, ts = struct.unpack("<IIIIQ", msg[:24])
-        self.last_seq = seq
         self.last_ts = ts
         return (magic, length, seq, flags, ts), msg[24:]
 

@@ -76,10 +76,6 @@ class NALUnit:
         return self.nal_type == 35
 
     @property
-    def is_sei(self) -> bool:
-        return self.nal_type in (39, 40)
-
-    @property
     def first_slice_segment_in_pic(self) -> bool:
         # For a VCL NAL, the first bit after the two-byte NAL header is
         # first_slice_segment_in_pic_flag.  Non-VCL NALs have no such flag.
@@ -113,10 +109,6 @@ class AccessUnit:
         return any(nal.is_irap for nal in self.nals)
 
     @property
-    def irap_types(self) -> tuple[int, ...]:
-        return tuple(nal.nal_type for nal in self.nals if nal.is_irap)
-
-    @property
     def parameter_sets(self) -> tuple[NALUnit, ...]:
         return tuple(nal for nal in self.nals if nal.is_parameter_set)
 
@@ -124,11 +116,6 @@ class AccessUnit:
     def has_all_parameter_sets(self) -> bool:
         present = {nal.nal_type for nal in self.parameter_sets}
         return all(t in present for t in PARAMETER_SET_TYPES)
-
-    @property
-    def nal_types(self) -> tuple[int, ...]:
-        return tuple(nal.nal_type for nal in self.nals)
-
 
 def _find_start(buf: bytearray, start: int) -> tuple[int, int] | None:
     """Find the next Annex-B start code, normalizing 4-byte codes.

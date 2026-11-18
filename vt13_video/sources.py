@@ -110,7 +110,6 @@ class VT13UsbSource:
         self._claimed = False
         self._detached_kernel = False
         self._endpoint = device.endpoint
-        self._status_interface = device.status_interface
         self._status_endpoint = device.status_endpoint
         self._status_claimed = False
         self._status_stop = threading.Event()
@@ -441,7 +440,7 @@ class FileSource:
         rows: list[tuple[float, int]] = []
         total = 0
         try:
-            for line_no, line in enumerate(times_path.read_text(encoding="utf-8").splitlines()):
+            for line in times_path.read_text(encoding="utf-8").splitlines():
                 if not line.strip() or line.startswith("elapsed_s"):
                     continue
                 fields = line.split("\t")

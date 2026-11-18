@@ -8,8 +8,6 @@ from pathlib import Path
 import subprocess
 import threading
 import time
-from typing import Iterator
-
 from .config import AppConfig
 from .control import ControlLink
 from .decoder import Frame, FrameQueue, HevcDecoder
@@ -267,7 +265,7 @@ class VT13Stream:
         self.start()
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> None:
+    def __exit__(self, _exc_type, _exc, _tb) -> None:
         self.stop()
 
     # ------------------------------------------------------------------ frame API
@@ -277,14 +275,6 @@ class VT13Stream:
     @property
     def latest_frame(self) -> Frame | None:
         return self.frames.latest
-
-    def frames_iter(self) -> Iterator[Frame]:
-        while self.is_running or self.frames.qsize() > 0:
-            frame = self.read_frame(0.5)
-            if frame is not None:
-                yield frame
-            elif not self.is_running and self.frames.qsize() == 0:
-                break
 
     def snapshot(self) -> dict:
         self.stats.dropped_frames = self.frames.dropped

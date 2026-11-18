@@ -104,8 +104,6 @@ def main() -> int:
         ]
     )
     prev = cpu_totals()
-    prev_py = proc_ticks(args.pid)
-    prev_wk = proc_ticks(resolve_worker_pid(args.worker_pid)) if args.worker_pid else (-1, -1, -1)
     t0 = time.monotonic()
     try:
         while True:
